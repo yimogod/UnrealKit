@@ -11,7 +11,7 @@
         <Border Background="#FF1B263B" Padding="20,14">
             <DockPanel>
                 <TextBlock Text="UnrealKit" Foreground="White" FontSize="22" FontWeight="SemiBold" DockPanel.Dock="Left" />
-                <TextBlock Text="当前工程：未打开" Foreground="#FFD8E0EC" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ProjectTitle}" Foreground="#FFD8E0EC" HorizontalAlignment="Right" VerticalAlignment="Center" />
             </DockPanel>
         </Border>
         <Grid Grid.Row="1">
@@ -34,15 +34,68 @@
                 <TextBlock Text="{Binding SelectedNavigationItem}" FontSize="26" FontWeight="SemiBold" Foreground="#FF1B263B" />
                 <TextBlock Grid.Row="1" Text="{Binding PageDescription}" Foreground="#FF52616B" Margin="0,8,0,20" TextWrapping="Wrap" />
                 <Border Grid.Row="2" Background="White" CornerRadius="6" BorderBrush="#FFE2E6EA" BorderThickness="1" Padding="24">
-                    <StackPanel>
-                        <TextBlock Text="工程入口" FontSize="18" FontWeight="SemiBold" />
-                        <TextBlock Text="创建或打开 .ukit 工程后，按左侧流程执行设备、采集、解析和导出操作。" Margin="0,10,0,20" TextWrapping="Wrap" />
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="创建工程" Command="{Binding CreateProjectCommand}" Padding="14,7" Margin="0,0,10,0" />
-                            <Button Content="打开工程" Command="{Binding OpenProjectCommand}" Padding="14,7" />
+                    <Grid>
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedNavigationItem}" Value="工程">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="打开工程" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="选择现有 .ukit 工程描述符。打开时会校验格式版本、目录和默认配置。" Margin="0,10,0,20" TextWrapping="Wrap" />
+                            <TextBlock Text="工程文件" FontWeight="SemiBold" Margin="0,0,0,6" />
+                            <DockPanel LastChildFill="True">
+                                <Button Content="浏览…" Click="BrowseProjectFile_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                                <TextBox Text="{Binding ProjectFilePath, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" Padding="8,6" />
+                            </DockPanel>
+                            <Button Content="打开工程" Command="{Binding OpenProjectCommand}" HorizontalAlignment="Left" Padding="18,8" Margin="0,16,0,0" />
                         </StackPanel>
-                        <TextBlock Text="{Binding StatusMessage}" Margin="0,20,0,0" Foreground="#FF52616B" TextWrapping="Wrap" />
-                    </StackPanel>
+                        <Grid>
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedNavigationItem}" Value="设备">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <DockPanel>
+                                <Button Content="刷新设备" Command="{Binding RefreshDevicesCommand}" Padding="14,7" DockPanel.Dock="Right" />
+                                <TextBlock Text="ADB 设备" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <TextBlock Grid.Row="1" Text="明确选择一台状态为 device 的设备；多设备时不会自动选择第一台。" Margin="0,10,0,14" TextWrapping="Wrap" />
+                            <ListBox Grid.Row="2" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" BorderBrush="#FFE2E6EA" BorderThickness="1">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="8,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="2*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding SerialNumber}" FontWeight="SemiBold" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Status}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding Model}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <TextBlock Grid.Row="3" Text="{Binding SelectedDeviceDescription}" Margin="0,14,0,0" Foreground="#FF52616B" TextWrapping="Wrap" />
+                        </Grid>
+                    </Grid>
                 </Border>
             </Grid>
         </Grid>
