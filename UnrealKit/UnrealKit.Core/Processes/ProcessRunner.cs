@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Text;
 using UnrealKit.Core.Operations;
 
 namespace UnrealKit.Core.Processes;
@@ -39,8 +40,8 @@ public sealed class ProcessRunner : IProcessRunner
             throw new InvalidOperationException($"无法启动外部进程 '{request.FileName}': {exception.Message}", exception);
         }
 
-        var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        var standardOutputTask = ReadStreamAsync(process.StandardOutput, ProcessOutputStream.StandardOutput, request.Output);
+        var standardErrorTask = ReadStreamAsync(process.StandardError, ProcessOutputStream.StandardError, request.Output);
         using var timeoutCancellationSource = new CancellationTokenSource(request.Timeout ?? ProcessExecutionRequest.DefaultTimeout);
         using var linkedCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCancellationSource.Token);
 
@@ -61,14 +62,15 @@ public sealed class ProcessRunner : IProcessRunner
             var message = $"外部进程在 {(request.Timeout ?? ProcessExecutionRequest.DefaultTimeout).TotalSeconds:0} 秒后超时: {request.FileName}";
             Report(progress, operationId, "TimedOut", message);
             Log(LogLevel.Error, operationId, message, request, result: result);
-            throw new TimeoutException(message);
+            throw new ProcessExecutionTimeoutException(message, result);
         }
         catch (OperationCanceledException)
         {
             KillProcessTree(process);
+            var result = await CreateResultAsync(process, standardOutputTask, standardErrorTask, startedAt);
             Report(progress, operationId, "Canceled", "外部进程已取消。");
-            Log(LogLevel.Warning, operationId, "External process canceled", request);
-            throw;
+            Log(LogLevel.Warning, operationId, "External process canceled", request, result: result);
+            throw new ProcessExecutionCanceledException(result, cancellationToken);
         }
     }
 
@@ -109,6 +111,18 @@ public sealed class ProcessRunner : IProcessRunner
         var standardError = await ReadCompletedTaskAsync(standardErrorTask);
         var exitCode = process.HasExited ? process.ExitCode : -1;
         return new ProcessExecutionResult(exitCode, standardOutput, standardError, startedAt, DateTimeOffset.UtcNow);
+    }
+
+    private static async Task<string> ReadStreamAsync(StreamReader reader, ProcessOutputStream stream, IProgress<ProcessOutput>? output)
+    {
+        var content = new StringBuilder();
+        while (await reader.ReadLineAsync() is { } line)
+        {
+            content.AppendLine(line);
+            output?.Report(new ProcessOutput(DateTimeOffset.UtcNow, stream, line));
+        }
+
+        return content.ToString();
     }
 
     private static async Task<string> ReadCompletedTaskAsync(Task<string> task)

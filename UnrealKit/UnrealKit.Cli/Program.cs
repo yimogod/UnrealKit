@@ -1,6 +1,7 @@
 using System.Text.Json;
 using UnrealKit.Core.Adb;
 using UnrealKit.Core.Launch;
+using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
 
 return await RunAsync(args);
@@ -30,6 +31,10 @@ static async Task<int> RunAsync(string[] arguments)
         if (exception is AdbCommandException adbException)
         {
             WriteAdbFailure(adbException);
+        }
+        else if (exception is AdbPathResolutionException pathException)
+        {
+            WriteAdbPathDiagnostics(pathException.Resolution);
         }
 
         return 1;
@@ -61,7 +66,7 @@ static async Task<int> RunAdbAsync(string[] arguments)
     }
 
     var (commandArguments, adbPath) = ParseAdbPath(arguments);
-    var service = new AdbService(new UnrealKit.Core.Processes.ProcessRunner(), adbPath);
+    var service = CreateAdbService(adbPath);
     return commandArguments[0].ToLowerInvariant() switch
     {
         "version" when commandArguments.Length == 1 => await ShowAdbVersionAsync(service),
@@ -82,9 +87,8 @@ static async Task<int> RunAppAsync(string[] arguments)
     }
 
     var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(commandArguments[1..], "--project"));
-    var service = new LaunchParameterService(new AdbService(new UnrealKit.Core.Processes.ProcessRunner(), adbPath ?? project.Settings.AdbPath));
+    var service = new LaunchParameterService(CreateAdbService(adbPath, project.Settings.AdbPath));
     var result = await service.StartApplicationAsync(project, GetRequiredOption(commandArguments[1..], "--device"));
-    Console.Write(result.StandardOutput);
     return 0;
 }
 
@@ -98,7 +102,7 @@ static async Task<int> RunCommandLineAsync(string[] arguments)
 
     var options = commandArguments[1..];
     var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(options, "--project"));
-    var service = new LaunchParameterService(new AdbService(new UnrealKit.Core.Processes.ProcessRunner(), adbPath ?? project.Settings.AdbPath));
+    var service = new LaunchParameterService(CreateAdbService(adbPath, project.Settings.AdbPath));
     var serialNumber = GetRequiredOption(options, "--device");
     var remotePath = GetOptionalOption(options, "--remote-path");
     switch (commandArguments[0].ToLowerInvariant())
@@ -114,7 +118,6 @@ static async Task<int> RunCommandLineAsync(string[] arguments)
         case "delete":
         {
             var result = await service.DeleteAsync(project, serialNumber, remotePath);
-            Console.Write(result.StandardOutput);
             return 0;
         }
         default:
@@ -174,7 +177,6 @@ static async Task<int> ValidateProjectAsync(IProjectService service, string[] ar
 static async Task<int> ShowAdbVersionAsync(IAdbService service)
 {
     var result = await service.GetVersionAsync();
-    Console.Write(result.StandardOutput);
     return 0;
 }
 
@@ -192,14 +194,12 @@ static async Task<int> ListAdbDevicesAsync(IAdbService service)
 static async Task<int> ConnectAdbAsync(IAdbService service, string endpoint)
 {
     var result = await service.ConnectAsync(endpoint);
-    Console.Write(result.StandardOutput);
     return 0;
 }
 
 static async Task<int> DisconnectAdbAsync(IAdbService service, string endpoint)
 {
     var result = await service.DisconnectAsync(endpoint);
-    Console.Write(result.StandardOutput);
     return 0;
 }
 
@@ -217,6 +217,27 @@ static (string[] CommandArguments, string? AdbPath) ParseAdbPath(string[] argume
     }
 
     return (arguments[..pathIndex], arguments[pathIndex + 1]);
+}
+
+static AdbService CreateAdbService(string? explicitPath, string? projectAdbPath = null)
+{
+    var resolvedPath = new AdbPathResolver().ResolveRequired(explicitPath, projectAdbPath);
+    return new AdbService(new ProcessRunner(), resolvedPath, new Progress<ProcessOutput>(WriteProcessOutput));
+}
+
+static void WriteProcessOutput(ProcessOutput output)
+{
+    var writer = output.Stream == ProcessOutputStream.StandardError ? Console.Error : Console.Out;
+    writer.WriteLine(output.Text);
+}
+
+static void WriteAdbPathDiagnostics(AdbPathResolution resolution)
+{
+    foreach (var attempt in resolution.Attempts)
+    {
+        var path = attempt.CandidatePath is null ? string.Empty : $" - {attempt.CandidatePath}";
+        Console.Error.WriteLine($"ADB {attempt.Source} ({attempt.Description}): {attempt.Status}{path}");
+    }
 }
 
 static string GetRequiredOption(string[] arguments, string optionName) => GetOptionalOption(arguments, optionName) ?? throw new ArgumentException($"Missing required option {optionName}.");

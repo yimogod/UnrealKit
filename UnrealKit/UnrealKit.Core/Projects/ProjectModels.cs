@@ -37,7 +37,7 @@ public sealed record ProjectSettings(
         "/sdcard/Android/data/{PackageName}/files/UE4Game/{UnrealProjectName}/{UnrealProjectName}",
         "/sdcard/Android/data/{PackageName}/files/UE4Game/{UnrealProjectName}/{UnrealProjectName}/Saved",
         string.Empty,
-        "adb",
+        string.Empty,
         "Default",
         "Saved/Exports",
         LaunchParameterPresetDefaults.All);

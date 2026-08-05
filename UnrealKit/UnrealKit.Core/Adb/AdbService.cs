@@ -7,11 +7,14 @@ public sealed class AdbService : IAdbService
 {
     private readonly IProcessRunner _processRunner;
     private readonly string _adbPath;
+    private readonly IProgress<ProcessOutput>? _output;
 
-    public AdbService(IProcessRunner processRunner, string? adbPath = null)
+    public AdbService(IProcessRunner processRunner, string adbPath, IProgress<ProcessOutput>? output = null)
     {
         _processRunner = processRunner;
-        _adbPath = string.IsNullOrWhiteSpace(adbPath) ? "adb" : adbPath;
+        ArgumentException.ThrowIfNullOrWhiteSpace(adbPath);
+        _adbPath = adbPath;
+        _output = output;
     }
 
     public Task<ProcessExecutionResult> GetVersionAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) =>
@@ -91,7 +94,7 @@ public sealed class AdbService : IAdbService
 
     private async Task<ProcessExecutionResult> RunRequiredAsync(IReadOnlyList<string> arguments, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
-        var result = await _processRunner.RunAsync(new ProcessExecutionRequest(_adbPath, arguments), progress, cancellationToken);
+        var result = await _processRunner.RunAsync(new ProcessExecutionRequest(_adbPath, arguments, Output: _output), progress, cancellationToken);
         if (result.Succeeded)
         {
             return result;

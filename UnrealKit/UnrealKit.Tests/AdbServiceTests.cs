@@ -51,7 +51,7 @@ public sealed class AdbServiceTests
     public async Task PushFileAsync_PreservesNonZeroResultInAdbCommandException()
     {
         var expectedResult = new ProcessExecutionResult(1, string.Empty, "adb: error", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
-        var service = new AdbService(new RecordingProcessRunner(expectedResult));
+        var service = new AdbService(new RecordingProcessRunner(expectedResult), "adb");
 
         var exception = await Assert.ThrowsAsync<AdbCommandException>(() => service.PushFileAsync("R58M123ABC", "input.txt", "/sdcard/input.txt"));
 
@@ -63,7 +63,7 @@ public sealed class AdbServiceTests
     [Fact]
     public async Task DeviceCommand_RejectsMissingSerialNumber()
     {
-        var service = new AdbService(new RecordingProcessRunner(ProcessExecutionResultForSuccess()));
+        var service = new AdbService(new RecordingProcessRunner(ProcessExecutionResultForSuccess()), "adb");
 
         await Assert.ThrowsAsync<ArgumentException>(() => service.RunDumpsysAsync(string.Empty, "com.example.game"));
     }
@@ -71,7 +71,7 @@ public sealed class AdbServiceTests
     [Fact]
     public async Task DeviceCommand_RejectsNonUnixRemotePath()
     {
-        var service = new AdbService(new RecordingProcessRunner(ProcessExecutionResultForSuccess()));
+        var service = new AdbService(new RecordingProcessRunner(ProcessExecutionResultForSuccess()), "adb");
 
         await Assert.ThrowsAsync<ArgumentException>(() => service.PushFileAsync("R58M123ABC", "input.txt", "C:\\temp\\input.txt"));
     }
