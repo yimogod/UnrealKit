@@ -16,12 +16,13 @@ public sealed record UkitProjectDescriptor(
         CurrentFormatVersion, projectName, "Content", "Config", "Saved", "Intermediate");
 }
 
-public sealed record LaunchParameterPreset(string Name, string Arguments);
+public sealed record LaunchParameterPreset(string Name, string Arguments, string Description, bool IsComposable);
 
 public sealed record ProjectSettings(
     string PackageName,
     string UnrealProjectName,
     string Activity,
+    string DeviceGameRootTemplate,
     string DeviceSavedRootTemplate,
     string LocalWorkingDirectory,
     string AdbPath,
@@ -33,12 +34,29 @@ public sealed record ProjectSettings(
         string.Empty,
         projectName,
         string.Empty,
+        "/sdcard/Android/data/{PackageName}/files/UE4Game/{UnrealProjectName}/{UnrealProjectName}",
         "/sdcard/Android/data/{PackageName}/files/UE4Game/{UnrealProjectName}/{UnrealProjectName}/Saved",
         string.Empty,
         "adb",
         "Default",
         "Saved/Exports",
-        Array.Empty<LaunchParameterPreset>());
+        LaunchParameterPresetDefaults.All);
+}
+
+public static class LaunchParameterPresetDefaults
+{
+    public static IReadOnlyList<LaunchParameterPreset> All { get; } =
+    [
+        new("LLM", "-llm", "Enable Unreal Low Level Memory Tracker.", true),
+        new("LLM CSV", "-llmcsv", "Enable LLM CSV output.", true),
+        new("OpenGL", "-OpenGLES", "Use the OpenGL ES renderer.", false),
+        new("Vulkan", "-vulkan", "Use the Vulkan renderer.", false),
+        new("Trace Default", string.Empty, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
+        new("Trace All", string.Empty, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
+        new("Trace Network", string.Empty, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
+        new("Trace Memory", string.Empty, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
+        new("No Update", string.Empty, "Configure the legacy no-update argument in DefaultGame.ini.", false)
+    ];
 }
 
 public sealed record ProjectConfigurationSnapshot(

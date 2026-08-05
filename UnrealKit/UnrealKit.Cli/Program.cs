@@ -1,5 +1,6 @@
 using System.Text.Json;
 using UnrealKit.Core.Adb;
+using UnrealKit.Core.Launch;
 using UnrealKit.Core.Projects;
 
 return await RunAsync(args);
@@ -18,6 +19,8 @@ static async Task<int> RunAsync(string[] arguments)
         {
             "project" => await RunProjectAsync(arguments[1..]),
             "adb" => await RunAdbAsync(arguments[1..]),
+            "app" => await RunAppAsync(arguments[1..]),
+            "commandline" => await RunCommandLineAsync(arguments[1..]),
             _ => FailUnknownCommand()
         };
     }
@@ -67,6 +70,56 @@ static async Task<int> RunAdbAsync(string[] arguments)
         "disconnect" when commandArguments.Length == 2 => await DisconnectAdbAsync(service, commandArguments[1]),
         _ => FailAdbUsage()
     };
+}
+
+static async Task<int> RunAppAsync(string[] arguments)
+{
+    var (commandArguments, adbPath) = ParseAdbPath(arguments);
+    if (commandArguments.Length == 0 || !string.Equals(commandArguments[0], "start", StringComparison.OrdinalIgnoreCase))
+    {
+        Console.Error.WriteLine("Usage: unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]");
+        return 2;
+    }
+
+    var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(commandArguments[1..], "--project"));
+    var service = new LaunchParameterService(new AdbService(new UnrealKit.Core.Processes.ProcessRunner(), adbPath ?? project.Settings.AdbPath));
+    var result = await service.StartApplicationAsync(project, GetRequiredOption(commandArguments[1..], "--device"));
+    Console.Write(result.StandardOutput);
+    return 0;
+}
+
+static async Task<int> RunCommandLineAsync(string[] arguments)
+{
+    var (commandArguments, adbPath) = ParseAdbPath(arguments);
+    if (commandArguments.Length == 0)
+    {
+        return FailCommandLineUsage();
+    }
+
+    var options = commandArguments[1..];
+    var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(options, "--project"));
+    var service = new LaunchParameterService(new AdbService(new UnrealKit.Core.Processes.ProcessRunner(), adbPath ?? project.Settings.AdbPath));
+    var serialNumber = GetRequiredOption(options, "--device");
+    var remotePath = GetOptionalOption(options, "--remote-path");
+    switch (commandArguments[0].ToLowerInvariant())
+    {
+        case "push":
+        {
+            var result = await service.PushAsync(project, new LaunchParameterRequest(serialNumber, GetOptions(options, "--preset"), GetOptionalOption(options, "--custom"), remotePath));
+            Console.WriteLine($"Pushed uecommandline.txt to {result.RemotePath}");
+            Console.WriteLine("Content:");
+            Console.WriteLine(result.Content);
+            return 0;
+        }
+        case "delete":
+        {
+            var result = await service.DeleteAsync(project, serialNumber, remotePath);
+            Console.Write(result.StandardOutput);
+            return 0;
+        }
+        default:
+            return FailCommandLineUsage();
+    }
 }
 
 static async Task<int> CreateProjectAsync(IProjectService service, string[] arguments)
@@ -166,6 +219,45 @@ static (string[] CommandArguments, string? AdbPath) ParseAdbPath(string[] argume
     return (arguments[..pathIndex], arguments[pathIndex + 1]);
 }
 
+static string GetRequiredOption(string[] arguments, string optionName) => GetOptionalOption(arguments, optionName) ?? throw new ArgumentException($"Missing required option {optionName}.");
+
+static string? GetOptionalOption(string[] arguments, string optionName)
+{
+    var index = Array.FindIndex(arguments, argument => string.Equals(argument, optionName, StringComparison.OrdinalIgnoreCase));
+    if (index < 0)
+    {
+        return null;
+    }
+
+    if (index + 1 >= arguments.Length || arguments[index + 1].StartsWith("--", StringComparison.Ordinal))
+    {
+        throw new ArgumentException($"{optionName} must be followed by a value.");
+    }
+
+    return arguments[index + 1];
+}
+
+static string[] GetOptions(string[] arguments, string optionName)
+{
+    var values = new List<string>();
+    for (var index = 0; index < arguments.Length; index++)
+    {
+        if (!string.Equals(arguments[index], optionName, StringComparison.OrdinalIgnoreCase))
+        {
+            continue;
+        }
+
+        if (++index >= arguments.Length || arguments[index].StartsWith("--", StringComparison.Ordinal))
+        {
+            throw new ArgumentException($"{optionName} must be followed by a value.");
+        }
+
+        values.Add(arguments[index]);
+    }
+
+    return values.ToArray();
+}
+
 static int WriteValidation(ProjectValidationResult validation)
 {
     foreach (var diagnostic in validation.Diagnostics)
@@ -206,6 +298,12 @@ static int FailAdbUsage()
     return 2;
 }
 
+static int FailCommandLineUsage()
+{
+    Console.Error.WriteLine("Usage: unrealkit commandline <push|delete> --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--remote-path <path>] [--adb-path <path>]");
+    return 2;
+}
+
 static void PrintUsage()
 {
     Console.WriteLine("UnrealKit CLI");
@@ -216,4 +314,7 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit adb devices [--adb-path <path>]");
     Console.WriteLine("  unrealkit adb connect <host:port> [--adb-path <path>]");
     Console.WriteLine("  unrealkit adb disconnect <host:port> [--adb-path <path>]");
+    Console.WriteLine("  unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]");
+    Console.WriteLine("  unrealkit commandline push --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--remote-path <path>] [--adb-path <path>]");
+    Console.WriteLine("  unrealkit commandline delete --project <project.ukit> --device <serial> [--remote-path <path>] [--adb-path <path>]");
 }

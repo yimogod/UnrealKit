@@ -132,12 +132,16 @@ public sealed class ProjectService : IProjectService
         document.SetValue(SettingsSection, "PackageName", settings.PackageName);
         document.SetValue(SettingsSection, "UnrealProjectName", settings.UnrealProjectName);
         document.SetValue(SettingsSection, "Activity", settings.Activity);
+        document.SetValue(SettingsSection, "DeviceGameRootTemplate", settings.DeviceGameRootTemplate);
         document.SetValue(SettingsSection, "DeviceSavedRootTemplate", settings.DeviceSavedRootTemplate);
         document.SetValue(SettingsSection, "LocalWorkingDirectory", settings.LocalWorkingDirectory);
         document.SetValue(SettingsSection, "AdbPath", settings.AdbPath);
         document.SetValue(SettingsSection, "DefaultCaptureTag", settings.DefaultCaptureTag);
         document.SetValue(SettingsSection, "DefaultExportDirectory", settings.DefaultExportDirectory);
-        document.SetValue(PresetsSection, "Default", string.Empty);
+        foreach (var preset in settings.LaunchParameterPresets)
+        {
+            document.SetValue(PresetsSection, preset.Name, preset.Arguments);
+        }
         await document.SaveAsync(path, cancellationToken);
     }
 
@@ -150,11 +154,21 @@ public sealed class ProjectService : IProjectService
         }
 
         var document = IniDocument.Parse(await File.ReadAllTextAsync(path, cancellationToken));
-        var presets = document.GetSection(PresetsSection).Select(pair => new LaunchParameterPreset(pair.Key, pair.Value)).OrderBy(preset => preset.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+        var configuredPresets = document.GetSection(PresetsSection);
+        var presets = LaunchParameterPresetDefaults.All
+            .Select(defaultPreset => configuredPresets.TryGetValue(defaultPreset.Name, out var arguments)
+                ? defaultPreset with { Arguments = arguments }
+                : defaultPreset)
+            .Concat(configuredPresets
+                .Where(pair => !LaunchParameterPresetDefaults.All.Any(defaultPreset => string.Equals(defaultPreset.Name, pair.Key, StringComparison.OrdinalIgnoreCase)))
+                .Select(pair => new LaunchParameterPreset(pair.Key, pair.Value, string.Empty, true)))
+            .OrderBy(preset => preset.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         return new ProjectSettings(
             document.GetValue(SettingsSection, "PackageName") ?? defaults.PackageName,
             document.GetValue(SettingsSection, "UnrealProjectName") ?? defaults.UnrealProjectName,
             document.GetValue(SettingsSection, "Activity") ?? defaults.Activity,
+            document.GetValue(SettingsSection, "DeviceGameRootTemplate") ?? defaults.DeviceGameRootTemplate,
             document.GetValue(SettingsSection, "DeviceSavedRootTemplate") ?? defaults.DeviceSavedRootTemplate,
             document.GetValue(SettingsSection, "LocalWorkingDirectory") ?? defaults.LocalWorkingDirectory,
             document.GetValue(SettingsSection, "AdbPath") ?? defaults.AdbPath,
