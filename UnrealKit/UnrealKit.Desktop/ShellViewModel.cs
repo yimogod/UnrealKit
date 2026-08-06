@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using UnrealKit.Core.Adb;
+using UnrealKit.Core.Capture;
 using UnrealKit.Core.Launch;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
@@ -22,6 +23,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _wirelessEndpoint = string.Empty;
     private string _customLaunchArguments = string.Empty;
     private string _remoteCommandLinePath = string.Empty;
+    private string _captureTag = string.Empty;
+    private string _captureArchivePreview = "请先打开工程并选择状态为 device 的设备。";
     private string _launchParameterPreview = "请先打开工程以加载启动参数预设。";
     private UkitProject? _project;
     private AdbDevice? _selectedDevice;
@@ -38,6 +41,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         PushLaunchParametersCommand = new AsyncDelegateCommand(PushLaunchParametersAsync, CanOperateOnSelectedDevice);
         DeleteLaunchParametersCommand = new AsyncDelegateCommand(DeleteLaunchParametersAsync, CanOperateOnSelectedDevice);
         StartApplicationCommand = new AsyncDelegateCommand(StartApplicationAsync, CanOperateOnSelectedDevice);
+        RunCaptureCommand = new AsyncDelegateCommand(RunCaptureAsync, CanOperateOnSelectedDevice);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -51,6 +55,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand PushLaunchParametersCommand { get; }
     public ICommand DeleteLaunchParametersCommand { get; }
     public ICommand StartApplicationCommand { get; }
+    public ICommand RunCaptureCommand { get; }
 
     public string SelectedNavigationItem
     {
@@ -80,6 +85,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string WirelessEndpoint { get => _wirelessEndpoint; set { if (SetField(ref _wirelessEndpoint, value)) RaiseCommandStates(); } }
     public string CustomLaunchArguments { get => _customLaunchArguments; set { if (SetField(ref _customLaunchArguments, value)) UpdateLaunchParameterPreview(); } }
     public string RemoteCommandLinePath { get => _remoteCommandLinePath; set { if (SetField(ref _remoteCommandLinePath, value)) UpdateLaunchParameterPreview(); } }
+    public string CaptureTag { get => _captureTag; set { if (SetField(ref _captureTag, value)) UpdateCaptureArchivePreview(); } }
+    public string CaptureArchivePreview { get => _captureArchivePreview; private set => SetField(ref _captureArchivePreview, value); }
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
     public string ProjectTitle => _project is null ? "当前工程：未打开" : $"当前工程：{_project.Descriptor.ProjectName}";
     public bool IsBusy { get => _isBusy; private set { if (SetField(ref _isBusy, value)) RaiseCommandStates(); } }
@@ -91,6 +98,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         {
             if (!SetField(ref _selectedDevice, value)) return;
             OnPropertyChanged(nameof(SelectedDeviceDescription));
+            UpdateCaptureArchivePreview();
             RaiseCommandStates();
         }
     }
@@ -167,8 +175,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
 
         RemoteCommandLinePath = new LaunchParameterService(CreateAdbService()).GetRemotePath(project.Settings);
+        CaptureTag = project.Settings.DefaultCaptureTag;
         OnPropertyChanged(nameof(ProjectTitle));
         UpdateLaunchParameterPreview();
+        UpdateCaptureArchivePreview();
         RaiseCommandStates();
     }
 
@@ -218,6 +228,33 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         StatusMessage = $"已发送应用启动请求：{_project!.Settings.PackageName}/{_project.Settings.Activity}";
     });
 
+    private void UpdateCaptureArchivePreview()
+    {
+        if (_project is null || SelectedDevice?.IsAvailable != true)
+        {
+            CaptureArchivePreview = "请先打开工程并选择状态为 device 的设备。";
+            return;
+        }
+
+        try
+        {
+            var plan = new CaptureService(CreateAdbService()).CreatePlan(new CaptureRequest(_project, SelectedDevice, CaptureTag));
+            CaptureArchivePreview = $"归档目录：{plan.CaptureDirectory}{Environment.NewLine}设备 Saved：{plan.DeviceSavedDirectory}";
+        }
+        catch (Exception exception)
+        {
+            CaptureArchivePreview = $"无法生成归档预览：{exception.Message}";
+        }
+    }
+
+    private Task RunCaptureAsync() => RunAsync("正在采集并归档原始数据…", async progress =>
+    {
+        var request = new CaptureRequest(_project!, SelectedDevice!, CaptureTag);
+        var result = await new CaptureService(CreateAdbService()).CaptureAsync(request, progress);
+        CaptureArchivePreview = $"归档目录：{result.Plan.CaptureDirectory}{Environment.NewLine}清单：{result.ManifestPath}";
+        StatusMessage = $"采集完成：{result.Plan.CaptureDirectory}";
+    });
+
     private async Task RunAsync(string initialMessage, Func<IProgress<OperationProgress>, Task> operation)
     {
         IsBusy = true;
@@ -238,7 +275,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
