@@ -1,6 +1,7 @@
 using System.Text.Json;
 using UnrealKit.Core.Adb;
 using UnrealKit.Core.Capture;
+using UnrealKit.Core.Export;
 using UnrealKit.Core.Launch;
 using UnrealKit.Core.Parsing;
 using UnrealKit.Core.Processes;
@@ -26,6 +27,7 @@ static async Task<int> RunAsync(string[] arguments)
             "commandline" => await RunCommandLineAsync(arguments[1..]),
             "capture" => await RunCaptureAsync(arguments[1..]),
             "parse" => await RunParseAsync(arguments[1..]),
+            "export" => await RunExportAsync(arguments[1..]),
             _ => FailUnknownCommand()
         };
     }
@@ -164,6 +166,24 @@ static async Task<int> RunParseAsync(string[] arguments)
     WriteMemInfoParseResult(result, json);
     return result.IsSuccess ? 0 : 1;
 }
+static async Task<int> RunExportAsync(string[] arguments)
+{
+    if (arguments.Length == 0) return FailExportUsage();
+    var commandName = new string([(char)109, (char)101, (char)109, (char)105, (char)110, (char)102, (char)111]);
+    if (!string.Equals(arguments[0], commandName, StringComparison.OrdinalIgnoreCase)) return FailExportUsage();
+    var options = arguments[1..];
+    var inputOption = new string([(char)45, (char)45, (char)105, (char)110, (char)112, (char)117, (char)116]);
+    var outputOption = new string([(char)45, (char)45, (char)111, (char)117, (char)116, (char)112, (char)117, (char)116]);
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { inputOption, outputOption });
+    var input = GetRequiredOption(options, inputOption);
+    var output = GetRequiredOption(options, outputOption);
+    var result = await new AndroidMemInfoParser().ParseFileAsync(input);
+    if (!result.IsSuccess) { WriteMemInfoParseResult(result, false); return 1; }
+    var exported = await new MemInfoExportService().ExportAsync(new MemInfoExportRequest(result, output, DateTimeOffset.UtcNow));
+    Console.WriteLine(exported.OutputFilePath);
+    return 0;
+}
+
 static async Task<int> CreateProjectAsync(IProjectService service, string[] arguments)
 {
     if (arguments.Length != 3 || !string.Equals(arguments[1], "--name", StringComparison.OrdinalIgnoreCase))
@@ -455,6 +475,7 @@ static int FailParseUsage()
     Console.Error.WriteLine("Usage: unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
     return 2;
 }
+static int FailExportUsage() { Console.Error.WriteLine("Usage: unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv>"); return 2; }
 static void PrintUsage()
 {
     Console.WriteLine("UnrealKit CLI");
@@ -470,4 +491,5 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit commandline delete --project <project.ukit> --device <serial> [--remote-path <path>] [--adb-path <path>]");
     Console.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial> [--tag <tag>] [--format text|json] [--adb-path <path>]");
     Console.WriteLine("  unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
+    Console.WriteLine("  unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv>");
 }
