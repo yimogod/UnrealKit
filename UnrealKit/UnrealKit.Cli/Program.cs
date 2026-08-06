@@ -1,5 +1,6 @@
 using System.Text.Json;
 using UnrealKit.Core.Adb;
+using UnrealKit.Core.Capture;
 using UnrealKit.Core.Launch;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
@@ -22,6 +23,7 @@ static async Task<int> RunAsync(string[] arguments)
             "adb" => await RunAdbAsync(arguments[1..]),
             "app" => await RunAppAsync(arguments[1..]),
             "commandline" => await RunCommandLineAsync(arguments[1..]),
+            "capture" => await RunCaptureAsync(arguments[1..]),
             _ => FailUnknownCommand()
         };
     }
@@ -125,6 +127,27 @@ static async Task<int> RunCommandLineAsync(string[] arguments)
     }
 }
 
+static async Task<int> RunCaptureAsync(string[] arguments)
+{
+    var (commandArguments, adbPath) = ParseAdbPath(arguments);
+    if (commandArguments.Length == 0 || !string.Equals(commandArguments[0], "run", StringComparison.OrdinalIgnoreCase))
+    {
+        return FailCaptureUsage();
+    }
+
+    var options = commandArguments[1..];
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--device", "--tag", "--format" });
+    var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(options, "--project"));
+    var serialNumber = GetRequiredOption(options, "--device");
+    var tag = GetOptionalOption(options, "--tag") ?? project.Settings.DefaultCaptureTag;
+    var json = IsJsonFormat(options);
+    var adbService = CreateAdbService(adbPath, project.Settings.AdbPath, streamOutput: !json);
+    var device = await GetSelectedAvailableDeviceAsync(adbService, serialNumber);
+    var result = await new CaptureService(adbService).CaptureAsync(new CaptureRequest(project, device, tag));
+    WriteCaptureResult(result, json);
+    return 0;
+}
+
 static async Task<int> CreateProjectAsync(IProjectService service, string[] arguments)
 {
     if (arguments.Length != 3 || !string.Equals(arguments[1], "--name", StringComparison.OrdinalIgnoreCase))
@@ -203,6 +226,45 @@ static async Task<int> DisconnectAdbAsync(IAdbService service, string endpoint)
     return 0;
 }
 
+static async Task<AdbDevice> GetSelectedAvailableDeviceAsync(IAdbService service, string serialNumber)
+{
+    var device = (await service.ListDevicesAsync()).SingleOrDefault(candidate => string.Equals(candidate.SerialNumber, serialNumber, StringComparison.Ordinal));
+    if (device is null)
+    {
+        throw new AdbDeviceSelectionException($"ADB device was not found: {serialNumber}");
+    }
+
+    if (!device.IsAvailable)
+    {
+        throw new AdbDeviceSelectionException($"ADB device '{serialNumber}' is in state '{device.Status}', not 'device'.");
+    }
+
+    return device;
+}
+
+static bool IsJsonFormat(string[] arguments)
+{
+    var format = GetOptionalOption(arguments, "--format");
+    return format is null || string.Equals(format, "text", StringComparison.OrdinalIgnoreCase)
+        ? false
+        : string.Equals(format, "json", StringComparison.OrdinalIgnoreCase)
+            ? true
+            : throw new ArgumentException("--format must be either text or json.");
+}
+
+static void WriteCaptureResult(CaptureResult result, bool json)
+{
+    if (json)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(new { result.Plan.CaptureId, result.Plan.CaptureDirectory, result.ManifestPath, result.Manifest.DeviceSerialNumber, result.Manifest.Tag }, new JsonSerializerOptions { WriteIndented = true }));
+        return;
+    }
+
+    Console.WriteLine($"Capture ID: {result.Plan.CaptureId}");
+    Console.WriteLine($"Archive: {result.Plan.CaptureDirectory}");
+    Console.WriteLine($"Manifest: {result.ManifestPath}");
+}
+
 static (string[] CommandArguments, string? AdbPath) ParseAdbPath(string[] arguments)
 {
     var pathIndex = Array.FindIndex(arguments, argument => string.Equals(argument, "--adb-path", StringComparison.OrdinalIgnoreCase));
@@ -219,10 +281,10 @@ static (string[] CommandArguments, string? AdbPath) ParseAdbPath(string[] argume
     return (arguments[..pathIndex], arguments[pathIndex + 1]);
 }
 
-static AdbService CreateAdbService(string? explicitPath, string? projectAdbPath = null)
+static AdbService CreateAdbService(string? explicitPath, string? projectAdbPath = null, bool streamOutput = true)
 {
     var resolvedPath = new AdbPathResolver().ResolveRequired(explicitPath, projectAdbPath);
-    return new AdbService(new ProcessRunner(), resolvedPath, new Progress<ProcessOutput>(WriteProcessOutput));
+    return new AdbService(new ProcessRunner(), resolvedPath, streamOutput ? new Progress<ProcessOutput>(WriteProcessOutput) : null);
 }
 
 static void WriteProcessOutput(ProcessOutput output)
@@ -279,6 +341,22 @@ static string[] GetOptions(string[] arguments, string optionName)
     return values.ToArray();
 }
 
+static void EnsureOnlyOptions(string[] arguments, IReadOnlySet<string> allowedOptions)
+{
+    for (var index = 0; index < arguments.Length; index += 2)
+    {
+        if (!arguments[index].StartsWith("--", StringComparison.Ordinal) || !allowedOptions.Contains(arguments[index]))
+        {
+            throw new ArgumentException($"Unsupported option: {arguments[index]}.");
+        }
+
+        if (index + 1 >= arguments.Length || arguments[index + 1].StartsWith("--", StringComparison.Ordinal))
+        {
+            throw new ArgumentException($"{arguments[index]} must be followed by a value.");
+        }
+    }
+}
+
 static int WriteValidation(ProjectValidationResult validation)
 {
     foreach (var diagnostic in validation.Diagnostics)
@@ -325,6 +403,12 @@ static int FailCommandLineUsage()
     return 2;
 }
 
+static int FailCaptureUsage()
+{
+    Console.Error.WriteLine("Usage: unrealkit capture run --project <project.ukit> --device <serial> [--tag <tag>] [--format text|json] [--adb-path <path>]");
+    return 2;
+}
+
 static void PrintUsage()
 {
     Console.WriteLine("UnrealKit CLI");
@@ -338,4 +422,5 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]");
     Console.WriteLine("  unrealkit commandline push --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--remote-path <path>] [--adb-path <path>]");
     Console.WriteLine("  unrealkit commandline delete --project <project.ukit> --device <serial> [--remote-path <path>] [--adb-path <path>]");
+    Console.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial> [--tag <tag>] [--format text|json] [--adb-path <path>]");
 }
