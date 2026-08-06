@@ -11,6 +11,20 @@ public partial class MainWindow : Window
         DataContext = new ShellViewModel();
     }
 
+    private void BrowseNewProjectDirectory_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "选择空目录或新工程目录",
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
+        {
+            viewModel.NewProjectDirectory = dialog.FolderName;
+        }
+    }
+
     private void BrowseProjectFile_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
