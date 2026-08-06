@@ -25,6 +25,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _remoteCommandLinePath = string.Empty;
     private string _captureTag = string.Empty;
     private string _captureArchivePreview = "请先打开工程并选择状态为 device 的设备。";
+    private string _packageName = string.Empty;
+    private string _unrealProjectName = string.Empty;
+    private string _activity = string.Empty;
+    private string _deviceSavedRootTemplate = string.Empty;
+    private string _adbPath = string.Empty;
     private string _launchParameterPreview = "请先打开工程以加载启动参数预设。";
     private UkitProject? _project;
     private AdbDevice? _selectedDevice;
@@ -42,6 +47,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         DeleteLaunchParametersCommand = new AsyncDelegateCommand(DeleteLaunchParametersAsync, CanOperateOnSelectedDevice);
         StartApplicationCommand = new AsyncDelegateCommand(StartApplicationAsync, CanOperateOnSelectedDevice);
         RunCaptureCommand = new AsyncDelegateCommand(RunCaptureAsync, CanOperateOnSelectedDevice);
+        SaveProjectSettingsCommand = new AsyncDelegateCommand(SaveProjectSettingsAsync, () => !IsBusy && _project is not null);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -56,6 +62,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand DeleteLaunchParametersCommand { get; }
     public ICommand StartApplicationCommand { get; }
     public ICommand RunCaptureCommand { get; }
+    public ICommand SaveProjectSettingsCommand { get; }
 
     public string SelectedNavigationItem
     {
@@ -87,6 +94,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string RemoteCommandLinePath { get => _remoteCommandLinePath; set { if (SetField(ref _remoteCommandLinePath, value)) UpdateLaunchParameterPreview(); } }
     public string CaptureTag { get => _captureTag; set { if (SetField(ref _captureTag, value)) UpdateCaptureArchivePreview(); } }
     public string CaptureArchivePreview { get => _captureArchivePreview; private set => SetField(ref _captureArchivePreview, value); }
+    public string PackageName { get => _packageName; set => SetField(ref _packageName, value); }
+    public string UnrealProjectName { get => _unrealProjectName; set => SetField(ref _unrealProjectName, value); }
+    public string Activity { get => _activity; set => SetField(ref _activity, value); }
+    public string DeviceSavedRootTemplate { get => _deviceSavedRootTemplate; set => SetField(ref _deviceSavedRootTemplate, value); }
+    public string AdbPath { get => _adbPath; set => SetField(ref _adbPath, value); }
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
     public string ProjectTitle => _project is null ? "当前工程：未打开" : $"当前工程：{_project.Descriptor.ProjectName}";
     public bool IsBusy { get => _isBusy; private set { if (SetField(ref _isBusy, value)) RaiseCommandStates(); } }
@@ -176,11 +188,31 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         RemoteCommandLinePath = new LaunchParameterService(CreateAdbService()).GetRemotePath(project.Settings);
         CaptureTag = project.Settings.DefaultCaptureTag;
+        PackageName = project.Settings.PackageName;
+        UnrealProjectName = project.Settings.UnrealProjectName;
+        Activity = project.Settings.Activity;
+        DeviceSavedRootTemplate = project.Settings.DeviceSavedRootTemplate;
+        AdbPath = project.Settings.AdbPath;
         OnPropertyChanged(nameof(ProjectTitle));
         UpdateLaunchParameterPreview();
         UpdateCaptureArchivePreview();
         RaiseCommandStates();
     }
+
+    private Task SaveProjectSettingsAsync() => RunAsync("正在保存项目默认配置…", async progress =>
+    {
+        var settings = _project!.Settings with
+        {
+            PackageName = PackageName.Trim(),
+            UnrealProjectName = UnrealProjectName.Trim(),
+            Activity = Activity.Trim(),
+            DeviceSavedRootTemplate = DeviceSavedRootTemplate.Trim(),
+            AdbPath = AdbPath.Trim(),
+            DefaultCaptureTag = CaptureTag.Trim()
+        };
+        SetCurrentProject(await _projectService.UpdateSettingsAsync(_project, settings, progress));
+        StatusMessage = "项目默认配置已保存。";
+    });
 
     private void UpdateLaunchParameterPreview()
     {
@@ -275,7 +307,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }

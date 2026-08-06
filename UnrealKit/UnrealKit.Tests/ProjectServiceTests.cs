@@ -50,6 +50,31 @@ public sealed class ProjectServiceTests : IDisposable
         Assert.Contains(validation.Diagnostics, diagnostic => diagnostic.Code == "UKIT002");
     }
 
+    [Fact]
+    public async Task UpdateSettingsAsync_PersistsCaptureAndAndroidDefaults()
+    {
+        var projectDirectory = Path.Combine(_temporaryDirectory, "MemoryReview");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "MemoryReview"));
+        var settings = created.Project.Settings with
+        {
+            PackageName = "com.example.memoryreview",
+            Activity = "com.epicgames.unreal.GameActivity",
+            DefaultCaptureTag = "Nightly",
+            DeviceSavedRootTemplate = "/sdcard/Android/data/{PackageName}/files/Saved",
+            AdbPath = "C:\\Android\\platform-tools\\adb.exe"
+        };
+
+        await service.UpdateSettingsAsync(created.Project, settings);
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal(settings.PackageName, reopened.Settings.PackageName);
+        Assert.Equal(settings.Activity, reopened.Settings.Activity);
+        Assert.Equal(settings.DefaultCaptureTag, reopened.Settings.DefaultCaptureTag);
+        Assert.Equal(settings.DeviceSavedRootTemplate, reopened.Settings.DeviceSavedRootTemplate);
+        Assert.Equal(settings.AdbPath, reopened.Settings.AdbPath);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))

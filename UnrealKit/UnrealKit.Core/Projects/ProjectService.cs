@@ -60,6 +60,20 @@ public sealed class ProjectService : IProjectService
         return new UkitProject(fullPath, rootDirectory, descriptor, settings);
     }
 
+    public async Task<UkitProject> UpdateSettingsAsync(UkitProject project, ProjectSettings settings, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        const string operationId = "project-settings-update";
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(settings);
+        ValidateSettings(settings);
+        var fullPath = GetProjectFilePath(project.ProjectFilePath);
+        Report(progress, operationId, "Writing", "正在保存项目默认配置。", 1, 2);
+        await WriteSettingsAsync(Path.Combine(project.RootDirectory, project.Descriptor.ConfigRoot, "DefaultGame.ini"), settings, cancellationToken);
+        Report(progress, operationId, "Completed", "项目默认配置已保存。", 2, 2);
+        _logger.Log(new LogEvent(DateTimeOffset.UtcNow, LogLevel.Information, operationId, "Project settings updated", new Dictionary<string, string> { ["path"] = fullPath }));
+        return project with { Settings = settings };
+    }
+
     public async Task<ProjectValidationResult> ValidateProjectAsync(string projectFilePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         const string operationId = "project-validate";
@@ -191,6 +205,33 @@ public sealed class ProjectService : IProjectService
         if (string.IsNullOrWhiteSpace(projectName) || projectName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || projectName is "." or "..")
         {
             throw new ArgumentException("工程名称不能为空，且不能包含文件名非法字符。", nameof(projectName));
+        }
+    }
+
+    private static void ValidateSettings(ProjectSettings settings)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(settings.UnrealProjectName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(settings.DeviceGameRootTemplate);
+        ArgumentException.ThrowIfNullOrWhiteSpace(settings.DeviceSavedRootTemplate);
+        ArgumentException.ThrowIfNullOrWhiteSpace(settings.DefaultCaptureTag);
+        ValidateCaptureTag(settings.DefaultCaptureTag);
+        ValidateUnixTemplate(settings.DeviceGameRootTemplate, nameof(settings.DeviceGameRootTemplate));
+        ValidateUnixTemplate(settings.DeviceSavedRootTemplate, nameof(settings.DeviceSavedRootTemplate));
+    }
+
+    private static void ValidateCaptureTag(string tag)
+    {
+        if (tag.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || tag.Contains('/') || tag.Contains('\\') || tag is "." or "..")
+        {
+            throw new ArgumentException("Default capture tag must be a single valid directory name.", nameof(tag));
+        }
+    }
+
+    private static void ValidateUnixTemplate(string path, string parameterName)
+    {
+        if (!path.StartsWith("/", StringComparison.Ordinal) || path.Contains('\\') || path.Contains('\0'))
+        {
+            throw new ArgumentException("Device path templates must be absolute Unix paths.", parameterName);
         }
     }
 
