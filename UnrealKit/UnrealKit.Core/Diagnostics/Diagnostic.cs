@@ -12,4 +12,5 @@ public sealed record Diagnostic(
     string Code,
     string Message,
     string? Path = null,
-    string? SuggestedFix = null);
+    string? SuggestedFix = null,
+    int? LineNumber = null);

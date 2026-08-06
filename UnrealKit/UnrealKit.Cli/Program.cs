@@ -2,6 +2,7 @@ using System.Text.Json;
 using UnrealKit.Core.Adb;
 using UnrealKit.Core.Capture;
 using UnrealKit.Core.Launch;
+using UnrealKit.Core.Parsing;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
 
@@ -24,6 +25,7 @@ static async Task<int> RunAsync(string[] arguments)
             "app" => await RunAppAsync(arguments[1..]),
             "commandline" => await RunCommandLineAsync(arguments[1..]),
             "capture" => await RunCaptureAsync(arguments[1..]),
+            "parse" => await RunParseAsync(arguments[1..]),
             _ => FailUnknownCommand()
         };
     }
@@ -148,6 +150,20 @@ static async Task<int> RunCaptureAsync(string[] arguments)
     return 0;
 }
 
+static async Task<int> RunParseAsync(string[] arguments)
+{
+    if (arguments.Length == 0 || !string.Equals(arguments[0], "meminfo", StringComparison.OrdinalIgnoreCase))
+    {
+        return FailParseUsage();
+    }
+
+    var options = arguments[1..];
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--input", "--format" });
+    var result = await new AndroidMemInfoParser().ParseFileAsync(GetRequiredOption(options, "--input"));
+    var json = IsJsonFormat(options);
+    WriteMemInfoParseResult(result, json);
+    return result.IsSuccess ? 0 : 1;
+}
 static async Task<int> CreateProjectAsync(IProjectService service, string[] arguments)
 {
     if (arguments.Length != 3 || !string.Equals(arguments[1], "--name", StringComparison.OrdinalIgnoreCase))
@@ -265,6 +281,31 @@ static void WriteCaptureResult(CaptureResult result, bool json)
     Console.WriteLine($"Manifest: {result.ManifestPath}");
 }
 
+static void WriteMemInfoParseResult(AndroidMemInfoParseResult result, bool json)
+{
+    if (json)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+        return;
+    }
+
+    if (result.Report is not null)
+    {
+        Console.WriteLine($"Input: {result.InputPath}");
+        Console.WriteLine($"Process: {result.Report.ProcessName} (pid {result.Report.ProcessId})");
+        Console.WriteLine($"App Summary TOTAL: {result.Report.Summary.TotalPssKb} KB");
+    }
+
+    foreach (var diagnostic in result.Diagnostics)
+    {
+        var line = diagnostic.LineNumber is null ? string.Empty : $" line {diagnostic.LineNumber}";
+        Console.Error.WriteLine($"[{diagnostic.Severity}] {diagnostic.Code}{line}: {diagnostic.Message}");
+        if (!string.IsNullOrWhiteSpace(diagnostic.SuggestedFix))
+        {
+            Console.Error.WriteLine($"  Fix: {diagnostic.SuggestedFix}");
+        }
+    }
+}
 static (string[] CommandArguments, string? AdbPath) ParseAdbPath(string[] arguments)
 {
     var pathIndex = Array.FindIndex(arguments, argument => string.Equals(argument, "--adb-path", StringComparison.OrdinalIgnoreCase));
@@ -409,6 +450,11 @@ static int FailCaptureUsage()
     return 2;
 }
 
+static int FailParseUsage()
+{
+    Console.Error.WriteLine("Usage: unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
+    return 2;
+}
 static void PrintUsage()
 {
     Console.WriteLine("UnrealKit CLI");
@@ -423,4 +469,5 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit commandline push --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--remote-path <path>] [--adb-path <path>]");
     Console.WriteLine("  unrealkit commandline delete --project <project.ukit> --device <serial> [--remote-path <path>] [--adb-path <path>]");
     Console.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial> [--tag <tag>] [--format text|json] [--adb-path <path>]");
+    Console.WriteLine("  unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
 }
