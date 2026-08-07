@@ -236,6 +236,56 @@
                     </Grid>
                 </Border>
             </Grid>
+                        <Grid>
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedNavigationItem}" Value="解析">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="离线 Android meminfo 解析" FontSize="18" FontWeight="SemiBold" />
+                            <StackPanel Grid.Row="1" Margin="0,14,0,0">
+                                <TextBlock Text="选择一个 .txt 文件。解析只读取原始文件；如需归档分析，请从对应 Capture 的 MemInfo 目录明确选择输入。" TextWrapping="Wrap" Foreground="#FF52616B" />
+                                <DockPanel Margin="0,12,0,0" LastChildFill="True">
+                                    <Button Content="浏览..." Click="BrowseMemInfoFile_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                                    <TextBox Text="{Binding MemInfoInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                                </DockPanel>
+                                <Button Content="解析 meminfo" Command="{Binding ParseMemInfoCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,12,0,0" />
+                            </StackPanel>
+                            <Grid Grid.Row="2" Margin="0,18,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="2*" />
+                                    <RowDefinition Height="3*" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{Binding MemInfoProcessDescription}" FontWeight="SemiBold" FontSize="16" />
+                                <TextBlock Grid.Row="1" Text="{Binding MemInfoParsedAt}" Foreground="#FF52616B" Margin="0,5,0,12" />
+                                <DataGrid Grid.Row="2" ItemsSource="{Binding MemInfoMetrics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" HeadersVisibility="Column" Margin="0,0,0,14">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="App Summary 指标" Binding="{Binding Name}" Width="*" />
+                                        <DataGridTextColumn Header="值" Binding="{Binding Value}" Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                                <DataGrid Grid.Row="3" ItemsSource="{Binding MemInfoDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" HeadersVisibility="Column">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="级别" Binding="{Binding Severity}" Width="90" />
+                                        <DataGridTextColumn Header="代码" Binding="{Binding Code}" Width="90" />
+                                        <DataGridTextColumn Header="行号" Binding="{Binding Line}" Width="70" />
+                                        <DataGridTextColumn Header="诊断" Binding="{Binding Message}" Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Grid>
         </Grid>
         <Border Grid.Row="2" Background="White" BorderBrush="#FFE2E6EA" BorderThickness="0,1,0,0" Padding="12,8"><TextBlock Text="{Binding StatusMessage}" Foreground="#FF52616B" /></Border>
     </Grid>

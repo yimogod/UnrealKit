@@ -1,11 +1,13 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using UnrealKit.Core.Adb;
 using UnrealKit.Core.Capture;
 using UnrealKit.Core.Launch;
 using UnrealKit.Core.Operations;
+using UnrealKit.Core.Parsing;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
 
@@ -30,6 +32,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _activity = string.Empty;
     private string _deviceSavedRootTemplate = string.Empty;
     private string _adbPath = string.Empty;
+    private string _memInfoInputPath = string.Empty;
+    private string _memInfoProcessDescription = "Select a meminfo text file to begin offline parsing.";
+    private string _memInfoParsedAt = string.Empty;
     private string _launchParameterPreview = "请先打开工程以加载启动参数预设。";
     private UkitProject? _project;
     private AdbDevice? _selectedDevice;
@@ -48,12 +53,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         StartApplicationCommand = new AsyncDelegateCommand(StartApplicationAsync, CanOperateOnSelectedDevice);
         RunCaptureCommand = new AsyncDelegateCommand(RunCaptureAsync, CanOperateOnSelectedDevice);
         SaveProjectSettingsCommand = new AsyncDelegateCommand(SaveProjectSettingsAsync, () => !IsBusy && _project is not null);
+        ParseMemInfoCommand = new AsyncDelegateCommand(ParseMemInfoAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(MemInfoInputPath));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public IReadOnlyList<string> NavigationItems { get; }
     public ObservableCollection<AdbDevice> Devices { get; } = [];
     public ObservableCollection<LaunchParameterPresetOption> LaunchParameterPresets { get; } = [];
+    public ObservableCollection<MemInfoMetricOption> MemInfoMetrics { get; } = [];
+    public ObservableCollection<MemInfoDiagnosticOption> MemInfoDiagnostics { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
     public ICommand RefreshDevicesCommand { get; }
@@ -63,6 +71,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand StartApplicationCommand { get; }
     public ICommand RunCaptureCommand { get; }
     public ICommand SaveProjectSettingsCommand { get; }
+    public ICommand ParseMemInfoCommand { get; }
 
     public string SelectedNavigationItem
     {
@@ -99,6 +108,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string Activity { get => _activity; set => SetField(ref _activity, value); }
     public string DeviceSavedRootTemplate { get => _deviceSavedRootTemplate; set => SetField(ref _deviceSavedRootTemplate, value); }
     public string AdbPath { get => _adbPath; set => SetField(ref _adbPath, value); }
+    public string MemInfoInputPath { get => _memInfoInputPath; set { if (SetField(ref _memInfoInputPath, value)) RaiseCommandStates(); } }
+    public string MemInfoProcessDescription { get => _memInfoProcessDescription; private set => SetField(ref _memInfoProcessDescription, value); }
+    public string MemInfoParsedAt { get => _memInfoParsedAt; private set => SetField(ref _memInfoParsedAt, value); }
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
     public string ProjectTitle => _project is null ? "当前工程：未打开" : $"当前工程：{_project.Descriptor.ProjectName}";
     public bool IsBusy { get => _isBusy; private set { if (SetField(ref _isBusy, value)) RaiseCommandStates(); } }
@@ -287,6 +299,52 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         StatusMessage = $"采集完成：{result.Plan.CaptureDirectory}";
     });
 
+    private Task ParseMemInfoAsync() => RunAsync("Parsing Android meminfo...", async _ =>
+    {
+        var inputPath = Path.GetFullPath(MemInfoInputPath);
+        if (!File.Exists(inputPath))
+        {
+            throw new FileNotFoundException("Meminfo input file not found.", inputPath);
+        }
+
+        var parseResult = await new AndroidMemInfoParser().ParseFileAsync(inputPath);
+        MemInfoMetrics.Clear();
+        MemInfoDiagnostics.Clear();
+
+        if (parseResult.Report is { } report)
+        {
+            MemInfoProcessDescription = $"{report.ProcessName} (PID {report.ProcessId})";
+            AddMemInfoMetric("Java Heap", report.Summary.JavaHeapKb);
+            AddMemInfoMetric("Native Heap", report.Summary.NativeHeapKb);
+            AddMemInfoMetric("Code", report.Summary.CodeKb);
+            AddMemInfoMetric("Stack", report.Summary.StackKb);
+            AddMemInfoMetric("Graphics", report.Summary.GraphicsKb);
+            AddMemInfoMetric("Private Other", report.Summary.PrivateOtherKb);
+            AddMemInfoMetric("System", report.Summary.SystemKb);
+            AddMemInfoMetric("TOTAL", report.Summary.TotalPssKb);
+        }
+        else
+        {
+            MemInfoProcessDescription = "No valid Android meminfo report was produced.";
+        }
+
+        foreach (var diagnostic in parseResult.Diagnostics)
+        {
+            MemInfoDiagnostics.Add(new MemInfoDiagnosticOption(
+                diagnostic.Severity.ToString(),
+                diagnostic.Code,
+                diagnostic.LineNumber is null ? "-" : diagnostic.LineNumber.Value.ToString(),
+                diagnostic.Message));
+        }
+
+        MemInfoParsedAt = $"Parsed {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz} · {parseResult.Diagnostics.Count} diagnostic(s)";
+        StatusMessage = parseResult.IsSuccess
+            ? "Meminfo parsing completed."
+            : "Meminfo parsing completed with errors. Review the diagnostics.";
+    });
+
+    private void AddMemInfoMetric(string name, long? value) => MemInfoMetrics.Add(new MemInfoMetricOption(name, value is null ? "Not found" : $"{value:N0} KB"));
+
     private async Task RunAsync(string initialMessage, Func<IProgress<OperationProgress>, Task> operation)
     {
         IsBusy = true;
@@ -307,7 +365,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
@@ -323,6 +381,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
+
+public sealed record MemInfoMetricOption(string Name, string Value);
+
+public sealed record MemInfoDiagnosticOption(string Severity, string Code, string Line, string Message);
 
 public sealed class AsyncDelegateCommand(Func<Task> execute, Func<bool> canExecute) : ICommand
 {

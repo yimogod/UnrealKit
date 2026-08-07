@@ -40,4 +40,20 @@ public partial class MainWindow : Window
             viewModel.ProjectFilePath = dialog.FileName;
         }
     }
+
+    private void BrowseMemInfoFile_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Select Android meminfo output",
+            Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
+        {
+            viewModel.MemInfoInputPath = dialog.FileName;
+        }
+    }
 }
