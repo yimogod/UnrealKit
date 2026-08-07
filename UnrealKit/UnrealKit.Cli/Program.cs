@@ -154,17 +154,19 @@ static async Task<int> RunCaptureAsync(string[] arguments)
 
 static async Task<int> RunParseAsync(string[] arguments)
 {
-    if (arguments.Length == 0 || !string.Equals(arguments[0], "meminfo", StringComparison.OrdinalIgnoreCase))
+    if (arguments.Length == 0)
     {
         return FailParseUsage();
     }
 
-    var options = arguments[1..];
-    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--input", "--format" });
-    var result = await new AndroidMemInfoParser().ParseFileAsync(GetRequiredOption(options, "--input"));
-    var json = IsJsonFormat(options);
-    WriteMemInfoParseResult(result, json);
-    return result.IsSuccess ? 0 : 1;
+    return arguments[0].ToLowerInvariant() switch
+    {
+        "meminfo" => await ParseMemInfoAsync(arguments[1..]),
+        "capture-list" => await ListCapturesAsync(arguments[1..]),
+        "capture-files" => await ListCaptureFilesAsync(arguments[1..]),
+        "capture-meminfo" => await ParseCaptureMemInfoAsync(arguments[1..]),
+        _ => FailParseUsage()
+    };
 }
 static async Task<int> RunExportAsync(string[] arguments)
 {
@@ -470,6 +472,124 @@ static int FailCaptureUsage()
     return 2;
 }
 
+static async Task<int> ParseMemInfoAsync(string[] options)
+{
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--input", "--format" });
+    var result = await new AndroidMemInfoParser().ParseFileAsync(GetRequiredOption(options, "--input"));
+    var json = IsJsonFormat(options);
+    WriteMemInfoParseResult(result, json);
+    return result.IsSuccess ? 0 : 1;
+}
+
+static async Task<int> ListCapturesAsync(string[] options)
+{
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--platform", "--tag" });
+    var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(options, "--project"));
+    var service = new CaptureAnalysisService();
+    var platform = GetOptionalOption(options, "--platform");
+    var tag = GetOptionalOption(options, "--tag");
+    var captures = await service.ListCaptureDirectoriesAsync(project, platform, tag);
+    foreach (var capture in captures)
+    {
+        var marker = capture.HasManifest ? "" : " [no manifest]";
+        Console.WriteLine($"{capture.CaptureDate:yyyy-MM-dd}  {capture.CaptureId}  platform={capture.Platform}  tag={capture.Tag}{marker}");
+        Console.WriteLine($"  {capture.RelativePath}");
+    }
+
+    Console.WriteLine($"{captures.Count} capture(s) found.");
+    return 0;
+}
+
+static async Task<int> ListCaptureFilesAsync(string[] options)
+{
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--capture-dir" });
+    var captureDir = GetRequiredOption(options, "--capture-dir");
+    var service = new CaptureAnalysisService();
+    var files = await service.ListCaptureFilesAsync(captureDir);
+    foreach (var file in files)
+    {
+        Console.WriteLine($"[{file.Category}] {file.FileName}  ({file.SizeBytes} bytes)");
+    }
+
+    Console.WriteLine($"{files.Count} file(s) found.");
+    return 0;
+}
+
+static async Task<int> ParseCaptureMemInfoAsync(string[] options)
+{
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--capture", "--file", "--analysis-id", "--format" });
+    var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(options, "--project"));
+    var captureIdOrPath = GetRequiredOption(options, "--capture");
+    var fileName = GetRequiredOption(options, "--file");
+    var analysisId = GetOptionalOption(options, "--analysis-id");
+    var json = IsJsonFormat(options);
+
+    var service = new CaptureAnalysisService();
+
+    string captureDirectoryPath;
+    if (Path.IsPathRooted(captureIdOrPath) || captureIdOrPath.Contains('/') || captureIdOrPath.Contains('\\'))
+    {
+        captureDirectoryPath = Path.GetFullPath(captureIdOrPath);
+    }
+    else
+    {
+        var captures = await service.ListCaptureDirectoriesAsync(project, platform: null, tag: null);
+        var match = captures.FirstOrDefault(c => string.Equals(c.CaptureId, captureIdOrPath, StringComparison.Ordinal));
+        if (match is null)
+        {
+            throw new ArgumentException($"Capture not found: {captureIdOrPath}. Use 'unrealkit parse capture-list --project <project.ukit>' to list available captures.");
+        }
+
+        captureDirectoryPath = match.FullPath;
+    }
+
+    var memInfoFiles = await service.ListCaptureFilesAsync(captureDirectoryPath);
+    var targetFile = memInfoFiles.FirstOrDefault(f => string.Equals(f.FileName, fileName, StringComparison.Ordinal));
+    if (targetFile is null)
+    {
+        var availableNames = string.Join(", ", memInfoFiles
+            .Where(f => string.Equals(f.Category, "MemInfo", StringComparison.OrdinalIgnoreCase))
+            .Select(f => f.FileName));
+        throw new ArgumentException(
+            $"Meminfo file '{fileName}' not found in capture. Available MemInfo files: {availableNames}");
+    }
+
+    if (!string.Equals(targetFile.Category, "MemInfo", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new ArgumentException($"File '{fileName}' is in category '{targetFile.Category}', not MemInfo.");
+    }
+
+    var request = new CaptureAnalysisRequest(project, captureDirectoryPath, targetFile.FullPath, analysisId);
+    var result = await service.AnalyzeMemInfoAsync(request);
+
+    if (json)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            result.AnalysisId,
+            result.AnalysisDirectory,
+            result.CaptureId,
+            result.InputFilePath,
+            result.ResultJsonPath,
+            result.ParseResult.IsSuccess,
+            result.ParseResult.Report?.ProcessName,
+            result.ParseResult.Report?.ProcessId,
+            Summary = result.ParseResult.Report?.Summary,
+            Diagnostics = result.ParseResult.Diagnostics.Select(d => new { d.Severity, d.Code, d.Message, d.LineNumber })
+        }, new JsonSerializerOptions { WriteIndented = true }));
+    }
+    else
+    {
+        Console.WriteLine($"Analysis ID: {result.AnalysisId}");
+        Console.WriteLine($"Capture: {result.CaptureId}");
+        Console.WriteLine($"Input: {result.InputFilePath}");
+        Console.WriteLine($"Result: {result.ResultJsonPath}");
+        WriteMemInfoParseResult(result.ParseResult, false);
+    }
+
+    return result.ParseResult.IsSuccess ? 0 : 1;
+}
+
 static int FailParseUsage()
 {
     Console.Error.WriteLine("Usage: unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
@@ -491,5 +611,8 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit commandline delete --project <project.ukit> --device <serial> [--remote-path <path>] [--adb-path <path>]");
     Console.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial> [--tag <tag>] [--format text|json] [--adb-path <path>]");
     Console.WriteLine("  unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
+    Console.WriteLine("  unrealkit parse capture-list --project <project.ukit> [--platform <platform>] [--tag <tag>]");
+    Console.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
+    Console.WriteLine("  unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]");
     Console.WriteLine("  unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv>");
 }
