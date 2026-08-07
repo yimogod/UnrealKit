@@ -1,0 +1,28 @@
+﻿Applications Memory Usage (in Kilobytes):
+
+** MEMINFO in pid 9876 [com.example.oemgame] **
+                 Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap
+               Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free
+              ------   ------   ------   ------   ------   ------   ------   ------
+ Native Heap    12345    12000        0       10    13000    64000    53000    11000
+ Dalvik Heap     4567     4500        0        0     5000    32000    28000     4000
+ EGL mtrack      ----      128        0        0      128
+
+ Dalvik Details
+           LinearAlloc:      512 KB
+             Accounting:      256
+
+ Objects
+               Views:       42
+         ViewRootImpl:        3
+
+ App Summary
+                       Pss (KB)
+                        Java Heap:     4567 KB
+                      Native Heap:   12,345
+                             Code:     1000
+                            Stack:      512
+                         Graphics:      128
+                    Private Other:      256
+                           System:      512
+                          TOTAL:   19,320

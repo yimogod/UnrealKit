@@ -1,0 +1,22 @@
+﻿Applications Memory Usage (in Kilobytes):
+
+** MEMINFO in pid 1111 [com.example.malformed] **
+                 Pss  Private  Private  SwapPss
+               Total    Dirty    Clean    Dirty
+              ------   ------   ------   ------
+ Native Heap     5000     4900        0        0
+ OEM total unavailable
+
+ Dalvik Details
+           LinearAlloc:      512
+             Accounting invalid
+
+ Objects
+               Views:       42
+         ViewRootImpl invalid
+
+ App Summary
+                       Pss(KB)
+                        Java Heap:     1000
+                      Native Heap:     5000
+                          TOTAL:     6000
