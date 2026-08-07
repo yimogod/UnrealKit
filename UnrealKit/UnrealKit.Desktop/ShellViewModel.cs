@@ -61,6 +61,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<AdbDevice> Devices { get; } = [];
     public ObservableCollection<LaunchParameterPresetOption> LaunchParameterPresets { get; } = [];
     public ObservableCollection<MemInfoMetricOption> MemInfoMetrics { get; } = [];
+    public ObservableCollection<MemInfoPssOption> MemInfoPssEntries { get; } = [];
+    public ObservableCollection<MemInfoNamedEntryOption> MemInfoDalvikEntries { get; } = [];
+    public ObservableCollection<MemInfoNamedEntryOption> MemInfoObjectEntries { get; } = [];
     public ObservableCollection<MemInfoDiagnosticOption> MemInfoDiagnostics { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
@@ -309,6 +312,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         var parseResult = await new AndroidMemInfoParser().ParseFileAsync(inputPath);
         MemInfoMetrics.Clear();
+        MemInfoPssEntries.Clear();
+        MemInfoDalvikEntries.Clear();
+        MemInfoObjectEntries.Clear();
         MemInfoDiagnostics.Clear();
 
         if (parseResult.Report is { } report)
@@ -322,6 +328,20 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             AddMemInfoMetric("Private Other", report.Summary.PrivateOtherKb);
             AddMemInfoMetric("System", report.Summary.SystemKb);
             AddMemInfoMetric("TOTAL", report.Summary.TotalPssKb);
+            foreach (var entry in report.DetailedPssEntries)
+            {
+                MemInfoPssEntries.Add(new MemInfoPssOption(entry.Name, FormatMemInfoValue(entry.TotalPssKb), FormatMemInfoValue(entry.PrivateDirtyKb), FormatMemInfoValue(entry.PrivateCleanKb), FormatMemInfoValue(entry.SwapPssKb), FormatMemInfoValue(entry.RssKb), FormatMemInfoValue(entry.HeapSizeKb), FormatMemInfoValue(entry.HeapAllocKb), FormatMemInfoValue(entry.HeapFreeKb), entry.LineNumber.ToString()));
+            }
+
+            foreach (var entry in report.DalvikEntries)
+            {
+                MemInfoDalvikEntries.Add(new MemInfoNamedEntryOption(entry.Name, FormatMemInfoValue(entry.PssKb), entry.LineNumber.ToString()));
+            }
+
+            foreach (var entry in report.ObjectEntries)
+            {
+                MemInfoObjectEntries.Add(new MemInfoNamedEntryOption(entry.Name, entry.Count.ToString("N0"), entry.LineNumber.ToString()));
+            }
         }
         else
         {
@@ -343,7 +363,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             : "Meminfo parsing completed with errors. Review the diagnostics.";
     });
 
-    private void AddMemInfoMetric(string name, long? value) => MemInfoMetrics.Add(new MemInfoMetricOption(name, value is null ? "Not found" : $"{value:N0} KB"));
+    private void AddMemInfoMetric(string name, long? value) => MemInfoMetrics.Add(new MemInfoMetricOption(name, FormatMemInfoValue(value)));
+
+    private static string FormatMemInfoValue(long? value) => value is null ? "Not found" : $"{value:N0} KB";
 
     private async Task RunAsync(string initialMessage, Func<IProgress<OperationProgress>, Task> operation)
     {
@@ -383,6 +405,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 }
 
 public sealed record MemInfoMetricOption(string Name, string Value);
+
+public sealed record MemInfoPssOption(string Name, string TotalPss, string PrivateDirty, string PrivateClean, string SwapPss, string Rss, string HeapSize, string HeapAlloc, string HeapFree, string Line);
+
+public sealed record MemInfoNamedEntryOption(string Name, string Value, string Line);
 
 public sealed record MemInfoDiagnosticOption(string Severity, string Code, string Line, string Message);
 

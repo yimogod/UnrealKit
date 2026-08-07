@@ -205,52 +205,79 @@ public sealed partial class AndroidMemInfoParser : IAndroidMemInfoParser
     private static long? GetColumnValue(IReadOnlyDictionary<string, long?> values, string column) => values.TryGetValue(column, out var value) ? value : null;
     private static IReadOnlyList<AndroidMemInfoDalvikEntry> ParseDalvikEntries(string inputPath, IReadOnlyList<string> lines, List<Diagnostic> diagnostics)
     {
-        var entries = new List<AndroidMemInfoDalvikEntry>();
-        var sectionIndex = FindSection(lines, "Dalvik Details");
-        if (sectionIndex is null) return entries;
-
-        for (var index = sectionIndex.Value + 1; index < lines.Count && !string.IsNullOrWhiteSpace(lines[index]); index++)
-        {
-            if (!TryParseNamedNumber(lines[index], out var name, out var value))
-            {
-                diagnostics.Add(Warning("AMI211", "The Dalvik Details section contains a malformed entry.", inputPath, index + 1, "Expected '<category>: <kilobytes>'."));
-                continue;
-            }
-
-            entries.Add(new AndroidMemInfoDalvikEntry(name, value, index + 1));
-        }
-
-        return entries;
+        var entries = ParseNamedSection(inputPath, lines, diagnostics, "Dalvik Details", "AMI210", "AMI211", "AMI212", "AMI213", "Dalvik Details", "<category>: <kilobytes>");
+        return entries.Select(entry => new AndroidMemInfoDalvikEntry(entry.Name, entry.Value, entry.LineNumber)).ToArray();
     }
 
     private static IReadOnlyList<AndroidMemInfoObjectEntry> ParseObjectEntries(string inputPath, IReadOnlyList<string> lines, List<Diagnostic> diagnostics)
     {
-        var entries = new List<AndroidMemInfoObjectEntry>();
-        var sectionIndex = FindSection(lines, "Objects");
-        if (sectionIndex is null) return entries;
+        var entries = ParseNamedSection(inputPath, lines, diagnostics, "Objects", "AMI220", "AMI221", "AMI222", "AMI223", "Objects", "<object type>: <count>");
+        return entries.Select(entry => new AndroidMemInfoObjectEntry(entry.Name, entry.Value, entry.LineNumber)).ToArray();
+    }
 
-        for (var index = sectionIndex.Value + 1; index < lines.Count && !string.IsNullOrWhiteSpace(lines[index]); index++)
+    private static IReadOnlyList<(string Name, long Value, int LineNumber)> ParseNamedSection(
+        string inputPath,
+        IReadOnlyList<string> lines,
+        List<Diagnostic> diagnostics,
+        string sectionName,
+        string duplicateSectionCode,
+        string malformedEntryCode,
+        string duplicateEntryCode,
+        string truncationCode,
+        string displayName,
+        string entryFormat)
+    {
+        var entries = new List<(string Name, long Value, int LineNumber)>();
+        var sectionIndices = FindSections(lines, sectionName);
+        if (sectionIndices.Count == 0) return entries;
+
+        if (sectionIndices.Count > 1)
         {
-            if (!TryParseNamedNumber(lines[index], out var name, out var value))
+            foreach (var sectionIndex in sectionIndices.Skip(1))
             {
-                diagnostics.Add(Warning("AMI221", "The Objects section contains a malformed entry.", inputPath, index + 1, "Expected '<object type>: <count>'."));
-                continue;
+                diagnostics.Add(Warning(duplicateSectionCode, $"More than one '{displayName}' section was found; entries from every section are retained.", inputPath, sectionIndex + 1, "Capture one process dump when possible, then compare duplicate sections by their line numbers."));
+            }
+        }
+
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sectionIndex in sectionIndices)
+        {
+            var sectionEntries = 0;
+            for (var index = sectionIndex + 1; index < lines.Count && !string.IsNullOrWhiteSpace(lines[index]); index++)
+            {
+                if (IsKnownSectionHeader(lines[index])) break;
+                if (!TryParseNamedNumber(lines[index], out var name, out var value))
+                {
+                    diagnostics.Add(Warning(malformedEntryCode, $"The {displayName} section contains a malformed entry.", inputPath, index + 1, $"Expected '{entryFormat}'."));
+                    continue;
+                }
+
+                if (!seenNames.Add(name))
+                {
+                    diagnostics.Add(Warning(duplicateEntryCode, $"The {displayName} section contains a duplicate '{name}' entry; all values are retained.", inputPath, index + 1, "Use the line number to determine whether this is an OEM-specific subdivision or duplicate output."));
+                }
+
+                entries.Add((name, value, index + 1));
+                sectionEntries++;
             }
 
-            entries.Add(new AndroidMemInfoObjectEntry(name, value, index + 1));
+            if (sectionEntries == 0)
+            {
+                diagnostics.Add(Warning(truncationCode, $"The {displayName} section ends without any entries and may be truncated.", inputPath, sectionIndex + 1, $"Capture the complete '{displayName}' section with at least one '{entryFormat}' entry."));
+            }
         }
 
         return entries;
     }
 
-    private static int? FindSection(IReadOnlyList<string> lines, string sectionName)
-    {
-        var matches = Enumerable.Range(0, lines.Count)
-            .Where(index => string.Equals(lines[index].Trim(), sectionName, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-        return matches.Length == 1 ? matches[0] : null;
-    }
+    private static IReadOnlyList<int> FindSections(IReadOnlyList<string> lines, string sectionName) => Enumerable.Range(0, lines.Count)
+        .Where(index => string.Equals(lines[index].Trim(), sectionName, StringComparison.OrdinalIgnoreCase))
+        .ToArray();
 
+    private static bool IsKnownSectionHeader(string line) =>
+        string.Equals(line.Trim(), "Dalvik Details", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(line.Trim(), "Objects", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(line.Trim(), "App Summary", StringComparison.OrdinalIgnoreCase);
     private static bool TryParseNamedNumber(string line, out string name, out long value)
     {
         var match = SummaryEntryRegex().Match(line);

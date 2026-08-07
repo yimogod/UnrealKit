@@ -1,0 +1,11 @@
+﻿Applications Memory Usage (in Kilobytes):
+
+** MEMINFO in pid 4444 [com.example.truncated] **
+
+ Dalvik Details
+ Objects
+ App Summary
+                       Pss(KB)
+                        Java Heap:      500
+                      Native Heap:     1000
+                          TOTAL:     1500

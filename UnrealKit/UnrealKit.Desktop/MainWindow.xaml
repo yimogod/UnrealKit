@@ -261,30 +261,29 @@
                                 </DockPanel>
                                 <Button Content="解析 meminfo" Command="{Binding ParseMemInfoCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,12,0,0" />
                             </StackPanel>
-                            <Grid Grid.Row="2" Margin="0,18,0,0">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="2*" />
-                                    <RowDefinition Height="3*" />
-                                </Grid.RowDefinitions>
-                                <TextBlock Text="{Binding MemInfoProcessDescription}" FontWeight="SemiBold" FontSize="16" />
-                                <TextBlock Grid.Row="1" Text="{Binding MemInfoParsedAt}" Foreground="#FF52616B" Margin="0,5,0,12" />
-                                <DataGrid Grid.Row="2" ItemsSource="{Binding MemInfoMetrics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" HeadersVisibility="Column" Margin="0,0,0,14">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="App Summary 指标" Binding="{Binding Name}" Width="*" />
-                                        <DataGridTextColumn Header="值" Binding="{Binding Value}" Width="*" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                                <DataGrid Grid.Row="3" ItemsSource="{Binding MemInfoDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" HeadersVisibility="Column">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="级别" Binding="{Binding Severity}" Width="90" />
-                                        <DataGridTextColumn Header="代码" Binding="{Binding Code}" Width="90" />
-                                        <DataGridTextColumn Header="行号" Binding="{Binding Line}" Width="70" />
-                                        <DataGridTextColumn Header="诊断" Binding="{Binding Message}" Width="*" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </Grid>
+                                                        <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding MemInfoProcessDescription}" FontWeight="SemiBold" FontSize="16" />
+                                    <TextBlock Text="{Binding MemInfoParsedAt}" Foreground="#FF52616B" Margin="0,5,0,12" />
+                                    <TabControl MinHeight="350">
+                                        <TabItem Header="App Summary">
+                                            <DataGrid ItemsSource="{Binding MemInfoMetrics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"><DataGrid.Columns><DataGridTextColumn Header="Metric" Binding="{Binding Name}" Width="*" /><DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*" /></DataGrid.Columns></DataGrid>
+                                        </TabItem>
+                                        <TabItem Header="Detailed PSS">
+                                            <DataGrid ItemsSource="{Binding MemInfoPssEntries}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"><DataGrid.Columns><DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="150" /><DataGridTextColumn Header="PSS" Binding="{Binding TotalPss}" Width="95" /><DataGridTextColumn Header="Private Dirty" Binding="{Binding PrivateDirty}" Width="105" /><DataGridTextColumn Header="Private Clean" Binding="{Binding PrivateClean}" Width="105" /><DataGridTextColumn Header="SwapPss" Binding="{Binding SwapPss}" Width="95" /><DataGridTextColumn Header="RSS" Binding="{Binding Rss}" Width="95" /><DataGridTextColumn Header="Heap Size" Binding="{Binding HeapSize}" Width="95" /><DataGridTextColumn Header="Heap Alloc" Binding="{Binding HeapAlloc}" Width="95" /><DataGridTextColumn Header="Heap Free" Binding="{Binding HeapFree}" Width="95" /><DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="60" /></DataGrid.Columns></DataGrid>
+                                        </TabItem>
+                                        <TabItem Header="Dalvik Details">
+                                            <DataGrid ItemsSource="{Binding MemInfoDalvikEntries}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"><DataGrid.Columns><DataGridTextColumn Header="Category" Binding="{Binding Name}" Width="*" /><DataGridTextColumn Header="PSS" Binding="{Binding Value}" Width="180" /><DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="80" /></DataGrid.Columns></DataGrid>
+                                        </TabItem>
+                                        <TabItem Header="Objects">
+                                            <DataGrid ItemsSource="{Binding MemInfoObjectEntries}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"><DataGrid.Columns><DataGridTextColumn Header="Object Type" Binding="{Binding Name}" Width="*" /><DataGridTextColumn Header="Count" Binding="{Binding Value}" Width="180" /><DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="80" /></DataGrid.Columns></DataGrid>
+                                        </TabItem>
+                                        <TabItem Header="Diagnostics">
+                                            <DataGrid ItemsSource="{Binding MemInfoDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"><DataGrid.Columns><DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="90" /><DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="90" /><DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="70" /><DataGridTextColumn Header="Diagnostic" Binding="{Binding Message}" Width="*" /></DataGrid.Columns></DataGrid>
+                                        </TabItem>
+                                    </TabControl>
+                                </StackPanel>
+                            </ScrollViewer>
                         </Grid>
         </Grid>
         <Border Grid.Row="2" Background="White" BorderBrush="#FFE2E6EA" BorderThickness="0,1,0,0" Padding="12,8"><TextBlock Text="{Binding StatusMessage}" Foreground="#FF52616B" /></Border>

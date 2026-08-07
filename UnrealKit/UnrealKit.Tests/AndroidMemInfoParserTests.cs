@@ -83,5 +83,29 @@ public sealed class AndroidMemInfoParserTests
         Assert.Null(nativeHeap.HeapFreeKb);
         Assert.Empty(result.Diagnostics);
     }
+    [Fact]
+    public async Task ParseFileAsync_RetainsDuplicateNamedSectionsAndEntriesWithDiagnostics()
+    {
+        var result = await new AndroidMemInfoParser().ParseFileAsync(GetSamplePath("duplicate-sections-meminfo.txt"));
+
+        Assert.True(result.IsSuccess);
+        var report = Assert.IsType<AndroidMemInfoReport>(result.Report);
+        Assert.Equal(3, report.DalvikEntries.Count);
+        Assert.Equal(3, report.ObjectEntries.Count);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "AMI210" && diagnostic.LineNumber == 12);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "AMI212" && diagnostic.LineNumber == 13);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "AMI220" && diagnostic.LineNumber == 15);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "AMI222" && diagnostic.LineNumber == 16);
+    }
+
+    [Fact]
+    public async Task ParseFileAsync_ReportsTruncatedNamedSectionsWithoutRejectingAppSummary()
+    {
+        var result = await new AndroidMemInfoParser().ParseFileAsync(GetSamplePath("truncated-sections-meminfo.txt"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "AMI213" && diagnostic.LineNumber == 5);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "AMI223" && diagnostic.LineNumber == 6);
+    }
     private static string GetSamplePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", "MemInfo", fileName);
 }

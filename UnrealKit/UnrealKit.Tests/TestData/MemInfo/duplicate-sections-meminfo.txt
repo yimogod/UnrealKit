@@ -1,0 +1,23 @@
+﻿Applications Memory Usage (in Kilobytes):
+
+** MEMINFO in pid 3333 [com.example.duplicates] **
+
+ Dalvik Details
+           LinearAlloc:      100
+             Accounting:       50
+
+ Objects
+               Views:       10
+
+ Dalvik Details
+           LinearAlloc:      120
+
+ Objects
+               Views:       12
+         ViewRootImpl:        2
+
+ App Summary
+                       Pss(KB)
+                        Java Heap:     1000
+                      Native Heap:     2000
+                          TOTAL:     3000
