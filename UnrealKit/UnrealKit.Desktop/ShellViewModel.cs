@@ -15,8 +15,9 @@ namespace UnrealKit.Desktop;
 
 public sealed class ShellViewModel : INotifyPropertyChanged
 {
-    private readonly IProjectService _projectService = new ProjectService();
-    private readonly AdbPathResolver _adbPathResolver = new();
+    private readonly IProjectService _projectService;
+    private readonly IDesktopAdbServiceFactory _adbServiceFactory;
+    private readonly IUserConfirmationService _confirmationService;
     private string _selectedNavigationItem;
     private string _statusMessage = "未打开工程。";
     private string _projectFilePath = string.Empty;
@@ -36,12 +37,25 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _memInfoProcessDescription = "Select a meminfo text file to begin offline parsing.";
     private string _memInfoParsedAt = string.Empty;
     private string _launchParameterPreview = "请先打开工程以加载启动参数预设。";
+    private string _launchOperationSummary = "请先打开工程并选择状态为 device 的设备。";
+    private string _operationStage = "Idle";
     private UkitProject? _project;
     private AdbDevice? _selectedDevice;
     private bool _isBusy;
 
     public ShellViewModel()
+        : this(new ProjectService(), new DesktopAdbServiceFactory(), new RejectingConfirmationService())
     {
+    }
+
+    public ShellViewModel(
+        IProjectService projectService,
+        IDesktopAdbServiceFactory adbServiceFactory,
+        IUserConfirmationService confirmationService)
+    {
+        _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
+        _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
+        _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
         NavigationItems = ["工程", "设备", "启动参数", "采集", "解析", "结果", "日志与设置"];
         _selectedNavigationItem = NavigationItems[0];
         CreateProjectCommand = new AsyncDelegateCommand(CreateProjectAsync, CanCreateProject);
@@ -65,6 +79,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<MemInfoNamedEntryOption> MemInfoDalvikEntries { get; } = [];
     public ObservableCollection<MemInfoNamedEntryOption> MemInfoObjectEntries { get; } = [];
     public ObservableCollection<MemInfoDiagnosticOption> MemInfoDiagnostics { get; } = [];
+    public ObservableCollection<string> OperationLogs { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
     public ICommand RefreshDevicesCommand { get; }
@@ -115,6 +130,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string MemInfoProcessDescription { get => _memInfoProcessDescription; private set => SetField(ref _memInfoProcessDescription, value); }
     public string MemInfoParsedAt { get => _memInfoParsedAt; private set => SetField(ref _memInfoParsedAt, value); }
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
+    public string LaunchOperationSummary { get => _launchOperationSummary; private set => SetField(ref _launchOperationSummary, value); }
+    public string OperationStage { get => _operationStage; private set => SetField(ref _operationStage, value); }
     public string ProjectTitle => _project is null ? "当前工程：未打开" : $"当前工程：{_project.Descriptor.ProjectName}";
     public bool IsBusy { get => _isBusy; private set { if (SetField(ref _isBusy, value)) RaiseCommandStates(); } }
 
@@ -126,6 +143,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             if (!SetField(ref _selectedDevice, value)) return;
             OnPropertyChanged(nameof(SelectedDeviceDescription));
             UpdateCaptureArchivePreview();
+            UpdateLaunchOperationSummary();
             RaiseCommandStates();
         }
     }
@@ -173,10 +191,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private async Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress> progress) =>
         await CreateAdbService().ListDevicesAsync(progress);
 
-    private AdbService CreateAdbService()
+    private IAdbService CreateAdbService()
     {
-        var adbPath = _adbPathResolver.ResolveRequired(null, _project?.Settings.AdbPath);
-        return new AdbService(new ProcessRunner(), adbPath);
+        return _adbServiceFactory.Create(_project?.Settings, new Progress<ProcessOutput>(output =>
+            AddOperationLog($"{output.Timestamp:HH:mm:ss} [{output.Stream}] {output.Text}")));
     }
 
     private void UpdateDevices(IReadOnlyList<AdbDevice> devices)
@@ -210,6 +228,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         AdbPath = project.Settings.AdbPath;
         OnPropertyChanged(nameof(ProjectTitle));
         UpdateLaunchParameterPreview();
+        UpdateLaunchOperationSummary();
         UpdateCaptureArchivePreview();
         RaiseCommandStates();
     }
@@ -243,10 +262,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             var content = service.BuildContent(_project.Settings, GetSelectedPresetNames(), CustomLaunchArguments);
             var remotePath = service.GetRemotePath(_project.Settings, RemoteCommandLinePath);
             LaunchParameterPreview = $"目标路径：{remotePath}{Environment.NewLine}{Environment.NewLine}{content}";
+            UpdateLaunchOperationSummary(remotePath);
         }
         catch (Exception exception)
         {
             LaunchParameterPreview = $"无法生成启动参数：{exception.Message}";
+            UpdateLaunchOperationSummary();
         }
     }
 
@@ -265,6 +286,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private Task DeleteLaunchParametersAsync() => RunAsync("正在删除 uecommandline.txt…", async progress =>
     {
         var remotePath = new LaunchParameterService(CreateAdbService()).GetRemotePath(_project!.Settings, RemoteCommandLinePath);
+        var target = new LaunchOperationTarget(SelectedDevice!.SerialNumber, _project.Settings.PackageName, _project.Settings.Activity, remotePath);
+        if (!await _confirmationService.ConfirmDeleteLaunchParametersAsync(target))
+        {
+            StatusMessage = "已取消删除设备启动参数。";
+            return;
+        }
         await new LaunchParameterService(CreateAdbService()).DeleteAsync(_project, SelectedDevice!.SerialNumber, RemoteCommandLinePath, progress);
         StatusMessage = $"已删除设备上的启动参数：{remotePath}";
     });
@@ -371,17 +398,58 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         IsBusy = true;
         StatusMessage = initialMessage;
+        OperationStage = initialMessage;
+        AddOperationLog($"{DateTimeOffset.Now:HH:mm:ss} [Info] {initialMessage}");
         try
         {
-            await operation(new Progress<OperationProgress>(item => StatusMessage = item.Message));
+            await operation(new Progress<OperationProgress>(item =>
+            {
+                OperationStage = item.Stage;
+                StatusMessage = item.Message;
+                AddOperationLog($"{DateTimeOffset.Now:HH:mm:ss} [{item.Stage}] {item.Message}");
+            }));
         }
         catch (Exception exception)
         {
             StatusMessage = exception.Message;
+            OperationStage = "Error";
+            AddOperationLog($"{DateTimeOffset.Now:HH:mm:ss} [Error] {exception.Message}");
         }
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    private void UpdateLaunchOperationSummary(string? remotePath = null)
+    {
+        if (_project is null || SelectedDevice?.IsAvailable != true)
+        {
+            LaunchOperationSummary = "请先打开工程并选择状态为 device 的设备。";
+            return;
+        }
+
+        try
+        {
+            var resolvedPath = remotePath ?? new LaunchParameterService(CreateAdbService()).GetRemotePath(_project.Settings, RemoteCommandLinePath);
+            LaunchOperationSummary = $"设备：{SelectedDevice.SerialNumber}{Environment.NewLine}" +
+                                   $"包名：{_project.Settings.PackageName}{Environment.NewLine}" +
+                                   $"Activity：{_project.Settings.Activity}{Environment.NewLine}" +
+                                   $"远端路径：{resolvedPath}";
+        }
+        catch (Exception exception)
+        {
+            LaunchOperationSummary = $"无法生成操作目标：{exception.Message}";
+        }
+    }
+
+    private void AddOperationLog(string message)
+    {
+        OperationLogs.Add(message);
+        const int maximumLogEntries = 300;
+        if (OperationLogs.Count > maximumLogEntries)
+        {
+            OperationLogs.RemoveAt(0);
         }
     }
 
@@ -404,6 +472,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
 
+internal sealed class RejectingConfirmationService : IUserConfirmationService
+{
+    public Task<bool> ConfirmDeleteLaunchParametersAsync(LaunchOperationTarget target) => Task.FromResult(false);
+}
+
 public sealed record MemInfoMetricOption(string Name, string Value);
 
 public sealed record MemInfoPssOption(string Name, string TotalPss, string PrivateDirty, string PrivateClean, string SwapPss, string Rss, string HeapSize, string HeapAlloc, string HeapFree, string Line);
@@ -416,7 +489,8 @@ public sealed class AsyncDelegateCommand(Func<Task> execute, Func<bool> canExecu
 {
     public event EventHandler? CanExecuteChanged;
     public bool CanExecute(object? parameter) => canExecute();
-    public async void Execute(object? parameter) => await execute();
+    public async void Execute(object? parameter) => await ExecuteAsync();
+    public Task ExecuteAsync() => execute();
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }
 

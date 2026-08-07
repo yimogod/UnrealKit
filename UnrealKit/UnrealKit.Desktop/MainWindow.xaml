@@ -198,6 +198,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <TextBlock Text="启动参数预设" FontSize="18" FontWeight="SemiBold" />
                             <TextBlock Grid.Column="1" Text="uecommandline.txt 预览" FontSize="18" FontWeight="SemiBold" Margin="20,0,0,0" />
@@ -232,6 +233,21 @@
                                 <Button Content="删除设备参数" Command="{Binding DeleteLaunchParametersCommand}" Padding="14,7" Margin="0,0,10,0" />
                                 <Button Content="启动应用" Command="{Binding StartApplicationCommand}" Padding="14,7" />
                             </StackPanel>
+                            <Grid Grid.Row="3" Grid.ColumnSpan="2" Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="操作目标（推送、启动、删除前请核对）" FontWeight="SemiBold" />
+                                    <TextBox Text="{Binding LaunchOperationSummary}" IsReadOnly="True" Margin="0,6,8,0" Padding="8" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="后台进度与 ADB 日志" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding OperationStage}" Foreground="#FF52616B" Margin="0,4,0,4" />
+                                    <ListBox ItemsSource="{Binding OperationLogs}" Margin="8,0,0,0" Height="128" FontFamily="Consolas" />
+                                </StackPanel>
+                            </Grid>
                         </Grid>
                     </Grid>
                 </Border>

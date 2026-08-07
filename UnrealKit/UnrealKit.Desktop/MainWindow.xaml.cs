@@ -1,5 +1,6 @@
 using System.Windows;
 using Microsoft.Win32;
+using UnrealKit.Core.Projects;
 
 namespace UnrealKit.Desktop;
 
@@ -8,7 +9,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        DataContext = new ShellViewModel();
+        DataContext = new ShellViewModel(new ProjectService(), new DesktopAdbServiceFactory(), new WpfUserConfirmationService(this));
     }
 
     private void BrowseNewProjectDirectory_Click(object sender, RoutedEventArgs e)
