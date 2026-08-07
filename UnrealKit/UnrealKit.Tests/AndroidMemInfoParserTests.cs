@@ -65,5 +65,23 @@ public sealed class AndroidMemInfoParserTests
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "AMI221" && diagnostic.LineNumber == 16);
     }
 
+    [Fact]
+    public async Task ParseFileAsync_MapsReorderedAndPartialPssColumnsByHeader()
+    {
+        var result = await new AndroidMemInfoParser().ParseFileAsync(GetSamplePath("oem-reordered-pss-meminfo.txt"));
+
+        Assert.True(result.IsSuccess);
+        var report = Assert.IsType<AndroidMemInfoReport>(result.Report);
+        var nativeHeap = Assert.Single(report.DetailedPssEntries);
+        Assert.Equal(7000, nativeHeap.TotalPssKb);
+        Assert.Equal(6800, nativeHeap.PrivateDirtyKb);
+        Assert.Equal(7500, nativeHeap.RssKb);
+        Assert.Equal(32000, nativeHeap.HeapSizeKb);
+        Assert.Null(nativeHeap.PrivateCleanKb);
+        Assert.Null(nativeHeap.SwapPssKb);
+        Assert.Null(nativeHeap.HeapAllocKb);
+        Assert.Null(nativeHeap.HeapFreeKb);
+        Assert.Empty(result.Diagnostics);
+    }
     private static string GetSamplePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", "MemInfo", fileName);
 }

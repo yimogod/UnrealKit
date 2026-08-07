@@ -1,0 +1,13 @@
+﻿Applications Memory Usage (in Kilobytes):
+
+** MEMINFO in pid 2222 [com.example.reordered] **
+               Heap      Pss      Rss  Private  Vendor
+               Size    Total    Total    Dirty  Extra
+              ------   ------   ------   ------   ------
+ Native Heap    32000     7000     7500     6800       99
+
+ App Summary
+                       Pss(KB)
+                        Java Heap:     1000
+                      Native Heap:     7000
+                          TOTAL:     8000

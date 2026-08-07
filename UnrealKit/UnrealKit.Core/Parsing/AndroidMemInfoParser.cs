@@ -123,6 +123,13 @@ public sealed partial class AndroidMemInfoParser : IAndroidMemInfoParser
         while (dividerIndex < lines.Count && !lines[dividerIndex].Contains("---", StringComparison.Ordinal)) dividerIndex++;
         if (dividerIndex == lines.Count) return entries;
 
+        var columns = ParseDetailedPssColumns(lines, headerIndex, dividerIndex);
+        if (columns.Count == 0)
+        {
+            diagnostics.Add(Warning("AMI201", "The detailed PSS table header could not be mapped.", inputPath, headerIndex + 1, "Include a PSS table header with supported columns such as Pss, Private Dirty, SwapPss, Rss, or Heap Size."));
+            return entries;
+        }
+
         for (var index = dividerIndex + 1; index < lines.Count && !string.IsNullOrWhiteSpace(lines[index]); index++)
         {
             var tokens = lines[index].Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
@@ -133,8 +140,8 @@ public sealed partial class AndroidMemInfoParser : IAndroidMemInfoParser
                 continue;
             }
 
-            var values = new long?[8];
-            for (var valueIndex = 0; valueIndex < Math.Min(tokens.Length - firstValueIndex, values.Length); valueIndex++)
+            var values = new Dictionary<string, long?>(StringComparer.OrdinalIgnoreCase);
+            for (var valueIndex = 0; valueIndex < Math.Min(tokens.Length - firstValueIndex, columns.Count); valueIndex++)
             {
                 var token = tokens[firstValueIndex + valueIndex];
                 if (IsPlaceholder(token)) continue;
@@ -144,15 +151,58 @@ public sealed partial class AndroidMemInfoParser : IAndroidMemInfoParser
                     break;
                 }
 
-                values[valueIndex] = value;
+                if (columns[valueIndex] is { } column) values[column] = value;
             }
 
-            entries.Add(new AndroidMemInfoPssEntry(string.Join(" ", tokens[..firstValueIndex]), values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7], index + 1));
+            entries.Add(new AndroidMemInfoPssEntry(
+                string.Join(" ", tokens[..firstValueIndex]),
+                GetColumnValue(values, "TotalPss"),
+                GetColumnValue(values, "PrivateDirty"),
+                GetColumnValue(values, "PrivateClean"),
+                GetColumnValue(values, "SwapPss"),
+                GetColumnValue(values, "Rss"),
+                GetColumnValue(values, "HeapSize"),
+                GetColumnValue(values, "HeapAlloc"),
+                GetColumnValue(values, "HeapFree"),
+                index + 1));
         }
 
         return entries;
     }
 
+    private static IReadOnlyList<string?> ParseDetailedPssColumns(IReadOnlyList<string> lines, int headerIndex, int dividerIndex)
+    {
+        var columnCount = lines[dividerIndex].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+        var headerRows = Enumerable.Range(headerIndex, dividerIndex - headerIndex)
+            .Select(index => lines[index].Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            .Where(tokens => tokens.Length == columnCount)
+            .ToArray();
+        if (columnCount == 0 || headerRows.Length == 0) return [];
+
+        var columns = new string?[columnCount];
+        for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
+        {
+            var label = string.Concat(headerRows.Select(row => row[columnIndex]));
+            columns[columnIndex] = NormalizeDetailedPssColumn(label);
+        }
+
+        return columns;
+    }
+
+    private static string? NormalizeDetailedPssColumn(string label) => label.Replace(" ", string.Empty, StringComparison.Ordinal).ToUpperInvariant() switch
+    {
+        "PSS" or "PSSTOTAL" => "TotalPss",
+        "PRIVATEDIRTY" => "PrivateDirty",
+        "PRIVATECLEAN" => "PrivateClean",
+        "SWAPPSS" or "SWAPPSSDIRTY" => "SwapPss",
+        "RSS" or "RSSTOTAL" => "Rss",
+        "HEAPSIZE" => "HeapSize",
+        "HEAPALLOC" => "HeapAlloc",
+        "HEAPFREE" => "HeapFree",
+        _ => null
+    };
+
+    private static long? GetColumnValue(IReadOnlyDictionary<string, long?> values, string column) => values.TryGetValue(column, out var value) ? value : null;
     private static IReadOnlyList<AndroidMemInfoDalvikEntry> ParseDalvikEntries(string inputPath, IReadOnlyList<string> lines, List<Diagnostic> diagnostics)
     {
         var entries = new List<AndroidMemInfoDalvikEntry>();
