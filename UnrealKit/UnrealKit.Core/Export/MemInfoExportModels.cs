@@ -11,6 +11,8 @@ public enum MemInfoExportFormat
 public sealed record MemInfoExportRequest(
     AndroidMemInfoParseResult ParseResult,
     string OutputFilePath,
-    DateTimeOffset ParsedAtUtc);
+    DateTimeOffset ParsedAtUtc,
+    bool IncludeDetails = false,
+    string? CaptureId = null);
 
 public sealed record MemInfoExportResult(string OutputFilePath, MemInfoExportFormat Format);

@@ -176,12 +176,16 @@ static async Task<int> RunExportAsync(string[] arguments)
     var options = arguments[1..];
     var inputOption = new string([(char)45, (char)45, (char)105, (char)110, (char)112, (char)117, (char)116]);
     var outputOption = new string([(char)45, (char)45, (char)111, (char)117, (char)116, (char)112, (char)117, (char)116]);
-    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { inputOption, outputOption });
+    var includeDetailsOption = "--include-details";
+    var captureIdOption = "--capture-id";
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { inputOption, outputOption, includeDetailsOption, captureIdOption });
     var input = GetRequiredOption(options, inputOption);
     var output = GetRequiredOption(options, outputOption);
+    var includeDetails = options.Any(option => string.Equals(option, includeDetailsOption, StringComparison.OrdinalIgnoreCase));
+    var captureId = GetOptionalOption(options, captureIdOption);
     var result = await new AndroidMemInfoParser().ParseFileAsync(input);
     if (!result.IsSuccess) { WriteMemInfoParseResult(result, false); return 1; }
-    var exported = await new MemInfoExportService().ExportAsync(new MemInfoExportRequest(result, output, DateTimeOffset.UtcNow));
+    var exported = await new MemInfoExportService().ExportAsync(new MemInfoExportRequest(result, output, DateTimeOffset.UtcNow, includeDetails, captureId));
     Console.WriteLine(exported.OutputFilePath);
     return 0;
 }
@@ -595,7 +599,7 @@ static int FailParseUsage()
     Console.Error.WriteLine("Usage: unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
     return 2;
 }
-static int FailExportUsage() { Console.Error.WriteLine("Usage: unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv>"); return 2; }
+static int FailExportUsage() { Console.Error.WriteLine("Usage: unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv> [--include-details] [--capture-id <capture-id>]"); return 2; }
 static void PrintUsage()
 {
     Console.WriteLine("UnrealKit CLI");
@@ -614,5 +618,5 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit parse capture-list --project <project.ukit> [--platform <platform>] [--tag <tag>]");
     Console.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
     Console.WriteLine("  unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]");
-    Console.WriteLine("  unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv>");
+    Console.WriteLine("  unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv> [--include-details] [--capture-id <capture-id>]");
 }
