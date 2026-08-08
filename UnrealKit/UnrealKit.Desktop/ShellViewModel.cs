@@ -42,6 +42,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private UkitProject? _project;
     private AdbDevice? _selectedDevice;
     private bool _isBusy;
+    private CancellationTokenSource? _operationCancellation;
+    private CancellationToken OperationCancellationToken => _operationCancellation?.Token ?? CancellationToken.None;
 
     public ShellViewModel()
         : this(new ProjectService(), new DesktopAdbServiceFactory(), new RejectingConfirmationService())
@@ -66,6 +68,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         DeleteLaunchParametersCommand = new AsyncDelegateCommand(DeleteLaunchParametersAsync, CanOperateOnSelectedDevice);
         StartApplicationCommand = new AsyncDelegateCommand(StartApplicationAsync, CanOperateOnSelectedDevice);
         RunCaptureCommand = new AsyncDelegateCommand(RunCaptureAsync, CanOperateOnSelectedDevice);
+        CancelOperationCommand = new DelegateCommand(CancelCurrentOperation, () => IsBusy);
         SaveProjectSettingsCommand = new AsyncDelegateCommand(SaveProjectSettingsAsync, () => !IsBusy && _project is not null);
         ParseMemInfoCommand = new AsyncDelegateCommand(ParseMemInfoAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(MemInfoInputPath));
     }
@@ -88,6 +91,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand DeleteLaunchParametersCommand { get; }
     public ICommand StartApplicationCommand { get; }
     public ICommand RunCaptureCommand { get; }
+    public ICommand CancelOperationCommand { get; }
     public ICommand SaveProjectSettingsCommand { get; }
     public ICommand ParseMemInfoCommand { get; }
 
@@ -161,35 +165,35 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private Task CreateProjectAsync() => RunAsync("正在创建工程…", async progress =>
     {
-        var result = await _projectService.CreateProjectAsync(new CreateProjectRequest(NewProjectDirectory, NewProjectName), progress);
+        var result = await _projectService.CreateProjectAsync(new CreateProjectRequest(NewProjectDirectory, NewProjectName), progress, OperationCancellationToken);
         SetCurrentProject(result.Project);
         StatusMessage = $"已创建工程：{result.Project.ProjectFilePath}";
     });
 
     private Task OpenProjectAsync() => RunAsync("正在打开工程…", async progress =>
     {
-        var project = await _projectService.OpenProjectAsync(ProjectFilePath, progress);
+        var project = await _projectService.OpenProjectAsync(ProjectFilePath, progress, OperationCancellationToken);
         SetCurrentProject(project);
         StatusMessage = $"已打开工程：{project.ProjectFilePath}";
     });
 
     private Task RefreshDevicesAsync() => RunAsync("正在刷新 ADB 设备…", async progress =>
     {
-        var devices = await ListDevicesAsync(progress);
+        var devices = await ListDevicesAsync(progress, OperationCancellationToken);
         UpdateDevices(devices);
     });
 
     private Task ConnectWirelessDeviceAsync() => RunAsync("正在连接 Wi-Fi ADB 设备…", async progress =>
     {
         var service = CreateAdbService();
-        await service.ConnectAsync(WirelessEndpoint.Trim(), progress);
-        var devices = await ListDevicesAsync(progress);
+        await service.ConnectAsync(WirelessEndpoint.Trim(), progress, OperationCancellationToken);
+        var devices = await ListDevicesAsync(progress, OperationCancellationToken);
         UpdateDevices(devices);
         StatusMessage = $"已连接 {WirelessEndpoint.Trim()}，请从列表中明确选择目标设备。";
     });
 
-    private async Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress> progress) =>
-        await CreateAdbService().ListDevicesAsync(progress);
+    private async Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress> progress, CancellationToken cancellationToken) =>
+        await CreateAdbService().ListDevicesAsync(progress, cancellationToken);
 
     private IAdbService CreateAdbService()
     {
@@ -201,7 +205,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         Devices.Clear();
         foreach (var device in devices) Devices.Add(device);
-        SelectedDevice = devices.Count(device => device.IsAvailable) == 1 ? devices.Single(device => device.IsAvailable) : null;
+        SelectedDevice = null;
         StatusMessage = devices.Count == 0 ? "未发现 ADB 设备。" : $"已发现 {devices.Count} 台设备，请明确选择可用设备。";
     }
 
@@ -244,7 +248,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             AdbPath = AdbPath.Trim(),
             DefaultCaptureTag = CaptureTag.Trim()
         };
-        SetCurrentProject(await _projectService.UpdateSettingsAsync(_project, settings, progress));
+        SetCurrentProject(await _projectService.UpdateSettingsAsync(_project, settings, progress, OperationCancellationToken));
         StatusMessage = "项目默认配置已保存。";
     });
 
@@ -278,7 +282,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var result = await new LaunchParameterService(CreateAdbService()).PushAsync(
             _project!,
             new LaunchParameterRequest(SelectedDevice!.SerialNumber, GetSelectedPresetNames(), CustomLaunchArguments, RemoteCommandLinePath),
-            progress);
+            progress,
+            OperationCancellationToken);
         StatusMessage = $"已推送启动参数到：{result.RemotePath}";
         UpdateLaunchParameterPreview();
     });
@@ -292,13 +297,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             StatusMessage = "已取消删除设备启动参数。";
             return;
         }
-        await new LaunchParameterService(CreateAdbService()).DeleteAsync(_project, SelectedDevice!.SerialNumber, RemoteCommandLinePath, progress);
+        await new LaunchParameterService(CreateAdbService()).DeleteAsync(_project, SelectedDevice!.SerialNumber, RemoteCommandLinePath, progress, OperationCancellationToken);
         StatusMessage = $"已删除设备上的启动参数：{remotePath}";
     });
 
     private Task StartApplicationAsync() => RunAsync("正在启动应用…", async progress =>
     {
-        await new LaunchParameterService(CreateAdbService()).StartApplicationAsync(_project!, SelectedDevice!.SerialNumber, progress);
+        await new LaunchParameterService(CreateAdbService()).StartApplicationAsync(_project!, SelectedDevice!.SerialNumber, progress, OperationCancellationToken);
         StatusMessage = $"已发送应用启动请求：{_project!.Settings.PackageName}/{_project.Settings.Activity}";
     });
 
@@ -324,7 +329,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private Task RunCaptureAsync() => RunAsync("正在采集并归档原始数据…", async progress =>
     {
         var request = new CaptureRequest(_project!, SelectedDevice!, CaptureTag);
-        var result = await new CaptureService(CreateAdbService()).CaptureAsync(request, progress);
+        var result = await new CaptureService(CreateAdbService()).CaptureAsync(request, progress, OperationCancellationToken);
         CaptureArchivePreview = $"归档目录：{result.Plan.CaptureDirectory}{Environment.NewLine}清单：{result.ManifestPath}";
         StatusMessage = $"采集完成：{result.Plan.CaptureDirectory}";
     });
@@ -337,7 +342,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             throw new FileNotFoundException("Meminfo input file not found.", inputPath);
         }
 
-        var parseResult = await new AndroidMemInfoParser().ParseFileAsync(inputPath);
+        var parseResult = await new AndroidMemInfoParser().ParseFileAsync(inputPath, OperationCancellationToken);
         MemInfoMetrics.Clear();
         MemInfoPssEntries.Clear();
         MemInfoDalvikEntries.Clear();
@@ -396,6 +401,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private async Task RunAsync(string initialMessage, Func<IProgress<OperationProgress>, Task> operation)
     {
+        using var cancellation = new CancellationTokenSource();
+        _operationCancellation = cancellation;
         IsBusy = true;
         StatusMessage = initialMessage;
         OperationStage = initialMessage;
@@ -417,9 +424,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
         finally
         {
+            _operationCancellation = null;
             IsBusy = false;
         }
     }
+
+    private void CancelCurrentOperation() => _operationCancellation?.Cancel();
 
     private void UpdateLaunchOperationSummary(string? remotePath = null)
     {
@@ -491,6 +501,14 @@ public sealed class AsyncDelegateCommand(Func<Task> execute, Func<bool> canExecu
     public bool CanExecute(object? parameter) => canExecute();
     public async void Execute(object? parameter) => await ExecuteAsync();
     public Task ExecuteAsync() => execute();
+    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+}
+
+public sealed class DelegateCommand(Action execute, Func<bool> canExecute) : ICommand
+{
+    public event EventHandler? CanExecuteChanged;
+    public bool CanExecute(object? parameter) => canExecute();
+    public void Execute(object? parameter) => execute();
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }
 

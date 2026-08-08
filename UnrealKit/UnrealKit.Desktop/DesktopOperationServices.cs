@@ -8,6 +8,8 @@ namespace UnrealKit.Desktop;
 public interface IDesktopAdbServiceFactory
 {
     IAdbService Create(ProjectSettings? settings, IProgress<ProcessOutput>? output);
+
+    AdbPathResolution Resolve(ProjectSettings? settings);
 }
 
 public sealed class DesktopAdbServiceFactory(AdbPathResolver? adbPathResolver = null) : IDesktopAdbServiceFactory
@@ -16,9 +18,12 @@ public sealed class DesktopAdbServiceFactory(AdbPathResolver? adbPathResolver = 
 
     public IAdbService Create(ProjectSettings? settings, IProgress<ProcessOutput>? output)
     {
-        var adbPath = _adbPathResolver.ResolveRequired(null, settings?.AdbPath);
+        var resolution = Resolve(settings);
+        var adbPath = resolution.ResolvedPath ?? throw new AdbPathResolutionException(resolution);
         return new AdbService(new ProcessRunner(), adbPath, output);
     }
+
+    public AdbPathResolution Resolve(ProjectSettings? settings) => _adbPathResolver.Resolve(null, settings?.AdbPath);
 }
 
 public sealed record LaunchOperationTarget(string SerialNumber, string PackageName, string Activity, string RemoteCommandLinePath);

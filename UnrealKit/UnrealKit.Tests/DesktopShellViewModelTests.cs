@@ -22,6 +22,8 @@ public sealed class DesktopShellViewModelTests
 
         await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
         await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+        Assert.Null(viewModel.SelectedDevice);
+        viewModel.SelectedDevice = viewModel.Devices.Single();
         await ((AsyncDelegateCommand)viewModel.PushLaunchParametersCommand).ExecuteAsync();
         await ((AsyncDelegateCommand)viewModel.StartApplicationCommand).ExecuteAsync();
         await ((AsyncDelegateCommand)viewModel.DeleteLaunchParametersCommand).ExecuteAsync();
@@ -51,6 +53,7 @@ public sealed class DesktopShellViewModelTests
 
         await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
         await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+        viewModel.SelectedDevice = viewModel.Devices.Single();
         await ((AsyncDelegateCommand)viewModel.DeleteLaunchParametersCommand).ExecuteAsync();
 
         Assert.True(confirmation.WasAsked);
@@ -79,6 +82,7 @@ public sealed class DesktopShellViewModelTests
     private sealed class StaticAdbServiceFactory(IAdbService adb) : IDesktopAdbServiceFactory
     {
         public IAdbService Create(ProjectSettings? settings, IProgress<ProcessOutput>? output) => new OutputForwardingAdbService(adb, output);
+        public AdbPathResolution Resolve(ProjectSettings? settings) => new(null, []);
     }
 
     private sealed class RecordingConfirmationService(bool response) : IUserConfirmationService
