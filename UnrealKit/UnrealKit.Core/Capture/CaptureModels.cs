@@ -36,3 +36,10 @@ public sealed record CaptureResult(
     CapturePlan Plan,
     string ManifestPath,
     CaptureManifest Manifest);
+
+public sealed record CaptureImportRequest(
+    Projects.UkitProject Project,
+    string SourceDirectory,
+    string Platform,
+    string Tag,
+    string? CaptureId = null);

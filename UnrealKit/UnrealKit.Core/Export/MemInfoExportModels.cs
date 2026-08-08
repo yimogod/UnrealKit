@@ -5,7 +5,8 @@ namespace UnrealKit.Core.Export;
 public enum MemInfoExportFormat
 {
     Csv,
-    Tsv
+    Tsv,
+    Xlsx
 }
 
 public sealed record MemInfoExportRequest(

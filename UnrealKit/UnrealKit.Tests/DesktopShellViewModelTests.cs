@@ -22,8 +22,8 @@ public sealed class DesktopShellViewModelTests
 
         await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
         await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
-        Assert.Null(viewModel.SelectedDevice);
-        viewModel.SelectedDevice = viewModel.Devices.Single();
+        Assert.NotNull(viewModel.SelectedDevice);
+        Assert.Equal("R58M123ABC", viewModel.SelectedDevice?.SerialNumber);
         await ((AsyncDelegateCommand)viewModel.PushLaunchParametersCommand).ExecuteAsync();
         await ((AsyncDelegateCommand)viewModel.StartApplicationCommand).ExecuteAsync();
         await ((AsyncDelegateCommand)viewModel.DeleteLaunchParametersCommand).ExecuteAsync();

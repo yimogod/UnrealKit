@@ -9,6 +9,7 @@ using UnrealKit.Core.Launch;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Parsing;
 using UnrealKit.Core.Processes;
+using System.Linq;
 using UnrealKit.Core.Projects;
 
 namespace UnrealKit.Desktop;
@@ -201,14 +202,22 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             AddOperationLog($"{output.Timestamp:HH:mm:ss} [{output.Stream}] {output.Text}")));
     }
 
-    private void UpdateDevices(IReadOnlyList<AdbDevice> devices)
+        private void UpdateDevices(IReadOnlyList<AdbDevice> devices)
     {
         Devices.Clear();
         foreach (var device in devices) Devices.Add(device);
-        SelectedDevice = null;
-        StatusMessage = devices.Count == 0 ? "未发现 ADB 设备。" : $"已发现 {devices.Count} 台设备，请明确选择可用设备。";
+        var available = devices.Where(device => device.IsAvailable).ToArray();
+        if (available.Length == 1)
+        {
+            SelectedDevice = available[0];
+            StatusMessage = $"????????????{available[0].SerialNumber} ({available[0].Model ?? "unknown model"})?";
+        }
+        else
+        {
+            SelectedDevice = null;
+            StatusMessage = devices.Count == 0 ? "??? ADB ???" : $"??? {devices.Count} ??????????????";
+        }
     }
-
     private void SetCurrentProject(UkitProject project)
     {
         _project = project;

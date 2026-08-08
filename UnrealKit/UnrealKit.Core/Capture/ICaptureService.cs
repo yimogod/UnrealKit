@@ -10,4 +10,9 @@ public interface ICaptureService
         CaptureRequest request,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
+
+    Task<CaptureResult> ImportAsync(
+        CaptureImportRequest request,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
 }

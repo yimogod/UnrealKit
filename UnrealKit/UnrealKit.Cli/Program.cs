@@ -5,6 +5,7 @@ using UnrealKit.Core.Export;
 using UnrealKit.Core.Launch;
 using UnrealKit.Core.Parsing;
 using UnrealKit.Core.Processes;
+using System.Linq;
 using UnrealKit.Core.Projects;
 
 return await RunAsync(args);
@@ -88,13 +89,15 @@ static async Task<int> RunAppAsync(string[] arguments)
     var (commandArguments, adbPath) = ParseAdbPath(arguments);
     if (commandArguments.Length == 0 || !string.Equals(commandArguments[0], "start", StringComparison.OrdinalIgnoreCase))
     {
-        Console.Error.WriteLine("Usage: unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]");
+        Console.Error.WriteLine("Usage: unrealkit app start --project <project.ukit> --device <serial>|auto [--adb-path <path>]");
         return 2;
     }
 
     var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(commandArguments[1..], "--project"));
-    var service = new LaunchParameterService(CreateAdbService(adbPath, project.Settings.AdbPath));
-    var result = await service.StartApplicationAsync(project, GetRequiredOption(commandArguments[1..], "--device"));
+    var adbService = CreateAdbService(adbPath, project.Settings.AdbPath);
+    var serialNumber = await ResolveDeviceSerialAsync(adbService, commandArguments[1..]);
+    var service = new LaunchParameterService(adbService);
+    await service.StartApplicationAsync(project, serialNumber);
     return 0;
 }
 
@@ -108,8 +111,9 @@ static async Task<int> RunCommandLineAsync(string[] arguments)
 
     var options = commandArguments[1..];
     var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(options, "--project"));
-    var service = new LaunchParameterService(CreateAdbService(adbPath, project.Settings.AdbPath));
-    var serialNumber = GetRequiredOption(options, "--device");
+    var adbService = CreateAdbService(adbPath, project.Settings.AdbPath);
+    var serialNumber = await ResolveDeviceSerialAsync(adbService, options);
+    var service = new LaunchParameterService(adbService);
     var remotePath = GetOptionalOption(options, "--remote-path");
     switch (commandArguments[0].ToLowerInvariant())
     {
@@ -134,21 +138,43 @@ static async Task<int> RunCommandLineAsync(string[] arguments)
 static async Task<int> RunCaptureAsync(string[] arguments)
 {
     var (commandArguments, adbPath) = ParseAdbPath(arguments);
-    if (commandArguments.Length == 0 || !string.Equals(commandArguments[0], "run", StringComparison.OrdinalIgnoreCase))
+    if (commandArguments.Length == 0)
     {
         return FailCaptureUsage();
     }
 
-    var options = commandArguments[1..];
-    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--device", "--tag", "--format" });
-    var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(options, "--project"));
-    var serialNumber = GetRequiredOption(options, "--device");
-    var tag = GetOptionalOption(options, "--tag") ?? project.Settings.DefaultCaptureTag;
-    var json = IsJsonFormat(options);
+    return commandArguments[0].ToLowerInvariant() switch
+    {
+        "run" => await RunCaptureRunAsync(commandArguments[1..], adbPath),
+        "import" => await RunCaptureImportAsync(commandArguments[1..]),
+        _ => FailCaptureUsage()
+    };
+}
+
+static async Task<int> RunCaptureRunAsync(string[] arguments, string? adbPath)
+{
+    EnsureOnlyOptions(arguments, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--device", "--tag", "--format" });
+    var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(arguments, "--project"));
+    var json = IsJsonFormat(arguments);
     var adbService = CreateAdbService(adbPath, project.Settings.AdbPath, streamOutput: !json);
+    var serialNumber = await ResolveDeviceSerialAsync(adbService, arguments);
+    var tag = GetOptionalOption(arguments, "--tag") ?? project.Settings.DefaultCaptureTag;
     var device = await GetSelectedAvailableDeviceAsync(adbService, serialNumber);
     var result = await new CaptureService(adbService).CaptureAsync(new CaptureRequest(project, device, tag));
     WriteCaptureResult(result, json);
+    return 0;
+}
+
+static async Task<int> RunCaptureImportAsync(string[] arguments)
+{
+    EnsureOnlyOptions(arguments, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--source", "--platform", "--tag", "--capture-id" });
+    var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(arguments, "--project"));
+    var source = GetRequiredOption(arguments, "--source");
+    var platform = GetOptionalOption(arguments, "--platform") ?? "Android";
+    var tag = GetOptionalOption(arguments, "--tag") ?? project.Settings.DefaultCaptureTag;
+    var captureId = GetOptionalOption(arguments, "--capture-id");
+    var result = await new CaptureService().ImportAsync(new CaptureImportRequest(project, source, platform, tag, captureId));
+    WriteCaptureResult(result, false);
     return 0;
 }
 
@@ -179,15 +205,24 @@ static async Task<int> RunExportAsync(string[] arguments)
     var outputOption = new string([(char)45, (char)45, (char)111, (char)117, (char)116, (char)112, (char)117, (char)116]);
     var includeDetailsOption = "--include-details";
     var captureIdOption = "--capture-id";
-    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { inputOption, outputOption, includeDetailsOption, captureIdOption });
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { inputOption, outputOption, includeDetailsOption, captureIdOption }, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { includeDetailsOption });
     var input = GetRequiredOption(options, inputOption);
     var output = GetRequiredOption(options, outputOption);
     var includeDetails = options.Any(option => string.Equals(option, includeDetailsOption, StringComparison.OrdinalIgnoreCase));
     var captureId = GetOptionalOption(options, captureIdOption);
     var result = await new AndroidMemInfoParser().ParseFileAsync(input);
     if (!result.IsSuccess) { WriteMemInfoParseResult(result, false); return 1; }
-    var exported = await new MemInfoExportService().ExportAsync(new MemInfoExportRequest(result, output, DateTimeOffset.UtcNow, includeDetails, captureId));
-    Console.WriteLine(exported.OutputFilePath);
+    var isXlsx = output.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase);
+    if (isXlsx)
+    {
+        var exported = await new XlsxMemInfoExportService().ExportAsync(new MemInfoExportRequest(result, output, DateTimeOffset.UtcNow, includeDetails, captureId));
+        Console.WriteLine(exported.OutputFilePath);
+    }
+    else
+    {
+        var exported = await new MemInfoExportService().ExportAsync(new MemInfoExportRequest(result, output, DateTimeOffset.UtcNow, includeDetails, captureId));
+        Console.WriteLine(exported.OutputFilePath);
+    }
     return 0;
 }
 
@@ -285,6 +320,46 @@ static async Task<AdbDevice> GetSelectedAvailableDeviceAsync(IAdbService service
     return device;
 }
 
+static async Task<string> ResolveDeviceSerialAsync(IAdbService service, string[] options)
+{
+    var serialNumber = GetOptionalOption(options, "--device");
+    if (!string.IsNullOrWhiteSpace(serialNumber))
+    {
+        if (string.Equals(serialNumber, "auto", StringComparison.OrdinalIgnoreCase))
+        {
+            var availableDevices = (await service.ListDevicesAsync()).Where(device => device.IsAvailable).ToArray();
+            return availableDevices.Length switch
+            {
+                1 => availableDevices[0].SerialNumber,
+                0 => throw new AdbDeviceSelectionException("No available ADB devices found for auto-selection. Connect a device or specify --device <serial>."),
+                _ => throw new AdbDeviceSelectionException($"Multiple devices available ({availableDevices.Length}). Use --device <serial> to select one: {string.Join(", ", availableDevices.Select(device => device.SerialNumber))}")
+            };
+        }
+
+        return serialNumber;
+    }
+
+    var devices = await service.ListDevicesAsync();
+    var available = devices.Where(device => device.IsAvailable).ToArray();
+    if (available.Length == 1)
+    {
+        Console.Error.WriteLine($"Only one available device found: {available[0].SerialNumber} ({available[0].Model ?? "unknown model"}). Use --device auto to select it.");
+    }
+    else if (available.Length == 0)
+    {
+        Console.Error.WriteLine("No available ADB devices found. Connect a device and try again.");
+    }
+    else
+    {
+        Console.Error.WriteLine("Multiple devices available. Use --device <serial> to select one:");
+        foreach (var device in available)
+        {
+            Console.Error.WriteLine($"  {device.SerialNumber}  {device.Status}  {device.Model ?? "unknown model"}");
+        }
+    }
+
+    throw new AdbDeviceSelectionException("No device specified. Use --device <serial> or --device auto when exactly one device is available.");
+}
 static bool IsJsonFormat(string[] arguments)
 {
     var format = GetOptionalOption(arguments, "--format");
@@ -409,19 +484,31 @@ static string[] GetOptions(string[] arguments, string optionName)
     return values.ToArray();
 }
 
-static void EnsureOnlyOptions(string[] arguments, IReadOnlySet<string> allowedOptions)
+static void EnsureOnlyOptions(string[] arguments, IReadOnlySet<string> allowedOptions, IReadOnlySet<string>? flagOptions = null)
 {
-    for (var index = 0; index < arguments.Length; index += 2)
+    for (var index = 0; index < arguments.Length; index++)
     {
-        if (!arguments[index].StartsWith("--", StringComparison.Ordinal) || !allowedOptions.Contains(arguments[index]))
+        if (!arguments[index].StartsWith("--", StringComparison.Ordinal))
         {
             throw new ArgumentException($"Unsupported option: {arguments[index]}.");
+        }
+
+        if (!allowedOptions.Contains(arguments[index]))
+        {
+            throw new ArgumentException($"Unsupported option: {arguments[index]}.");
+        }
+
+        if (flagOptions?.Contains(arguments[index]) == true)
+        {
+            continue;
         }
 
         if (index + 1 >= arguments.Length || arguments[index + 1].StartsWith("--", StringComparison.Ordinal))
         {
             throw new ArgumentException($"{arguments[index]} must be followed by a value.");
         }
+
+        index++;
     }
 }
 
@@ -473,7 +560,9 @@ static int FailCommandLineUsage()
 
 static int FailCaptureUsage()
 {
-    Console.Error.WriteLine("Usage: unrealkit capture run --project <project.ukit> --device <serial> [--tag <tag>] [--format text|json] [--adb-path <path>]");
+    Console.Error.WriteLine("Usage:");
+    Console.Error.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial>|auto [--tag <tag>] [--format text|json] [--adb-path <path>]");
+    Console.Error.WriteLine("  unrealkit capture import --project <project.ukit> --source <directory> [--platform <platform>] [--tag <tag>] [--capture-id <id>]");
     return 2;
 }
 
@@ -661,7 +750,7 @@ static int FailParseUsage()
     return 2;
 }
 
-static int FailExportUsage() { Console.Error.WriteLine("Usage: unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv> [--include-details] [--capture-id <capture-id>]"); return 2; }
+static int FailExportUsage() { Console.Error.WriteLine("Usage: unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]"); return 2; }
 
 static void PrintUsage()
 {
@@ -676,11 +765,12 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]");
     Console.WriteLine("  unrealkit commandline push --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--remote-path <path>] [--adb-path <path>]");
     Console.WriteLine("  unrealkit commandline delete --project <project.ukit> --device <serial> [--remote-path <path>] [--adb-path <path>]");
-    Console.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial> [--tag <tag>] [--format text|json] [--adb-path <path>]");
+    Console.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial>|auto [--tag <tag>] [--format text|json] [--adb-path <path>]");
+    Console.WriteLine("  unrealkit capture import --project <project.ukit> --source <directory> [--platform <platform>] [--tag <tag>] [--capture-id <id>]");
     Console.WriteLine("  unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
     Console.WriteLine("  unrealkit parse memreport --input <memreport.txt> [--format text|json]");
     Console.WriteLine("  unrealkit parse capture-list --project <project.ukit> [--platform <platform>] [--tag <tag>]");
     Console.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
     Console.WriteLine("  unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]");
-    Console.WriteLine("  unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv> [--include-details] [--capture-id <capture-id>]");
+    Console.WriteLine("  unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
 }

@@ -3,7 +3,7 @@ using UnrealKit.Core.Operations;
 
 namespace UnrealKit.Core.Capture;
 
-public sealed class CaptureService(IAdbService adbService, TimeProvider? timeProvider = null) : ICaptureService
+public sealed class CaptureService(IAdbService? adbService = null, TimeProvider? timeProvider = null) : ICaptureService
 {
     private const string Platform = "Android";
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
@@ -22,6 +22,7 @@ public sealed class CaptureService(IAdbService adbService, TimeProvider? timePro
 
     public async Task<CaptureResult> CaptureAsync(CaptureRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
+        if (adbService is null) throw new InvalidOperationException("CaptureService requires an IAdbService for live capture. Use ImportAsync for importing local data.");
         var startedAt = _timeProvider.GetLocalNow();
         var plan = CreatePlan(request, startedAt);
         if (Directory.Exists(plan.CaptureDirectory))
@@ -46,11 +47,11 @@ public sealed class CaptureService(IAdbService adbService, TimeProvider? timePro
         var memInfoDirectory = Path.Combine(stagingDirectory, "MemInfo");
         Directory.CreateDirectory(memInfoDirectory);
         progress?.Report(new OperationProgress("capture", "MemInfo", 1, 3, $"Collecting dumpsys meminfo for {request.Project.Settings.PackageName}."));
-        var memInfo = await adbService.RunDumpsysAsync(request.Device.SerialNumber, request.Project.Settings.PackageName, progress, cancellationToken);
+        var memInfo = await adbService!.RunDumpsysAsync(request.Device.SerialNumber, request.Project.Settings.PackageName, progress, cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(memInfoDirectory, $"meminfo_{startedAt:yyyyMMdd-HHmmss}.txt"), memInfo.StandardOutput, cancellationToken);
 
         progress?.Report(new OperationProgress("capture", "Saved", 2, 3, $"Pulling UE Saved data from {plan.DeviceSavedDirectory}."));
-        await adbService.PullDirectoryAsync(request.Device.SerialNumber, plan.DeviceSavedDirectory, Path.Combine(stagingDirectory, "Saved"), progress, cancellationToken);
+        await adbService!.PullDirectoryAsync(request.Device.SerialNumber, plan.DeviceSavedDirectory, Path.Combine(stagingDirectory, "Saved"), progress, cancellationToken);
 
         var manifest = await CreateManifestAsync(request, plan, startedAt, stagingDirectory, cancellationToken);
         progress?.Report(new OperationProgress("capture", "Manifest", 3, 3, "Writing capture manifest and archiving original data."));
@@ -79,7 +80,87 @@ public sealed class CaptureService(IAdbService adbService, TimeProvider? timePro
         await System.Text.Json.JsonSerializer.SerializeAsync(stream, manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }, cancellationToken);
     }
 
-    private static string ResolveDeviceSavedDirectory(Projects.ProjectSettings settings)
+
+    public async Task<CaptureResult> ImportAsync(CaptureImportRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Project);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.SourceDirectory);
+        var sourceDirectory = Path.GetFullPath(request.SourceDirectory);
+        if (!Directory.Exists(sourceDirectory))
+        {
+            throw new DirectoryNotFoundException($"Import source directory not found: {sourceDirectory}");
+        }
+
+        var startedAt = _timeProvider.GetLocalNow();
+        var captureId = string.IsNullOrWhiteSpace(request.CaptureId)
+            ? $"import-{startedAt:yyyyMMdd-HHmmss}-{Guid.NewGuid():N[..8]}"
+            : ValidateCaptureId(request.CaptureId);
+        var contentRoot = request.Project.ContentDir;
+        var captureDirectory = Path.Combine(contentRoot, request.Platform, NormalizeTag(request.Tag), startedAt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), captureId);
+
+        if (Directory.Exists(captureDirectory))
+        {
+            throw new InvalidOperationException($"Capture archive already exists and will not be overwritten: {captureDirectory}");
+        }
+
+        progress?.Report(new OperationProgress("import", "Copy", 1, 3, $"Copying files from {sourceDirectory}."));
+        var stagingDirectory = Path.Combine(request.Project.IntermediateDir, "ImportStaging", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(stagingDirectory);
+        try
+        {
+            CopyDirectoryContents(sourceDirectory, stagingDirectory);
+            progress?.Report(new OperationProgress("import", "Manifest", 2, 3, "Generating capture manifest."));
+            var deviceSerial = "imported";
+            var deviceModel = (string?)null;
+            var manifest = new CaptureManifest(captureId, request.Platform, NormalizeTag(request.Tag), startedAt, _timeProvider.GetLocalNow(), request.Project.CreateConfigurationSnapshot(), deviceSerial, deviceModel, "imported", request.Project.Settings.PackageName, string.Empty, []);
+            manifest = await CreateManifestFromDirectoryAsync(stagingDirectory, captureId, request.Platform, NormalizeTag(request.Tag), startedAt, request.Project, deviceSerial, deviceModel, "imported", request.Project.Settings.PackageName, string.Empty, cancellationToken);
+            await WriteManifestAsync(stagingDirectory, manifest, cancellationToken);
+
+            progress?.Report(new OperationProgress("import", "Finalize", 3, 3, "Archiving to Content directory."));
+            Directory.CreateDirectory(Path.GetDirectoryName(captureDirectory)!);
+            Directory.Move(stagingDirectory, captureDirectory);
+            return new CaptureResult(new CapturePlan(captureId, captureDirectory, string.Empty), Path.Combine(captureDirectory, "CaptureManifest.json"), manifest);
+        }
+        finally
+        {
+            if (Directory.Exists(stagingDirectory)) Directory.Delete(stagingDirectory, recursive: true);
+        }
+    }
+
+    private static void CopyDirectoryContents(string sourceDirectory, string destinationDirectory)
+    {
+        Directory.CreateDirectory(destinationDirectory);
+        foreach (var entry in Directory.EnumerateFileSystemEntries(sourceDirectory))
+        {
+            var relative = Path.GetRelativePath(sourceDirectory, entry);
+            var destination = Path.Combine(destinationDirectory, relative);
+            if (Directory.Exists(entry))
+            {
+                CopyDirectoryContents(entry, destination);
+            }
+            else
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                File.Copy(entry, destination, overwrite: false);
+            }
+        }
+    }
+
+    private async Task<CaptureManifest> CreateManifestFromDirectoryAsync(string directory, string captureId, string platform, string tag, DateTimeOffset startedAt, Projects.UkitProject project, string deviceSerial, string? deviceModel, string deviceStatus, string packageName, string deviceSavedDirectory, CancellationToken cancellationToken)
+    {
+        var files = new List<CaptureFileManifestEntry>();
+        foreach (var path in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories).OrderBy(path => path, StringComparer.Ordinal))
+        {
+            await using var stream = File.OpenRead(path);
+            var hash = await System.Security.Cryptography.SHA256.HashDataAsync(stream, cancellationToken);
+            files.Add(new CaptureFileManifestEntry(Path.GetRelativePath(directory, path).Replace(Path.DirectorySeparatorChar, '/'), new FileInfo(path).Length, Convert.ToHexStringLower(hash)));
+        }
+
+        return new CaptureManifest(captureId, platform, tag, startedAt, _timeProvider.GetLocalNow(), project.CreateConfigurationSnapshot(), deviceSerial, deviceModel, deviceStatus, packageName, deviceSavedDirectory, files);
+    }
+
+        private static string ResolveDeviceSavedDirectory(Projects.ProjectSettings settings)
     {
         var path = settings.DeviceSavedRootTemplate.Replace("{PackageName}", settings.PackageName, StringComparison.Ordinal).Replace("{UnrealProjectName}", settings.UnrealProjectName, StringComparison.Ordinal);
         if (!path.StartsWith("/", StringComparison.Ordinal) || path.Contains('\\') || path.Contains('\0'))
