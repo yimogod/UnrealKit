@@ -15,7 +15,7 @@ public sealed class CaptureService(IAdbService adbService, TimeProvider? timePro
         var captureId = string.IsNullOrWhiteSpace(request.CaptureId)
             ? CreateCaptureId(capturedLocalTime, request.Device.SerialNumber)
             : ValidateCaptureId(request.CaptureId);
-        var contentRoot = Path.Combine(request.Project.RootDirectory, request.Project.Descriptor.ContentRoot);
+        var contentRoot = request.Project.ContentDir;
         var captureDirectory = Path.Combine(contentRoot, Platform, NormalizeTag(request.Tag), capturedLocalTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), captureId);
         return new CapturePlan(captureId, captureDirectory, ResolveDeviceSavedDirectory(request.Project.Settings));
     }
@@ -29,7 +29,7 @@ public sealed class CaptureService(IAdbService adbService, TimeProvider? timePro
             throw new InvalidOperationException($"Capture archive already exists and will not be overwritten: {plan.CaptureDirectory}");
         }
 
-        var stagingDirectory = Path.Combine(request.Project.RootDirectory, request.Project.Descriptor.IntermediateRoot, "CaptureStaging", Guid.NewGuid().ToString("N"));
+        var stagingDirectory = Path.Combine(request.Project.IntermediateDir, "CaptureStaging", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stagingDirectory);
         try
         {

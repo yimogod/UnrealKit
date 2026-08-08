@@ -68,7 +68,7 @@ public sealed class ProjectService : IProjectService
         ValidateSettings(settings);
         var fullPath = GetProjectFilePath(project.ProjectFilePath);
         Report(progress, operationId, "Writing", "正在保存项目默认配置。", 1, 2);
-        await WriteSettingsAsync(Path.Combine(project.RootDirectory, project.Descriptor.ConfigRoot, "DefaultGame.ini"), settings, cancellationToken);
+        await WriteSettingsAsync(project.ConfigFilePath, settings, cancellationToken);
         Report(progress, operationId, "Completed", "项目默认配置已保存。", 2, 2);
         _logger.Log(new LogEvent(DateTimeOffset.UtcNow, LogLevel.Information, operationId, "Project settings updated", new Dictionary<string, string> { ["path"] = fullPath }));
         return project with { Settings = settings };

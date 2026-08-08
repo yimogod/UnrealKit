@@ -1,4 +1,5 @@
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.Runtime;
 
 namespace UnrealKit.Tests;
 
@@ -73,6 +74,28 @@ public sealed class ProjectServiceTests : IDisposable
         Assert.Equal(settings.DefaultCaptureTag, reopened.Settings.DefaultCaptureTag);
         Assert.Equal(settings.DeviceSavedRootTemplate, reopened.Settings.DeviceSavedRootTemplate);
         Assert.Equal(settings.AdbPath, reopened.Settings.AdbPath);
+    }
+
+    [Fact]
+    public async Task CreateProjectAsync_ExposesUeStyleProjectDirectories()
+    {
+        var projectDirectory = Path.Combine(_temporaryDirectory, "MemoryReview");
+        var service = new ProjectService();
+
+        var project = (await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "MemoryReview"))).Project;
+
+        Assert.Equal(projectDirectory, project.ProjectDir);
+        Assert.Equal(Path.Combine(projectDirectory, "Content"), project.ContentDir);
+        Assert.Equal(Path.Combine(projectDirectory, "Config"), project.ConfigDir);
+        Assert.Equal(Path.Combine(projectDirectory, "Saved"), project.SavedDir);
+        Assert.Equal(Path.Combine(projectDirectory, "Intermediate"), project.IntermediateDir);
+        Assert.Equal(Path.Combine(project.ConfigDir, "DefaultGame.ini"), project.ConfigFilePath);
+    }
+
+    [Fact]
+    public void ApplicationPaths_AppDirMatchesRuntimeBaseDirectory()
+    {
+        Assert.Equal(AppContext.BaseDirectory, ApplicationPaths.AppDir);
     }
 
     public void Dispose()

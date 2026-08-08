@@ -34,7 +34,7 @@ public sealed class CaptureAnalysisService : ICaptureAnalysisService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
-        var root = Path.Combine(project.RootDirectory, project.Descriptor.ContentRoot);
+        var root = project.ContentDir;
         if (!Directory.Exists(root))
         {
             return Task.FromResult<IReadOnlyList<CaptureDirectoryInfo>>(Array.Empty<CaptureDirectoryInfo>());
@@ -201,7 +201,7 @@ public sealed class CaptureAnalysisService : ICaptureAnalysisService
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(analysisId);
-        return Path.Combine(project.RootDirectory, project.Descriptor.SavedRoot, "Analysis", analysisId);
+        return Path.Combine(project.SavedDir, "Analysis", analysisId);
     }
 
     private static async Task WriteResultJsonAsync(

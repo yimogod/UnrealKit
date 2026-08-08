@@ -52,7 +52,7 @@ public sealed class CaptureAnalysisServiceTests : IDisposable
     public async Task ListCaptureDirectoriesAsync_CaptureWithoutManifest_HasManifestFalse()
     {
         var project = await CreateProjectAsync("NoManifestTest");
-        var contentRoot = Path.Combine(project.RootDirectory, project.Descriptor.ContentRoot);
+        var contentRoot = project.ContentDir;
         var captureDir = Path.Combine(contentRoot, "Android", "Solo", "2026-08-06", "20260806-no-manifest");
         Directory.CreateDirectory(Path.Combine(captureDir, "MemInfo"));
 
@@ -67,7 +67,7 @@ public sealed class CaptureAnalysisServiceTests : IDisposable
     public async Task ListCaptureFilesAsync_ListsFilesInEachCategory()
     {
         var project = await CreateProjectAsync("FileListTest");
-        var contentRoot = Path.Combine(project.RootDirectory, project.Descriptor.ContentRoot);
+        var contentRoot = project.ContentDir;
         var captureDir = Path.Combine(contentRoot, "Android", "Nightly", "2026-08-06", "20260806-120000-dev01");
         Directory.CreateDirectory(Path.Combine(captureDir, "MemInfo"));
         Directory.CreateDirectory(Path.Combine(captureDir, "Saved"));
@@ -93,7 +93,7 @@ public sealed class CaptureAnalysisServiceTests : IDisposable
     public async Task AnalyzeMemInfoAsync_ParsesAndWritesResultToSavedAnalysis()
     {
         var project = await CreateProjectAsync("AnalyzeTest");
-        var contentRoot = Path.Combine(project.RootDirectory, project.Descriptor.ContentRoot);
+        var contentRoot = project.ContentDir;
         var captureDir = Path.Combine(contentRoot, "Android", "Nightly", "2026-08-06", "20260806-120000-dev01");
         Directory.CreateDirectory(Path.Combine(captureDir, "MemInfo"));
         var meminfoPath = Path.Combine(captureDir, "MemInfo", "meminfo_001.txt");
@@ -109,7 +109,7 @@ public sealed class CaptureAnalysisServiceTests : IDisposable
         Assert.Equal("com.example.performance", result.ParseResult.Report!.ProcessName);
 
         Assert.True(File.Exists(result.ResultJsonPath));
-        Assert.StartsWith(Path.Combine(project.RootDirectory, project.Descriptor.SavedRoot, "Analysis"), result.AnalysisDirectory);
+        Assert.StartsWith(Path.Combine(project.SavedDir, "Analysis"), result.AnalysisDirectory);
 
         var outputContent = await File.ReadAllTextAsync(result.ResultJsonPath);
         Assert.Contains("test-analysis-001", outputContent, StringComparison.Ordinal);
@@ -123,7 +123,7 @@ public sealed class CaptureAnalysisServiceTests : IDisposable
     public async Task AnalyzeMemInfoAsync_GeneratesAnalysisIdWhenNotProvided()
     {
         var project = await CreateProjectAsync("GenIdTest");
-        var contentRoot = Path.Combine(project.RootDirectory, project.Descriptor.ContentRoot);
+        var contentRoot = project.ContentDir;
         var captureDir = Path.Combine(contentRoot, "Android", "Nightly", "2026-08-06", "20260806-120000-dev01");
         Directory.CreateDirectory(Path.Combine(captureDir, "MemInfo"));
         var meminfoPath = Path.Combine(captureDir, "MemInfo", "meminfo_001.txt");
@@ -152,7 +152,7 @@ public sealed class CaptureAnalysisServiceTests : IDisposable
     public async Task AnalyzeMemInfoAsync_RecordsDiagnosticsOnParseFailure()
     {
         var project = await CreateProjectAsync("FailParseTest");
-        var contentRoot = Path.Combine(project.RootDirectory, project.Descriptor.ContentRoot);
+        var contentRoot = project.ContentDir;
         var captureDir = Path.Combine(contentRoot, "Android", "Nightly", "2026-08-06", "fail-capture");
         Directory.CreateDirectory(Path.Combine(captureDir, "MemInfo"));
         var meminfoPath = Path.Combine(captureDir, "MemInfo", "bad_meminfo.txt");
@@ -201,12 +201,12 @@ public sealed class CaptureAnalysisServiceTests : IDisposable
 
     private static void CreateCapture(UkitProject project, string platform, string tag, string date, string captureId)
     {
-        var contentRoot = Path.Combine(project.RootDirectory, project.Descriptor.ContentRoot);
+        var contentRoot = project.ContentDir;
         var captureDir = Path.Combine(contentRoot, platform, tag, date, captureId);
         Directory.CreateDirectory(Path.Combine(captureDir, "MemInfo"));
         var manifest = "{\"CaptureId\":\"" + captureId + "\",\"Platform\":\"" + platform + "\",\"Tag\":\"" + tag + "\",\"StartedAt\":\"" + date + "T00:00:00+00:00\",\"CompletedAt\":\"" + date + "T01:00:00+00:00\",\"PackageName\":\"com.example.test\",\"DeviceSerialNumber\":\"dev-01\"}";
         File.WriteAllText(Path.Combine(captureDir, "CaptureManifest.json"), manifest);
     }
 
-    private static string GetSamplePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", "MemInfo", fileName);
+    private static string GetSamplePath(string fileName) => Path.Combine(ApplicationPaths.AppDir, "TestData", "MemInfo", fileName);
 }

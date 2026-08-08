@@ -75,7 +75,17 @@ public sealed record UkitProject(
     UkitProjectDescriptor Descriptor,
     ProjectSettings Settings)
 {
-    public string ConfigFilePath => Path.Combine(RootDirectory, Descriptor.ConfigRoot, "DefaultGame.ini");
+    public string ProjectDir => RootDirectory;
+
+    public string ContentDir => Path.Combine(ProjectDir, Descriptor.ContentRoot);
+
+    public string ConfigDir => Path.Combine(ProjectDir, Descriptor.ConfigRoot);
+
+    public string SavedDir => Path.Combine(ProjectDir, Descriptor.SavedRoot);
+
+    public string IntermediateDir => Path.Combine(ProjectDir, Descriptor.IntermediateRoot);
+
+    public string ConfigFilePath => Path.Combine(ConfigDir, "DefaultGame.ini");
 
     public ProjectConfigurationSnapshot CreateConfigurationSnapshot() =>
         new(Descriptor, Settings, DateTimeOffset.UtcNow);

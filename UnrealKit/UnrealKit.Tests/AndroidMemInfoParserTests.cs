@@ -1,4 +1,5 @@
-﻿using UnrealKit.Core.Parsing;
+using UnrealKit.Core.Parsing;
+using UnrealKit.Core.Runtime;
 
 namespace UnrealKit.Tests;
 
@@ -107,5 +108,5 @@ public sealed class AndroidMemInfoParserTests
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "AMI213" && diagnostic.LineNumber == 5);
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "AMI223" && diagnostic.LineNumber == 6);
     }
-    private static string GetSamplePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", "MemInfo", fileName);
+    private static string GetSamplePath(string fileName) => Path.Combine(ApplicationPaths.AppDir, "TestData", "MemInfo", fileName);
 }

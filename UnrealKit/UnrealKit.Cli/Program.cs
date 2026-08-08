@@ -222,7 +222,7 @@ static async Task<int> ShowProjectInfoAsync(IProjectService service, string[] ar
 
     Console.WriteLine($"Project: {project.Descriptor.ProjectName}");
     Console.WriteLine($"Descriptor: {project.ProjectFilePath}");
-    Console.WriteLine($"Root: {project.RootDirectory}");
+    Console.WriteLine($"Root: {project.ProjectDir}");
     Console.WriteLine($"Format version: {project.Descriptor.FormatVersion}");
     Console.WriteLine($"UE project: {project.Settings.UnrealProjectName}");
     return WriteValidation(validation);

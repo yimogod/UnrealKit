@@ -105,5 +105,5 @@ public sealed class MemInfoExportServiceTests : IDisposable
     }
 
     private static string Sample(string name) =>
-        Path.Combine(AppContext.BaseDirectory, "TestData", "MemInfo", name);
+        Path.Combine(ApplicationPaths.AppDir, "TestData", "MemInfo", name);
 }
