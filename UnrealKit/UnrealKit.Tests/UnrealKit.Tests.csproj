@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <None Update="TestData\MemInfo\*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="TestData\MemReport\*.memreport" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

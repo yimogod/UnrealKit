@@ -19,7 +19,37 @@ public sealed record UnrealMemReportMetric(
 
 public sealed record UnrealMemReportSummary(IReadOnlyList<UnrealMemReportMetric> Metrics);
 
-public sealed record UnrealMemReport(string Changelist, UnrealMemReportSummary Summary);
+public sealed record UnrealMemReportTexture(
+    string Name,
+    int? Width,
+    int? Height,
+    string? Format,
+    long? MemoryKb,
+    string RawLine,
+    int LineNumber);
+
+public sealed record UnrealMemReportRenderTarget(
+    string Name,
+    int? Width,
+    int? Height,
+    string? Format,
+    long? MemoryKb,
+    string RawLine,
+    int LineNumber);
+
+public sealed record UnrealMemReportObject(
+    string ClassName,
+    long? Count,
+    long? MemoryKb,
+    string RawLine,
+    int LineNumber);
+
+public sealed record UnrealMemReport(
+    string Changelist,
+    UnrealMemReportSummary Summary,
+    IReadOnlyList<UnrealMemReportTexture> Textures,
+    IReadOnlyList<UnrealMemReportRenderTarget> RenderTargets,
+    IReadOnlyList<UnrealMemReportObject> Objects);
 
 public sealed record UnrealMemReportParseResult(
     string InputPath,
