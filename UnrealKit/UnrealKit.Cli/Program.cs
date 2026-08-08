@@ -165,6 +165,7 @@ static async Task<int> RunParseAsync(string[] arguments)
         "capture-list" => await ListCapturesAsync(arguments[1..]),
         "capture-files" => await ListCaptureFilesAsync(arguments[1..]),
         "capture-meminfo" => await ParseCaptureMemInfoAsync(arguments[1..]),
+        "memreport" => await ParseMemReportAsync(arguments[1..]),
         _ => FailParseUsage()
     };
 }
@@ -594,12 +595,74 @@ static async Task<int> ParseCaptureMemInfoAsync(string[] options)
     return result.ParseResult.IsSuccess ? 0 : 1;
 }
 
+static async Task<int> ParseMemReportAsync(string[] options)
+{
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--input", "--format" });
+    var result = await new UnrealMemReportParser().ParseFileAsync(GetRequiredOption(options, "--input"));
+    var json = IsJsonFormat(options);
+    WriteMemReportParseResult(result, json);
+    return result.IsSuccess ? 0 : 1;
+}
+
+static void WriteMemReportParseResult(UnrealMemReportParseResult result, bool json)
+{
+    if (json)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+        return;
+    }
+
+    if (result.Report is not null)
+    {
+        Console.WriteLine($"Input: {result.InputPath}");
+        Console.WriteLine($"Changelist: {result.Report.Changelist}");
+        Console.WriteLine();
+        Console.WriteLine("Summary Metrics:");
+        foreach (var metric in result.Report.Summary.Metrics)
+        {
+            var status = metric.Status switch
+            {
+                UnrealMemReportMetricStatus.Parsed => $"{metric.ValueKb} KB",
+                UnrealMemReportMetricStatus.Missing => "MISSING",
+                UnrealMemReportMetricStatus.Invalid => $"INVALID ({metric.RawValue})",
+                _ => "?"
+            };
+            Console.WriteLine($"  [{metric.Group}] {metric.Name}: {status}");
+        }
+
+        if (result.Report.Textures.Count > 0)
+            Console.WriteLine($"\nTextures: {result.Report.Textures.Count}");
+        if (result.Report.RenderTargets.Count > 0)
+            Console.WriteLine($"Render Targets: {result.Report.RenderTargets.Count}");
+        if (result.Report.Objects.Count > 0)
+            Console.WriteLine($"Objects: {result.Report.Objects.Count}");
+    }
+
+    foreach (var diagnostic in result.Diagnostics)
+    {
+        var line = diagnostic.LineNumber is null ? string.Empty : $" line {diagnostic.LineNumber}";
+        Console.Error.WriteLine($"[{diagnostic.Severity}] {diagnostic.Code}{line}: {diagnostic.Message}");
+        if (!string.IsNullOrWhiteSpace(diagnostic.SuggestedFix))
+        {
+            Console.Error.WriteLine($"  Fix: {diagnostic.SuggestedFix}");
+        }
+    }
+}
+
+
 static int FailParseUsage()
 {
-    Console.Error.WriteLine("Usage: unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
+    Console.Error.WriteLine("Usage:");
+    Console.Error.WriteLine("  unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
+    Console.Error.WriteLine("  unrealkit parse memreport --input <memreport.txt> [--format text|json]");
+    Console.Error.WriteLine("  unrealkit parse capture-list --project <project.ukit> [--platform <platform>] [--tag <tag>]");
+    Console.Error.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
+    Console.Error.WriteLine("  unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]");
     return 2;
 }
+
 static int FailExportUsage() { Console.Error.WriteLine("Usage: unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv> [--include-details] [--capture-id <capture-id>]"); return 2; }
+
 static void PrintUsage()
 {
     Console.WriteLine("UnrealKit CLI");
@@ -615,6 +678,7 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit commandline delete --project <project.ukit> --device <serial> [--remote-path <path>] [--adb-path <path>]");
     Console.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial> [--tag <tag>] [--format text|json] [--adb-path <path>]");
     Console.WriteLine("  unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
+    Console.WriteLine("  unrealkit parse memreport --input <memreport.txt> [--format text|json]");
     Console.WriteLine("  unrealkit parse capture-list --project <project.ukit> [--platform <platform>] [--tag <tag>]");
     Console.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
     Console.WriteLine("  unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]");
