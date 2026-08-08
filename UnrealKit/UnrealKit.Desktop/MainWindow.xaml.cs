@@ -42,6 +42,38 @@ public partial class MainWindow : Window
         }
     }
 
+    private void BrowseExportInput_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Select input file for export",
+            Filter = "Text files (*.txt)|*.txt|MemReport files (*.memreport)|*.memreport|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
+        {
+            viewModel.ExportInputPath = dialog.FileName;
+        }
+    }
+
+    private void BrowseExportOutput_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save exported results",
+            Filter = "CSV files (*.csv)|*.csv|TSV files (*.tsv)|*.tsv|XLSX files (*.xlsx)|*.xlsx|All files (*.*)|*.*",
+            DefaultExt = ".xlsx",
+            OverwritePrompt = true
+        };
+
+        if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
+        {
+            viewModel.ExportOutputPath = dialog.FileName;
+        }
+    }
+
     private void BrowseMemInfoFile_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog

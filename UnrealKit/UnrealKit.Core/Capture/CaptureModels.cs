@@ -6,7 +6,8 @@ public sealed record CaptureRequest(
     Projects.UkitProject Project,
     AdbDevice Device,
     string Tag,
-    string? CaptureId = null);
+    string? CaptureId = null,
+    bool SkipSaved = false);
 
 public sealed record CapturePlan(
     string CaptureId,

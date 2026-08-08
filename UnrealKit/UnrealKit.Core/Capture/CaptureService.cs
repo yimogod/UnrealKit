@@ -50,8 +50,11 @@ public sealed class CaptureService(IAdbService? adbService = null, TimeProvider?
         var memInfo = await adbService!.RunDumpsysAsync(request.Device.SerialNumber, request.Project.Settings.PackageName, progress, cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(memInfoDirectory, $"meminfo_{startedAt:yyyyMMdd-HHmmss}.txt"), memInfo.StandardOutput, cancellationToken);
 
-        progress?.Report(new OperationProgress("capture", "Saved", 2, 3, $"Pulling UE Saved data from {plan.DeviceSavedDirectory}."));
-        await adbService!.PullDirectoryAsync(request.Device.SerialNumber, plan.DeviceSavedDirectory, Path.Combine(stagingDirectory, "Saved"), progress, cancellationToken);
+        if (!request.SkipSaved)
+        {
+            progress?.Report(new OperationProgress("capture", "Saved", 2, 3, $"Pulling UE Saved data from {plan.DeviceSavedDirectory}."));
+            await adbService!.PullDirectoryAsync(request.Device.SerialNumber, plan.DeviceSavedDirectory, Path.Combine(stagingDirectory, "Saved"), progress, cancellationToken);
+        }
 
         var manifest = await CreateManifestAsync(request, plan, startedAt, stagingDirectory, cancellationToken);
         progress?.Report(new OperationProgress("capture", "Manifest", 3, 3, "Writing capture manifest and archiving original data."));

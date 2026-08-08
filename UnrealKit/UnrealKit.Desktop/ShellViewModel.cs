@@ -7,6 +7,7 @@ using UnrealKit.Core.Adb;
 using UnrealKit.Core.Capture;
 using UnrealKit.Core.Launch;
 using UnrealKit.Core.Operations;
+using UnrealKit.Core.Export;
 using UnrealKit.Core.Parsing;
 using UnrealKit.Core.Processes;
 using System.Linq;
@@ -37,11 +38,20 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _memInfoInputPath = string.Empty;
     private string _memInfoProcessDescription = "Select a meminfo text file to begin offline parsing.";
     private string _memInfoParsedAt = string.Empty;
+    private string _captureResultsCount = "Select a project then browse capture entries.";
+    private string _exportInputPath = string.Empty;
+    private string _exportOutputPath = string.Empty;
+    private bool _exportIncludeDetails;
+    private string _exportProgress = "Select an input file and output path, then choose a format.";
+    private string _memReportInputPath = string.Empty;
+    private string _memReportParseDescription = "Select a .memreport text file to begin offline parsing.";
+    private string _memReportParsedAt = string.Empty;
     private string _launchParameterPreview = "请先打开工程以加载启动参数预设。";
     private string _launchOperationSummary = "请先打开工程并选择状态为 device 的设备。";
     private string _operationStage = "Idle";
     private UkitProject? _project;
     private AdbDevice? _selectedDevice;
+    private CaptureFileInfo? _selectedCaptureResultFile;
     private bool _isBusy;
     private CancellationTokenSource? _operationCancellation;
     private CancellationToken OperationCancellationToken => _operationCancellation?.Token ?? CancellationToken.None;
@@ -59,7 +69,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
-        NavigationItems = ["工程", "设备", "启动参数", "采集", "解析", "结果", "日志与设置"];
+        NavigationItems = ["工程", "设备", "启动参数", "采集", "解析", "结果", "导出", "日志与设置"];
         _selectedNavigationItem = NavigationItems[0];
         CreateProjectCommand = new AsyncDelegateCommand(CreateProjectAsync, CanCreateProject);
         OpenProjectCommand = new AsyncDelegateCommand(OpenProjectAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ProjectFilePath));
@@ -72,6 +82,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         CancelOperationCommand = new DelegateCommand(CancelCurrentOperation, () => IsBusy);
         SaveProjectSettingsCommand = new AsyncDelegateCommand(SaveProjectSettingsAsync, () => !IsBusy && _project is not null);
         ParseMemInfoCommand = new AsyncDelegateCommand(ParseMemInfoAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(MemInfoInputPath));
+        RefreshCaptureResultsCommand = new AsyncDelegateCommand(RefreshCaptureResultsAsync, () => !IsBusy && _project is not null);
+        ViewCaptureResultFileCommand = new AsyncDelegateCommand(ViewCaptureResultFileAsync, () => !IsBusy && SelectedCaptureResultFile is not null);
+        ParseMemReportCommand = new AsyncDelegateCommand(ParseMemReportAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(MemReportInputPath));
+        ExportCaptureDataCommand = new AsyncDelegateCommand(ExportCaptureDataAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ExportInputPath) && !string.IsNullOrWhiteSpace(ExportOutputPath));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -83,6 +97,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<MemInfoNamedEntryOption> MemInfoDalvikEntries { get; } = [];
     public ObservableCollection<MemInfoNamedEntryOption> MemInfoObjectEntries { get; } = [];
     public ObservableCollection<MemInfoDiagnosticOption> MemInfoDiagnostics { get; } = [];
+    public ObservableCollection<CaptureDirectoryInfo> CaptureResults { get; } = [];
+    public ObservableCollection<CaptureFileInfo> CaptureResultFiles { get; } = [];
+    public ObservableCollection<MemInfoMetricOption> CaptureResultMetrics { get; } = [];
+    public ObservableCollection<MemReportMetricOption> MemReportMetrics { get; } = [];
+    public ObservableCollection<MemReportSummaryOption> MemReportSummaries { get; } = [];
     public ObservableCollection<string> OperationLogs { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
@@ -95,6 +114,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand CancelOperationCommand { get; }
     public ICommand SaveProjectSettingsCommand { get; }
     public ICommand ParseMemInfoCommand { get; }
+    public ICommand RefreshCaptureResultsCommand { get; }
+    public ICommand ViewCaptureResultFileCommand { get; }
+    public ICommand ParseMemReportCommand { get; }
+    public ICommand ExportCaptureDataCommand { get; }
 
     public string SelectedNavigationItem
     {
@@ -114,6 +137,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "采集" => "将采集数据归档到新的 Content Capture，避免覆盖历史数据。",
         "解析" => "明确选择输入文件，查看格式诊断和解析结果。",
         "结果" => "查看摘要、筛选表格并将派生结果导出到 Saved。",
+        "导出" => "选择解析结果，指定输出格式和路径，导出 CSV/TSV/XLSX。",
         _ => "查看可复制日志与应用设置。"
     };
 
@@ -134,6 +158,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string MemInfoInputPath { get => _memInfoInputPath; set { if (SetField(ref _memInfoInputPath, value)) RaiseCommandStates(); } }
     public string MemInfoProcessDescription { get => _memInfoProcessDescription; private set => SetField(ref _memInfoProcessDescription, value); }
     public string MemInfoParsedAt { get => _memInfoParsedAt; private set => SetField(ref _memInfoParsedAt, value); }
+    public string CaptureResultsCount { get => _captureResultsCount; private set => SetField(ref _captureResultsCount, value); }
+    public string ExportInputPath { get => _exportInputPath; set { if (SetField(ref _exportInputPath, value)) RaiseCommandStates(); } }
+    public string ExportOutputPath { get => _exportOutputPath; set { if (SetField(ref _exportOutputPath, value)) RaiseCommandStates(); } }
+    public bool ExportIncludeDetails { get => _exportIncludeDetails; set => SetField(ref _exportIncludeDetails, value); }
+    public string ExportProgress { get => _exportProgress; private set => SetField(ref _exportProgress, value); }
+    public string MemReportInputPath { get => _memReportInputPath; set { if (SetField(ref _memReportInputPath, value)) RaiseCommandStates(); } }
+    public string MemReportParseDescription { get => _memReportParseDescription; private set => SetField(ref _memReportParseDescription, value); }
+    public string MemReportParsedAt { get => _memReportParsedAt; private set => SetField(ref _memReportParsedAt, value); }
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
     public string LaunchOperationSummary { get => _launchOperationSummary; private set => SetField(ref _launchOperationSummary, value); }
     public string OperationStage { get => _operationStage; private set => SetField(ref _operationStage, value); }
@@ -150,6 +182,16 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             UpdateCaptureArchivePreview();
             UpdateLaunchOperationSummary();
             RaiseCommandStates();
+        }
+    }
+
+    public CaptureFileInfo? SelectedCaptureResultFile
+    {
+        get => _selectedCaptureResultFile;
+        set
+        {
+            if (SetField(ref _selectedCaptureResultFile, value))
+                RaiseCommandStates();
         }
     }
 
@@ -472,9 +514,195 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
     }
 
+    private async Task RefreshCaptureResultsAsync()
+    {
+        if (_project is null) return;
+        IsBusy = true;
+        OperationStage = "Listing captures";
+        try
+        {
+            var service = new CaptureAnalysisService();
+            var captures = await service.ListCaptureDirectoriesAsync(_project);
+            CaptureResults.Clear();
+            foreach (var capture in captures.Take(200))
+            {
+                CaptureResults.Add(capture);
+            }
+
+            CaptureResultsCount = $"{CaptureResults.Count} capture(s) found.";
+            StatusMessage = CaptureResultsCount;
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+            CaptureResultsCount = $"Error: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            OperationStage = "Idle";
+        }
+    }
+
+    private async Task ViewCaptureResultFileAsync()
+    {
+        if (SelectedCaptureResultFile is null) return;
+        IsBusy = true;
+        OperationStage = "Parsing capture file";
+        try
+        {
+            var filePath = SelectedCaptureResultFile.FullPath;
+            var category = SelectedCaptureResultFile.Category;
+
+            CaptureResultMetrics.Clear();
+            MemReportMetrics.Clear();
+
+            if (string.Equals(category, "MemInfo", StringComparison.OrdinalIgnoreCase))
+            {
+                var result = await new AndroidMemInfoParser().ParseFileAsync(filePath);
+                if (result.IsSuccess && result.Report is not null)
+                {
+                    var summary = result.Report.Summary;
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Process Name", result.Report.ProcessName ?? "-"));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Process ID", result.Report.ProcessId.ToString()));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Java Heap", (summary.JavaHeapKb?.ToString() ?? "N/A") + " KB"));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Native Heap", (summary.NativeHeapKb?.ToString() ?? "N/A") + " KB"));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Code", (summary.CodeKb?.ToString() ?? "N/A") + " KB"));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Stack", (summary.StackKb?.ToString() ?? "N/A") + " KB"));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Graphics", (summary.GraphicsKb?.ToString() ?? "N/A") + " KB"));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Private Other", (summary.PrivateOtherKb?.ToString() ?? "N/A") + " KB"));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("System", (summary.SystemKb?.ToString() ?? "N/A") + " KB"));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("TOTAL PSS", (summary.TotalPssKb?.ToString() ?? "N/A") + " KB"));
+                }
+
+                StatusMessage = "Parsed meminfo: " + filePath;
+            }
+            else
+            {
+                StatusMessage = "File category '" + category + "' not supported for inline viewing. Use the Parse page for memreport files.";
+            }
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+            OperationStage = "Idle";
+        }
+    }
+
+    private async Task ParseMemReportAsync()
+    {
+        if (string.IsNullOrWhiteSpace(MemReportInputPath)) return;
+        IsBusy = true;
+        OperationStage = "Parsing memreport";
+        try
+        {
+            var result = await new UnrealMemReportParser().ParseFileAsync(MemReportInputPath);
+            MemReportMetrics.Clear();
+            MemReportSummaries.Clear();
+
+            if (result.Report is not null)
+            {
+                MemReportParseDescription = "Changelist: " + result.Report.Changelist + " | Source: " + result.InputPath;
+                MemReportParsedAt = "Parsed: " + DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                foreach (var metric in result.Report.Summary.Metrics)
+                {
+                    var value = metric.Status == UnrealMemReportMetricStatus.Parsed ? metric.ValueKb + " KB" :
+                                metric.Status == UnrealMemReportMetricStatus.Missing ? "MISSING" : "INVALID (" + metric.RawValue + ")";
+                    MemReportMetrics.Add(new MemReportMetricOption(metric.Group, metric.Name, value, metric.Status.ToString()));
+                }
+
+                if (result.Report.Textures.Count > 0)
+                    MemReportSummaries.Add(new MemReportSummaryOption("Textures", result.Report.Textures.Count.ToString(), string.Empty));
+                if (result.Report.RenderTargets.Count > 0)
+                    MemReportSummaries.Add(new MemReportSummaryOption("Render Targets", result.Report.RenderTargets.Count.ToString(), string.Empty));
+                if (result.Report.Objects.Count > 0)
+                    MemReportSummaries.Add(new MemReportSummaryOption("Objects", result.Report.Objects.Count.ToString(), string.Empty));
+
+                StatusMessage = "Parsed memreport: " + result.Report.Summary.Metrics.Count + " metrics, " + result.Report.Textures.Count + " textures";
+            }
+            else
+            {
+                MemReportParseDescription = "Parse failed.";
+                MemReportParsedAt = string.Empty;
+                StatusMessage = "MemReport parse failed.";
+            }
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+            OperationStage = "Idle";
+        }
+    }
+
+    private async Task ExportCaptureDataAsync()
+    {
+        if (string.IsNullOrWhiteSpace(ExportInputPath) || string.IsNullOrWhiteSpace(ExportOutputPath)) return;
+        IsBusy = true;
+        OperationStage = "Exporting";
+        ExportProgress = "Exporting...";
+        try
+        {
+            var isXlsx = ExportOutputPath.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase);
+            var isMemReport = ExportInputPath.EndsWith(".memreport", StringComparison.OrdinalIgnoreCase);
+
+            if (isMemReport)
+            {
+                var parseResult = await new UnrealMemReportParser().ParseFileAsync(ExportInputPath);
+                if (!parseResult.IsSuccess) { StatusMessage = "MemReport parse failed; cannot export."; ExportProgress = "Failed."; return; }
+
+                if (isXlsx)
+                {
+                    var result = await new XlsxMemReportExportService().ExportAsync(new MemReportExportRequest(parseResult, ExportOutputPath, DateTimeOffset.UtcNow, ExportIncludeDetails));
+                    ExportProgress = "Exported to: " + result.OutputFilePath;
+                }
+                else
+                {
+                    var result = await new MemReportExportService().ExportAsync(new MemReportExportRequest(parseResult, ExportOutputPath, DateTimeOffset.UtcNow, ExportIncludeDetails));
+                    ExportProgress = "Exported to: " + result.OutputFilePath;
+                }
+            }
+            else
+            {
+                var parseResult = await new AndroidMemInfoParser().ParseFileAsync(ExportInputPath);
+                if (!parseResult.IsSuccess) { StatusMessage = "MemInfo parse failed; cannot export."; ExportProgress = "Failed."; return; }
+
+                if (isXlsx)
+                {
+                    var result = await new XlsxMemInfoExportService().ExportAsync(new MemInfoExportRequest(parseResult, ExportOutputPath, DateTimeOffset.UtcNow, ExportIncludeDetails));
+                    ExportProgress = "Exported to: " + result.OutputFilePath;
+                }
+                else
+                {
+                    var result = await new MemInfoExportService().ExportAsync(new MemInfoExportRequest(parseResult, ExportOutputPath, DateTimeOffset.UtcNow, ExportIncludeDetails));
+                    ExportProgress = "Exported to: " + result.OutputFilePath;
+                }
+            }
+
+            StatusMessage = ExportProgress;
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+            ExportProgress = "Error: " + exception.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+            OperationStage = "Idle";
+        }
+    }
+
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
@@ -512,6 +740,10 @@ public sealed class AsyncDelegateCommand(Func<Task> execute, Func<bool> canExecu
     public Task ExecuteAsync() => execute();
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }
+
+public sealed record MemReportMetricOption(string Group, string Name, string Value, string Status);
+
+public sealed record MemReportSummaryOption(string Category, string Count, string Details);
 
 public sealed class DelegateCommand(Action execute, Func<bool> canExecute) : ICommand
 {

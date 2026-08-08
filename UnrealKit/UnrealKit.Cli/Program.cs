@@ -147,34 +147,74 @@ static async Task<int> RunCaptureAsync(string[] arguments)
     {
         "run" => await RunCaptureRunAsync(commandArguments[1..], adbPath),
         "import" => await RunCaptureImportAsync(commandArguments[1..]),
+        "list" => await ListCapturesAsync(commandArguments[1..]),
+        "info" => await ShowCaptureInfoAsync(commandArguments[1..]),
         _ => FailCaptureUsage()
     };
 }
 
 static async Task<int> RunCaptureRunAsync(string[] arguments, string? adbPath)
 {
-    EnsureOnlyOptions(arguments, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--device", "--tag", "--format" });
+    EnsureOnlyOptions(arguments, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--device", "--tag", "--format" }, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--skip-saved" });
     var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(arguments, "--project"));
     var json = IsJsonFormat(arguments);
     var adbService = CreateAdbService(adbPath, project.Settings.AdbPath, streamOutput: !json);
     var serialNumber = await ResolveDeviceSerialAsync(adbService, arguments);
     var tag = GetOptionalOption(arguments, "--tag") ?? project.Settings.DefaultCaptureTag;
     var device = await GetSelectedAvailableDeviceAsync(adbService, serialNumber);
-    var result = await new CaptureService(adbService).CaptureAsync(new CaptureRequest(project, device, tag));
+    var skipSaved = arguments.Any(option => string.Equals(option, "--skip-saved", StringComparison.OrdinalIgnoreCase));
+    var result = await new CaptureService(adbService).CaptureAsync(new CaptureRequest(project, device, tag, SkipSaved: skipSaved));
     WriteCaptureResult(result, json);
     return 0;
 }
 
 static async Task<int> RunCaptureImportAsync(string[] arguments)
 {
-    EnsureOnlyOptions(arguments, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--source", "--platform", "--tag", "--capture-id" });
+    EnsureOnlyOptions(arguments, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--source", "--platform", "--tag", "--capture-id", "--format" });
     var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(arguments, "--project"));
     var source = GetRequiredOption(arguments, "--source");
     var platform = GetOptionalOption(arguments, "--platform") ?? "Android";
     var tag = GetOptionalOption(arguments, "--tag") ?? project.Settings.DefaultCaptureTag;
     var captureId = GetOptionalOption(arguments, "--capture-id");
+    var json = IsJsonFormat(arguments);
     var result = await new CaptureService().ImportAsync(new CaptureImportRequest(project, source, platform, tag, captureId));
-    WriteCaptureResult(result, false);
+    WriteCaptureResult(result, json);
+    return 0;
+}
+
+static async Task<int> ShowCaptureInfoAsync(string[] options)
+{
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--capture-dir", "--format" });
+    var captureDir = GetRequiredOption(options, "--capture-dir");
+    var json = IsJsonFormat(options);
+    var service = new CaptureAnalysisService();
+    var files = await service.ListCaptureFilesAsync(captureDir);
+
+    if (json)
+    {
+        var manifestPath = Path.Combine(captureDir, "CaptureManifest.json");
+        var hasManifest = File.Exists(manifestPath);
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            CaptureDirectory = Path.GetFullPath(captureDir),
+            CaptureId = Path.GetFileName(captureDir),
+            HasManifest = hasManifest,
+            Files = files.Select(f => new { f.Category, f.FileName, f.SizeBytes })
+        }, new JsonSerializerOptions { WriteIndented = true }));
+        return 0;
+    }
+
+    Console.WriteLine($"Capture directory: {Path.GetFullPath(captureDir)}");
+    Console.WriteLine($"Capture ID: {Path.GetFileName(captureDir)}");
+    var manifestPath2 = Path.Combine(captureDir, "CaptureManifest.json");
+    Console.WriteLine(File.Exists(manifestPath2) ? "Manifest: present" : "Manifest: missing");
+    Console.WriteLine();
+    foreach (var file in files)
+    {
+        Console.WriteLine($"[{file.Category}] {file.FileName}  ({file.SizeBytes} bytes)");
+    }
+
+    Console.WriteLine($"{files.Count} file(s) found.");
     return 0;
 }
 
@@ -198,11 +238,11 @@ static async Task<int> RunParseAsync(string[] arguments)
 static async Task<int> RunExportAsync(string[] arguments)
 {
     if (arguments.Length == 0) return FailExportUsage();
-    var commandName = new string([(char)109, (char)101, (char)109, (char)105, (char)110, (char)102, (char)111]);
-    if (!string.Equals(arguments[0], commandName, StringComparison.OrdinalIgnoreCase)) return FailExportUsage();
+    var subCommand = arguments[0].ToLowerInvariant();
+    if (subCommand is not ("meminfo" or "memreport")) return FailExportUsage();
     var options = arguments[1..];
-    var inputOption = new string([(char)45, (char)45, (char)105, (char)110, (char)112, (char)117, (char)116]);
-    var outputOption = new string([(char)45, (char)45, (char)111, (char)117, (char)116, (char)112, (char)117, (char)116]);
+    var inputOption = "--input";
+    var outputOption = "--output";
     var includeDetailsOption = "--include-details";
     var captureIdOption = "--capture-id";
     EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { inputOption, outputOption, includeDetailsOption, captureIdOption }, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { includeDetailsOption });
@@ -210,18 +250,38 @@ static async Task<int> RunExportAsync(string[] arguments)
     var output = GetRequiredOption(options, outputOption);
     var includeDetails = options.Any(option => string.Equals(option, includeDetailsOption, StringComparison.OrdinalIgnoreCase));
     var captureId = GetOptionalOption(options, captureIdOption);
-    var result = await new AndroidMemInfoParser().ParseFileAsync(input);
-    if (!result.IsSuccess) { WriteMemInfoParseResult(result, false); return 1; }
-    var isXlsx = output.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase);
-    if (isXlsx)
+
+    if (subCommand == "meminfo")
     {
-        var exported = await new XlsxMemInfoExportService().ExportAsync(new MemInfoExportRequest(result, output, DateTimeOffset.UtcNow, includeDetails, captureId));
-        Console.WriteLine(exported.OutputFilePath);
+        var result = await new AndroidMemInfoParser().ParseFileAsync(input);
+        if (!result.IsSuccess) { WriteMemInfoParseResult(result, false); return 1; }
+        var isXlsx = output.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase);
+        if (isXlsx)
+        {
+            var exported = await new XlsxMemInfoExportService().ExportAsync(new MemInfoExportRequest(result, output, DateTimeOffset.UtcNow, includeDetails, captureId));
+            Console.WriteLine(exported.OutputFilePath);
+        }
+        else
+        {
+            var exported = await new MemInfoExportService().ExportAsync(new MemInfoExportRequest(result, output, DateTimeOffset.UtcNow, includeDetails, captureId));
+            Console.WriteLine(exported.OutputFilePath);
+        }
     }
     else
     {
-        var exported = await new MemInfoExportService().ExportAsync(new MemInfoExportRequest(result, output, DateTimeOffset.UtcNow, includeDetails, captureId));
-        Console.WriteLine(exported.OutputFilePath);
+        var result = await new UnrealMemReportParser().ParseFileAsync(input);
+        if (!result.IsSuccess) { WriteMemReportParseResult(result, false); return 1; }
+        var isXlsx = output.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase);
+        if (isXlsx)
+        {
+            var exported = await new XlsxMemReportExportService().ExportAsync(new MemReportExportRequest(result, output, DateTimeOffset.UtcNow, includeDetails, captureId));
+            Console.WriteLine(exported.OutputFilePath);
+        }
+        else
+        {
+            var exported = await new MemReportExportService().ExportAsync(new MemReportExportRequest(result, output, DateTimeOffset.UtcNow, includeDetails, captureId));
+            Console.WriteLine(exported.OutputFilePath);
+        }
     }
     return 0;
 }
@@ -561,8 +621,10 @@ static int FailCommandLineUsage()
 static int FailCaptureUsage()
 {
     Console.Error.WriteLine("Usage:");
-    Console.Error.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial>|auto [--tag <tag>] [--format text|json] [--adb-path <path>]");
+    Console.Error.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial>|auto [--tag <tag>] [--format text|json] [--skip-saved] [--adb-path <path>]");
     Console.Error.WriteLine("  unrealkit capture import --project <project.ukit> --source <directory> [--platform <platform>] [--tag <tag>] [--capture-id <id>]");
+    Console.Error.WriteLine("  unrealkit capture list --project <project.ukit> [--platform <platform>] [--tag <tag>] [--format text|json]");
+    Console.Error.WriteLine("  unrealkit capture info --capture-dir <path> [--format text|json]");
     return 2;
 }
 
@@ -577,12 +639,19 @@ static async Task<int> ParseMemInfoAsync(string[] options)
 
 static async Task<int> ListCapturesAsync(string[] options)
 {
-    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--platform", "--tag" });
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--platform", "--tag", "--format" });
     var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(options, "--project"));
+    var json = IsJsonFormat(options);
     var service = new CaptureAnalysisService();
     var platform = GetOptionalOption(options, "--platform");
     var tag = GetOptionalOption(options, "--tag");
     var captures = await service.ListCaptureDirectoriesAsync(project, platform, tag);
+    if (json)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(captures.Select(c => new { c.CaptureId, c.CaptureDate, c.Platform, c.Tag, c.RelativePath, c.HasManifest }), new JsonSerializerOptions { WriteIndented = true }));
+        return 0;
+    }
+
     foreach (var capture in captures)
     {
         var marker = capture.HasManifest ? "" : " [no manifest]";
@@ -596,10 +665,17 @@ static async Task<int> ListCapturesAsync(string[] options)
 
 static async Task<int> ListCaptureFilesAsync(string[] options)
 {
-    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--capture-dir" });
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--capture-dir", "--format" });
     var captureDir = GetRequiredOption(options, "--capture-dir");
+    var json = IsJsonFormat(options);
     var service = new CaptureAnalysisService();
     var files = await service.ListCaptureFilesAsync(captureDir);
+    if (json)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(files.Select(f => new { f.Category, f.FileName, f.SizeBytes, f.FullPath }), new JsonSerializerOptions { WriteIndented = true }));
+        return 0;
+    }
+
     foreach (var file in files)
     {
         Console.WriteLine($"[{file.Category}] {file.FileName}  ({file.SizeBytes} bytes)");
@@ -750,7 +826,7 @@ static int FailParseUsage()
     return 2;
 }
 
-static int FailExportUsage() { Console.Error.WriteLine("Usage: unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]"); return 2; }
+static int FailExportUsage() { Console.Error.WriteLine("Usage: unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]"); Console.Error.WriteLine("       unrealkit export memreport --input <memreport.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]"); return 2; }
 
 static void PrintUsage()
 {
@@ -765,7 +841,7 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]");
     Console.WriteLine("  unrealkit commandline push --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--remote-path <path>] [--adb-path <path>]");
     Console.WriteLine("  unrealkit commandline delete --project <project.ukit> --device <serial> [--remote-path <path>] [--adb-path <path>]");
-    Console.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial>|auto [--tag <tag>] [--format text|json] [--adb-path <path>]");
+    Console.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial>|auto [--tag <tag>] [--format text|json] [--skip-saved] [--adb-path <path>]");
     Console.WriteLine("  unrealkit capture import --project <project.ukit> --source <directory> [--platform <platform>] [--tag <tag>] [--capture-id <id>]");
     Console.WriteLine("  unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
     Console.WriteLine("  unrealkit parse memreport --input <memreport.txt> [--format text|json]");
@@ -773,4 +849,5 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
     Console.WriteLine("  unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]");
     Console.WriteLine("  unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
+  Console.WriteLine("  unrealkit export memreport --input <memreport.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
 }
