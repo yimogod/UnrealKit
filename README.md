@@ -108,3 +108,8 @@ Script\Publish-Shipping.bat
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Roadmap
+
+- Phase 1 (complete): see [Doc/PlanM1.md](Doc/PlanM1.md)
+- Phase 2 (next): see [Doc/PlanM2.md](Doc/PlanM2.md)
