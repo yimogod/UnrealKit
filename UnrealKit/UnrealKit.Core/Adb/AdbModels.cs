@@ -1,3 +1,4 @@
+using UnrealKit.Core.Devices;
 using UnrealKit.Core.Processes;
 
 namespace UnrealKit.Core.Adb;
@@ -25,9 +26,14 @@ public sealed record AdbDevice(
     string? Model,
     string? DeviceName,
     AdbConnectionType ConnectionType,
-    string RawLine)
+    string RawLine) : IDevice
 {
     public bool IsAvailable => Status == AdbDeviceStatus.Device;
+
+    string IDevice.Id => SerialNumber;
+    string IDevice.Name => Model ?? DeviceName ?? SerialNumber;
+    string IDevice.Platform => "Android";
+    bool IDevice.IsAvailable => IsAvailable;
 }
 
 public sealed class AdbCommandException : Exception

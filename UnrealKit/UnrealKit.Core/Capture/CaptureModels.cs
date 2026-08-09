@@ -1,10 +1,10 @@
-using UnrealKit.Core.Adb;
+using UnrealKit.Core.Devices;
 
 namespace UnrealKit.Core.Capture;
 
 public sealed record CaptureRequest(
     Projects.UkitProject Project,
-    AdbDevice Device,
+    IDevice Device,
     string Tag,
     string? CaptureId = null,
     bool SkipSaved = false);
@@ -19,6 +19,10 @@ public sealed record CaptureFileManifestEntry(
     long SizeBytes,
     string Sha256);
 
+/// <summary>
+/// 采集清单。DeviceSerialNumber 在 Android 上为 ADB serial，在 Win64 上为主机名。
+/// DeviceModel / PackageName 在非 Android 平台可以为 null。
+/// </summary>
 public sealed record CaptureManifest(
     string CaptureId,
     string Platform,

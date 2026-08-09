@@ -1,0 +1,17 @@
+*** Begin Patch
+*** Update File: UnrealKit\UnrealKit.Core\Projects\ProjectModels.cs
+@@ -1,3 +1,12 @@
+ using UnrealKit.Core.Diagnostics;
++
++namespace UnrealKit.Core.Projects;
++
++/// <summary>
++/// 目标平台枚举。Core 层不得依据平台做 UI 分支，仅用于采集策略选择。
++/// </summary>
++public enum TargetPlatform
++{
++    Android,
++    Win64
++}
+ 
+*** End Patch

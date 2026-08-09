@@ -1,4 +1,5 @@
 ﻿using UnrealKit.Core.Adb;
+using UnrealKit.Core.Devices;
 using UnrealKit.Core.Launch;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
@@ -11,7 +12,7 @@ public sealed class LaunchParameterServiceTests
     [Fact]
     public void BuildContent_CombinesComposablePresetsAndCustomArguments()
     {
-        var service = new LaunchParameterService(new RecordingAdbService());
+        var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));
         var settings = ProjectSettings.CreateDefaults("Sample");
 
         var content = service.BuildContent(settings, ["LLM", "LLM CSV"], "-log");
@@ -22,7 +23,7 @@ public sealed class LaunchParameterServiceTests
     [Fact]
     public void BuildContent_RejectsNonComposablePresetWithAnotherPreset()
     {
-        var service = new LaunchParameterService(new RecordingAdbService());
+        var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));
 
         Assert.Throws<ArgumentException>(() => service.BuildContent(ProjectSettings.CreateDefaults("Sample"), ["OpenGL", "LLM"]));
     }
@@ -31,7 +32,7 @@ public sealed class LaunchParameterServiceTests
     public async Task PushAsync_UsesExpandedPathAndDeletesTemporaryFile()
     {
         var adbService = new RecordingAdbService();
-        var service = new LaunchParameterService(adbService);
+        var service = new LaunchParameterService(new AdbDeviceService(adbService));
         var project = CreateProject();
 
         var result = await service.PushAsync(project, new LaunchParameterRequest("R58M123ABC", ["LLM"]));
@@ -48,7 +49,7 @@ public sealed class LaunchParameterServiceTests
     public async Task DeleteAndStart_UseProjectConfiguration()
     {
         var adbService = new RecordingAdbService();
-        var service = new LaunchParameterService(adbService);
+        var service = new LaunchParameterService(new AdbDeviceService(adbService));
         var project = CreateProject();
 
         await service.DeleteAsync(project, "R58M123ABC");

@@ -1,4 +1,5 @@
 ﻿using UnrealKit.Core.Adb;
+using UnrealKit.Core.Devices;
 using UnrealKit.Core.Capture;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
@@ -17,7 +18,7 @@ public sealed class CaptureServiceTests : IDisposable
         var configPath = project.Project.ConfigFilePath;
         await File.WriteAllTextAsync(configPath, (await File.ReadAllTextAsync(configPath)).Replace("PackageName=", "PackageName=com.example.project", StringComparison.Ordinal));
         var configuredProject = await new ProjectService().OpenProjectAsync(project.Project.ProjectFilePath);
-        var service = new CaptureService(new FakeAdbService());
+        var service = new CaptureService(new AdbDeviceService(new FakeAdbService()));
         var device = new AdbDevice("device-01", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, string.Empty);
 
         var result = await service.CaptureAsync(new CaptureRequest(configuredProject, device, "Nightly", "capture-001"));

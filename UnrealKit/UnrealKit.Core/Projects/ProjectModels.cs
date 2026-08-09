@@ -1,6 +1,15 @@
-﻿using UnrealKit.Core.Diagnostics;
+using UnrealKit.Core.Diagnostics;
 
 namespace UnrealKit.Core.Projects;
+
+/// <summary>
+/// 目标平台枚举。Core 层不得依据平台做 UI 分支，仅用于采集策略选择。
+/// </summary>
+public enum TargetPlatform
+{
+    Android,
+    Win64
+}
 
 public sealed record UkitProjectDescriptor(
     int FormatVersion,
@@ -68,7 +77,10 @@ public sealed record ProjectSettings(
     IReadOnlyList<LaunchParameterPreset> LaunchParameterPresets,
     IReadOnlyList<ConsoleSequencePreset> ConsoleSequences,
     string? PreCaptureSequence,
-    string? PostCaptureSequence)
+    string? PostCaptureSequence,
+    TargetPlatform Platform = TargetPlatform.Android,
+    string? Win64Executable = null,
+    string? Win64WorkingDirectory = null)
 {
     public static ProjectSettings CreateDefaults(string projectName) => new(
         string.Empty,
@@ -82,6 +94,9 @@ public sealed record ProjectSettings(
         "Saved/Exports",
         LaunchParameterPresetDefaults.All,
         [],
+        null,
+        null,
+        TargetPlatform.Android,
         null,
         null);
 }

@@ -1,0 +1,110 @@
+using UnrealKit.Core.Adb;
+using UnrealKit.Core.Operations;
+using UnrealKit.Core.Processes;
+
+namespace UnrealKit.Core.Devices;
+
+/// <summary>
+/// IDeviceService 的 Android ADB 实现，适配现有 IAdbService。
+/// </summary>
+public sealed class AdbDeviceService : IDeviceService
+{
+    private readonly IAdbService _adb;
+
+    public AdbDeviceService(IAdbService adb)
+    {
+        _adb = adb ?? throw new ArgumentNullException(nameof(adb));
+    }
+
+    public async Task<IReadOnlyList<IDevice>> ListDevicesAsync(
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var adbDevices = await _adb.ListDevicesAsync(progress, cancellationToken);
+        return adbDevices.Select(d => (IDevice)new AdbDeviceWrapper(d)).ToList();
+    }
+
+    public Task<ProcessExecutionResult> CaptureMemoryAsync(
+        IDevice device,
+        string target,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        return _adb.RunDumpsysAsync(device.Id, target, progress, cancellationToken);
+    }
+
+    public Task<ProcessExecutionResult> PullDirectoryAsync(
+        IDevice device,
+        string remotePath,
+        string localDirectory,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        return _adb.PullDirectoryAsync(device.Id, remotePath, localDirectory, progress, cancellationToken);
+    }
+
+    public Task<ProcessExecutionResult> SendConsoleCommandAsync(
+        IDevice device,
+        string command,
+        string? target = null,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        return _adb.SendConsoleCommandAsync(device.Id, command, target, progress, cancellationToken);
+    }
+
+    public IAsyncEnumerable<string> StreamLogAsync(
+        IDevice device,
+        string? filter = null,
+        CancellationToken cancellationToken = default)
+    {
+        return _adb.StreamLogcatAsync(device.Id, filter, cancellationToken);
+    }
+
+    public Task<ProcessExecutionResult> StartApplicationAsync(
+        IDevice device,
+        string target,
+        string? activity = null,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        return _adb.StartApplicationAsync(device.Id, target, activity ?? string.Empty, progress, cancellationToken);
+    }
+
+    public Task<ProcessExecutionResult> PushFileAsync(
+        IDevice device,
+        string localPath,
+        string remotePath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        return _adb.PushFileAsync(device.Id, localPath, remotePath, progress, cancellationToken);
+    }
+
+    public Task<ProcessExecutionResult> DeleteRemoteFileAsync(
+        IDevice device,
+        string remotePath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        return _adb.DeleteRemoteFileAsync(device.Id, remotePath, progress, cancellationToken);
+    }
+
+    /// <summary>
+    /// 将 AdbDevice 包装为 IDevice 的公开适配器，供 CLI / Desktop 层使用。
+    /// </summary>
+    public sealed class AdbDeviceWrapper : IDevice
+    {
+        private readonly AdbDevice _adbDevice;
+
+        public AdbDeviceWrapper(AdbDevice adbDevice)
+        {
+            _adbDevice = adbDevice;
+        }
+
+        public string Id => _adbDevice.SerialNumber;
+        public string Name => _adbDevice.Model ?? _adbDevice.SerialNumber;
+        public string Platform => "Android";
+        public bool IsAvailable => _adbDevice.IsAvailable;
+    }
+}

@@ -1,12 +1,19 @@
-using UnrealKit.Core.Adb;
+using UnrealKit.Core.Devices;
 using UnrealKit.Core.Operations;
-using UnrealKit.Core.Projects;
 using UnrealKit.Core.Processes;
+using UnrealKit.Core.Projects;
 
 namespace UnrealKit.Core.Launch;
 
-public sealed class LaunchParameterService(IAdbService adbService) : ILaunchParameterService
+public sealed class LaunchParameterService : ILaunchParameterService
 {
+    private readonly IDeviceService _deviceService;
+
+    public LaunchParameterService(IDeviceService deviceService)
+    {
+        _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
+    }
+
     private const string FileName = "uecommandline.txt";
 
     public string BuildContent(ProjectSettings settings, IReadOnlyList<string> presetNames, string? customArguments = null)
@@ -30,11 +37,22 @@ public sealed class LaunchParameterService(IAdbService adbService) : ILaunchPara
         ArgumentNullException.ThrowIfNull(settings);
         if (!string.IsNullOrWhiteSpace(remotePathOverride))
         {
-            return ValidateRemotePath(remotePathOverride);
+            return ValidatePath(settings, remotePathOverride);
         }
 
-        var root = settings.DeviceGameRootTemplate.Replace("{PackageName}", settings.PackageName, StringComparison.Ordinal).Replace("{UnrealProjectName}", settings.UnrealProjectName, StringComparison.Ordinal);
-        return ValidateRemotePath($"{root.TrimEnd('/')}/{FileName}");
+        if (settings.Platform == TargetPlatform.Win64)
+        {
+            var workingDir = !string.IsNullOrWhiteSpace(settings.Win64WorkingDirectory)
+                ? settings.Win64WorkingDirectory
+                : ".";
+            return ValidatePath(settings, Path.Combine(workingDir, settings.UnrealProjectName, FileName));
+        }
+
+        // Android
+        var root = settings.DeviceGameRootTemplate
+            .Replace("{PackageName}", settings.PackageName, StringComparison.Ordinal)
+            .Replace("{UnrealProjectName}", settings.UnrealProjectName, StringComparison.Ordinal);
+        return ValidatePath(settings, $"{root.TrimEnd('/')}/{FileName}");
     }
 
     public async Task<LaunchParameterPushResult> PushAsync(UkitProject project, LaunchParameterRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
@@ -44,6 +62,18 @@ public sealed class LaunchParameterService(IAdbService adbService) : ILaunchPara
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SerialNumber);
         var content = BuildContent(project.Settings, request.PresetNames, request.CustomArguments);
         var remotePath = GetRemotePath(project.Settings, request.RemotePathOverride);
+
+        if (project.Settings.Platform == TargetPlatform.Win64)
+        {
+            // Win64: 直接写入本地文件
+            progress?.Report(new OperationProgress("commandline-push", "Writing", 1, 1, $"Writing {FileName} to {remotePath}."));
+            var dir = Path.GetDirectoryName(remotePath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            await File.WriteAllTextAsync(remotePath, content, new System.Text.UTF8Encoding(false), cancellationToken);
+            return new LaunchParameterPushResult(content, remotePath, new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        }
+
+        // Android: ADB push
         var directory = Path.Combine(Path.GetTempPath(), "UnrealKit", "LaunchParameters");
         Directory.CreateDirectory(directory);
         var temporaryPath = Path.Combine(directory, $"{Guid.NewGuid():N}-{FileName}");
@@ -52,7 +82,8 @@ public sealed class LaunchParameterService(IAdbService adbService) : ILaunchPara
             progress?.Report(new OperationProgress("commandline-push", "Writing", 1, 2, "Writing temporary uecommandline.txt."));
             await File.WriteAllTextAsync(temporaryPath, content, new System.Text.UTF8Encoding(false), cancellationToken);
             progress?.Report(new OperationProgress("commandline-push", "Pushing", 2, 2, $"Pushing to {remotePath}."));
-            var result = await adbService.PushFileAsync(request.SerialNumber, temporaryPath, remotePath, progress, cancellationToken);
+            var adbDevice = new AdbDeviceWrapper(request.SerialNumber);
+            var result = await _deviceService.PushFileAsync(adbDevice, temporaryPath, remotePath, progress, cancellationToken);
             return new LaunchParameterPushResult(content, remotePath, result);
         }
         finally
@@ -68,23 +99,64 @@ public sealed class LaunchParameterService(IAdbService adbService) : ILaunchPara
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(serialNumber);
-        return adbService.DeleteRemoteFileAsync(serialNumber, GetRemotePath(project.Settings, remotePathOverride), progress, cancellationToken);
+        var path = GetRemotePath(project.Settings, remotePathOverride);
+
+        if (project.Settings.Platform == TargetPlatform.Win64)
+        {
+            if (File.Exists(path)) File.Delete(path);
+            return Task.FromResult(new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        }
+
+        return _deviceService.DeleteRemoteFileAsync(new AdbDeviceWrapper(serialNumber), path, progress, cancellationToken);
     }
 
     public Task<ProcessExecutionResult> StartApplicationAsync(UkitProject project, string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(serialNumber);
-        return adbService.StartApplicationAsync(serialNumber, project.Settings.PackageName, project.Settings.Activity, progress, cancellationToken);
-    }
 
-    private static string ValidateRemotePath(string remotePath)
-    {
-        if (!remotePath.StartsWith("/", StringComparison.Ordinal) || remotePath.Contains('\\') || remotePath.Contains('\0'))
+        if (project.Settings.Platform == TargetPlatform.Win64)
         {
-            throw new ArgumentException("Launch parameter remote path must be an absolute Unix path.", nameof(remotePath));
+            var exePath = !string.IsNullOrWhiteSpace(project.Settings.Win64Executable)
+                ? project.Settings.Win64Executable
+                : throw new InvalidOperationException("Win64Executable is not configured in project settings.");
+            var workingDir = !string.IsNullOrWhiteSpace(project.Settings.Win64WorkingDirectory)
+                ? project.Settings.Win64WorkingDirectory
+                : Path.GetDirectoryName(exePath) ?? ".";
+            var runner = new ProcessRunner();
+            return runner.RunAsync(new ProcessExecutionRequest(exePath, Array.Empty<string>(), workingDir), progress, cancellationToken);
         }
 
-        return remotePath;
+        return _deviceService.StartApplicationAsync(new AdbDeviceWrapper(serialNumber), project.Settings.PackageName, project.Settings.Activity, progress, cancellationToken);
+    }
+
+    private static string ValidatePath(ProjectSettings settings, string path)
+    {
+        if (settings.Platform == TargetPlatform.Win64)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("Launch parameter path must not be empty.", nameof(path));
+            return path;
+        }
+
+        // Android
+        if (!path.StartsWith("/", StringComparison.Ordinal) || path.Contains('\\') || path.Contains('\0'))
+        {
+            throw new ArgumentException("Launch parameter remote path must be an absolute Unix path.", nameof(path));
+        }
+
+        return path;
+    }
+
+    /// <summary>
+    /// 从 serial number 构造最小 IDevice 实现，仅用于 ADB 调用。
+    /// </summary>
+    private sealed class AdbDeviceWrapper : IDevice
+    {
+        public AdbDeviceWrapper(string id) { Id = id; Name = id; }
+        public string Id { get; }
+        public string Name { get; }
+        public string Platform => "Android";
+        public bool IsAvailable => true;
     }
 }
