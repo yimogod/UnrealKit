@@ -1,8 +1,8 @@
-﻿# UnrealKit 第二阶段 TODO
+# UnrealKit 第二阶段 TODO
 
 基于 旧版Python性能检查工具功能分析.md 第二阶段 + 第三阶段能力。
 
-最后更新： | 框架 .NET 9 / WPF | 72 测试通过
+最后更新：2026-08-09 | 框架 .NET 9 / WPF | 79 测试通过 | P1 静态相机 Core+CLI 完成
 
 ---
 
@@ -16,13 +16,13 @@
 
 ### P1：静态相机性能模块
 
-- [ ] StaticCameraPerfParser：解析 `!!!Do Perf Start!!!` / `!!!Do Perf End!!!` / `PointNum:` 标记
-- [ ] 14 行数据结构配置化（标签、阈值不可硬编码）
-- [ ] 截图数量校验：截图数 vs 相机记录数一致性检查
-- [ ] DC warning/error 分档（旧脚本同值 500 是已知缺陷，修复）
-- [ ] HTML 报告生成：日志 + 截图 + 阈值标记
-- [ ] CLI：`parse static-camera --input <log> --screenshots <dir> [--config <ini>]`
-- [ ] WPF：静态相机解析页（日志选择、截图预览、报告查看）
+- [x] StaticCameraPerfParser：解析 `!!!Do Perf Start!!!` / `!!!Do Perf End!!!` / `PointNum:` 标记
+- [x] 14 行数据结构配置化（标签、阈值不可硬编码 → `StaticCameraPerfConfig`）
+- [x] 截图数量校验：截图数 vs 相机记录数一致性检查
+- [x] DC warning/error 分档（旧脚本同值 500 是已知缺陷，修复 → 400/500）
+- [ ] HTML 报告生成：日志 + 截图 + 阈值标记（后续迭代）
+- [x] CLI：`parse static-camera --input <log> --screenshots <dir> [--format json]`
+- [ ] WPF：静态相机解析页（日志选择、截图预览、报告查看）（后续迭代）
 
 ### P2：基线差分
 
@@ -56,7 +56,7 @@
 
 ## 下一步优先级
 
-1. **P1 静态相机** — 旧工具中唯一未迁移的核心解析能力
+1. ~~**P1 静态相机**~~ — Core 解析器 + CLI 已完成（HTML 报告、WPF 页面后续迭代）
 2. **P2 基线差分** — 建立对比分析基础
 3. **P3 历史趋势** — 在基线基础上扩展时间维度
 4. **P4 RenderDoc** — 独立能力集成

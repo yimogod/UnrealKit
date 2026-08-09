@@ -8,7 +8,7 @@ UnrealKit is a desktop tool for Unreal Engine Android performance data capture a
 - **Device Management** — Enumerate, connect (Wi-Fi), and select Android devices via ADB.
 - **Launch Parameters** — Push presets (LLM, OpenGL, Vulkan, Trace, No Update) or custom commands to `uecommandline.txt`.
 - **Capture** — Real-time capture of `dumpsys meminfo` and UE Saved data, archived to `Content/<Platform>/<Tag>/<Date>/<CaptureId>/`.
-- **Parsing** — Offline parsing of Android meminfo and UE memreport files with structured diagnostics.
+- **Parsing** — Offline parsing of Android meminfo, UE memreport, and static camera performance logs with structured diagnostics.
 - **Export** — Export to CSV, TSV, and real XLSX with metadata, details, and diagnostics.
 - **GUI (WPF)** — Full desktop application with 8 pages: Project, Devices, Launch Params, Capture, Parse, Results, Export, Log & Settings.
 - **CLI** — Full coverage: `project create/info/validate`, `adb`, `app start`, `commandline push/delete`, `capture run/list/info`, `parse`, `export`. Machine-readable `--format json` supported.
@@ -61,6 +61,7 @@ unrealkit capture run --project <project.ukit> --device <serial|auto> [--tag <ta
 unrealkit capture import --project <project.ukit> --source <directory> [--platform <platform>] [--tag <tag>] [--capture-id <id>]
 unrealkit parse meminfo --input <file> [--format text|json]
 unrealkit parse memreport --input <file> [--format text|json]
+unrealkit parse static-camera --input <log> --screenshots <dir> [--format json]
 unrealkit parse capture-list --project <project.ukit> [--platform <platform>] [--tag <tag>]
 unrealkit parse capture-files --capture-dir <path>
 unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]
@@ -81,10 +82,11 @@ unrealkit export memreport --input <file> --output <file.csv|file.tsv|file.xlsx>
 │     ├─ MemInfo/
 │     ├─ Saved/
 │     └─ Logs/
-├─ Saved/          (re-generatable derived data)
-├─ Intermediate/   (cache, temp)
-└─ Script/         (build and run scripts)
+├─ Saved/          (re-generatable derived data: Exports, Analysis, Reports, Logs)
+└─ Intermediate/   (cache, temp)
 ```
+
+`Script/` lives at the repository root, not inside a `.ukit` project.
 
 ## Building from Source
 
@@ -92,7 +94,7 @@ unrealkit export memreport --input <file> --output <file.csv|file.tsv|file.xlsx>
 :: Debug build
 Script\Build-Debug.bat
 
-:: Run tests (72 passing)
+:: Run tests (79 passing)
 dotnet test UnrealKit\UnrealKit.Tests
 
 :: Self-contained publish (win-x64 standalone)
@@ -112,4 +114,8 @@ MIT — see [LICENSE](LICENSE).
 ## Roadmap
 
 - Phase 1 (complete): see [Doc/PlanM1.md](Doc/PlanM1.md)
-- Phase 2 (next): see [Doc/PlanM2.md](Doc/PlanM2.md)
+- Phase 2 (in progress): see [Doc/PlanM2.md](Doc/PlanM2.md)
+
+## Development Conventions
+
+Contributor conventions live in [CLAUDE.md](CLAUDE.md), with per-domain detail under [Doc/](Doc).
