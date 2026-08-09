@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -55,6 +55,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _scpLogPath = string.Empty;
     private string _scpScreenshotsDir = string.Empty;
     private string _scpParseDescription = "Select a static camera perf log and optional screenshots directory.";
+    private StaticCameraPerfParseResult? _lastScpParseResult;
     private string _diffBaselinePath = string.Empty;
     private string _diffCurrentPath = string.Empty;
     private string _diffSource = "StaticCamera";
@@ -66,6 +67,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _trendSource = "StaticCamera";
     private string _trendMetricFilter = string.Empty;
     private string _trendSummary = "Open a project, then click Build Trend.";
+    private TrendResult? _lastTrendResult;
     private string _renderDocPythonPath = string.Empty;
     private string _renderDocScriptPath = string.Empty;
     private string _renderDocArguments = string.Empty;
@@ -138,6 +140,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<DiffDiagnosticOption> DiffDiagnostics { get; } = [];
     public ObservableCollection<TrendCaptureOption> TrendCaptures { get; } = [];
     public ObservableCollection<TrendSeriesOption> TrendSeries { get; } = [];
+    public ObservableCollection<string> TrendChartSeriesNames { get; } = [];
+    public ObservableCollection<System.Windows.Point> TrendChartPoints { get; } = [];
+    public ObservableCollection<TrendChartAxisLabel> TrendChartXLabels { get; } = [];
+    private string _selectedTrendChartSeries = "";
+    public string SelectedTrendChartSeries { get => _selectedTrendChartSeries; set { if (SetField(ref _selectedTrendChartSeries, value)) UpdateTrendChart(); } }
     public ObservableCollection<TrendDiagnosticOption> TrendDiagnostics { get; } = [];
     public ObservableCollection<RenderDocDiagnosticOption> RenderDocDiagnostics { get; } = [];
     public ICommand CreateProjectCommand { get; }
@@ -776,6 +783,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         else
             result = await parser.ParseFileAsync(inputPath, OperationCancellationToken);
 
+        _lastScpParseResult = result;
         ScpFrames.Clear();
         ScpAverages.Clear();
         ScpDiagnostics.Clear();
@@ -882,6 +890,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         TrendCaptures.Clear();
         TrendSeries.Clear();
         TrendDiagnostics.Clear();
+        _lastTrendResult = result;
 
         foreach (var capture in result.Captures)
             TrendCaptures.Add(new TrendCaptureOption(capture.CaptureId, capture.CaptureDate.ToString("yyyy-MM-dd HH:mm"), capture.Platform, capture.Tag, capture.DeviceModel ?? "-"));
@@ -945,6 +954,76 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         StatusMessage = $"RenderDoc finished (exit {result.ExitCode}).";
         AddOperationLog(log.ToString());
     });
+    public async Task GenerateScpHtmlReportAsync(string outputPath)
+    {
+        if (_lastScpParseResult?.Report is null) return;
+        await new StaticCameraHtmlReportService().GenerateAsync(
+            new StaticCameraHtmlReportRequest(_lastScpParseResult, outputPath));
+        AddOperationLog($"HTML report saved: {outputPath}");
+    }
+    private void UpdateTrendChart()
+    {
+        TrendChartPoints.Clear();
+        TrendChartXLabels.Clear();
+        TrendChartSeriesNames.Clear();
+
+        if (_lastTrendResult is null || string.IsNullOrEmpty(SelectedTrendChartSeries)) return;
+
+        var series = _lastTrendResult.Series.FirstOrDefault(s =>
+            $"{s.Group}/{s.Name}" == SelectedTrendChartSeries || s.Name == SelectedTrendChartSeries);
+        if (series is null) return;
+
+        // Populate series names for dropdown
+        foreach (var s in _lastTrendResult.Series)
+            TrendChartSeriesNames.Add($"{s.Group}/{s.Name}");
+
+        if (TrendChartSeriesNames.Count > 0 && string.IsNullOrEmpty(SelectedTrendChartSeries))
+            SelectedTrendChartSeries = TrendChartSeriesNames[0];
+
+        var presentPoints = series.Points.Where(p => p.Value.HasValue).ToList();
+        if (presentPoints.Count == 0) return;
+
+        double minVal = presentPoints.Min(p => p.Value!.Value);
+        double maxVal = presentPoints.Max(p => p.Value!.Value);
+        double range = maxVal - minVal;
+        if (range < 1e-9) range = 1;
+
+        double chartWidth = 600;
+        double chartHeight = 300;
+        double paddingLeft = 60;
+        double paddingRight = 20;
+        double paddingTop = 20;
+        double paddingBottom = 40;
+
+        double plotWidth = chartWidth - paddingLeft - paddingRight;
+        double plotHeight = chartHeight - paddingTop - paddingBottom;
+
+        if (presentPoints.Count == 1)
+        {
+            double x = paddingLeft + plotWidth / 2;
+            double y = paddingTop + plotHeight / 2;
+            TrendChartPoints.Add(new System.Windows.Point(x, y));
+        }
+        else
+        {
+            for (int i = 0; i < presentPoints.Count; i++)
+            {
+                double x = paddingLeft + (i / (double)(presentPoints.Count - 1)) * plotWidth;
+                double y = paddingTop + (1 - (presentPoints[i].Value!.Value - minVal) / range) * plotHeight;
+                TrendChartPoints.Add(new System.Windows.Point(x, y));
+            }
+        }
+
+        // X-axis labels (dates)
+        int labelStep = Math.Max(1, presentPoints.Count / 6);
+        for (int i = 0; i < presentPoints.Count; i += labelStep)
+        {
+            TrendChartXLabels.Add(new TrendChartAxisLabel(
+                paddingLeft + (presentPoints.Count > 1 ? (i / (double)(presentPoints.Count - 1)) * plotWidth : plotWidth / 2),
+                paddingTop + plotHeight + 5,
+                presentPoints[i].CaptureDate.ToString("MM-dd")));
+        }
+    }
 
     private void RaiseCommandStates()
     {
@@ -1037,3 +1116,4 @@ public sealed record TrendSeriesOption(string Group, string Name, string Unit, s
 public sealed record TrendDiagnosticOption(string Severity, string Code, string Line, string Message);
 
 public sealed record RenderDocDiagnosticOption(string Severity, string Code, string Line, string Message);
+public sealed record TrendChartAxisLabel(double X, double Y, string Label);

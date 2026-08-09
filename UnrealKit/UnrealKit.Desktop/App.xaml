@@ -4,6 +4,6 @@
              xmlns:local="clr-namespace:UnrealKit.Desktop"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <local:PointsToPointCollectionConverter x:Key="PointsConverter" />
     </Application.Resources>
 </Application>

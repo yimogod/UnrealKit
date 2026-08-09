@@ -197,4 +197,34 @@ public partial class MainWindow : Window
             viewModel.RenderDocOutputDir = dialog.FolderName;
         }
     }
+
+    private async void GenerateScpHtmlReport_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ShellViewModel viewModel) return;
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save HTML Report",
+            Filter = "HTML files (*.html)|*.html|All files (*.*)|*.*",
+            DefaultExt = ".html",
+            OverwritePrompt = true,
+            FileName = "StaticCameraReport.html"
+        };
+
+        if (dialog.ShowDialog(this) == true)
+        {
+            try
+            {
+                await viewModel.GenerateScpHtmlReportAsync(dialog.FileName);
+                MessageBox.Show($"HTML report saved to:{Environment.NewLine}{dialog.FileName}", "Report Generated",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to generate HTML report:{Environment.NewLine}{ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+
 }

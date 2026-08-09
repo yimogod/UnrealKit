@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using UnrealKit.Core.Adb;
 using UnrealKit.Core.Analysis;
 using UnrealKit.Core.Capture;
@@ -762,7 +762,7 @@ static string FormatDiffPercent(double? value) => value is null
     ? "-"
     : value.Value.ToString("+0.##;-0.##;0", System.Globalization.CultureInfo.InvariantCulture) + "%";
 
-static string Truncate(string value, int maxLength) => value.Length <= maxLength ? value : value[..(maxLength - 1)] + "…";
+static string Truncate(string value, int maxLength) => value.Length <= maxLength ? value : value[..(maxLength - 1)] + "...";
 
 
 static async Task<int> RunRenderDocAsync(string[] arguments)
@@ -1515,7 +1515,7 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit parse capture-list --project <project.ukit> [--platform <platform>] [--tag <tag>]");
     Console.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
     Console.WriteLine("  unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]");
-    Console.WriteLine("  unrealkit parse static-camera --input <log> [--screenshots <dir>] [--format json]");
+    Console.WriteLine("  unrealkit parse static-camera --input <log> [--screenshots <dir>] [--format json] [--html-output <path>]");
     Console.WriteLine("  unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
   Console.WriteLine("  unrealkit export memreport --input <memreport.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
     Console.WriteLine("  unrealkit analyze diff --baseline <file> --current <file> [--source meminfo|memreport|static-camera] [--metrics <list>] [--only-changed] [--format text|json]");
@@ -1523,3 +1523,5 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit analyze trend --project <project.ukit> [--source <source>] [--platform <platform>] [--tag <tag>] [--device <serial>] [--from <yyyy-MM-dd>] [--to <yyyy-MM-dd>] [--metrics <list>] [--file <filename>] [--output <file.csv|file.tsv|file.xlsx>] [--include-points] [--format text|json]");
     Console.WriteLine("  unrealkit renderdoc run --python <python.exe> --script <script.py> [--args <space-separated args>] [--output <dir>] [--workdir <dir>] [--format text|json]");
 }
+
+

@@ -4,6 +4,17 @@ All notable changes to UnrealKit.
 
 ## [Unreleased]
 
+
+
+### Static Camera HTML Report (Phase 2 P1)
+- `StaticCameraHtmlReportService`: self-contained HTML report with device info, threshold-colored summary, collapsible per-camera detail cards, screenshot references, and diagnostics
+- CLI: `parse static-camera --html-output <path>` generates HTML alongside text/json output
+- WPF: "?? HTML ???" button on the static camera page with SaveFileDialog
+
+### Trend Line Chart (Phase 2 P3)
+- WPF trend page: new "Chart" tab with metric selector dropdown and Canvas-based line chart
+- Zero external dependencies; pure WPF Canvas rendering with dot markers and date labels
+- `TrendChartAxisLabel` record and `UpdateTrendChart()` method in `ShellViewModel`
 ### Static Camera Performance (Phase 2 P1)
 - `StaticCameraPerfParser`: `!!!Do Perf Start!!!` / `!!!Do Perf End!!!` sections, `PointNum:` camera count, 14-line per-camera data blocks, screenshot count validation
 - All tags, structural parameters, and thresholds live in `StaticCameraPerfConfig`; `Validate()` enforces error thresholds strictly above warning thresholds
