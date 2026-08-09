@@ -9,6 +9,7 @@ public sealed class ProjectService : IProjectService
     private const string DescriptorSection = "UnrealKit.Project";
     private const string SettingsSection = "UnrealKit.ProjectSettings";
     private const string PresetsSection = "UnrealKit.LaunchPresets";
+    private const string ConsoleSequencesSection = "UnrealKit.ConsoleSequences";
     private const string BaseGameIniFileName = "BaseGame.ini";
     private readonly IOperationLogger _logger;
 
@@ -177,6 +178,18 @@ public sealed class ProjectService : IProjectService
         {
             document.SetValue(PresetsSection, preset.Name, preset.Arguments);
         }
+
+        foreach (var sequence in settings.ConsoleSequences)
+        {
+            document.SetValue(ConsoleSequencesSection, sequence.Name, sequence.StepsDefinition);
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.PreCaptureSequence))
+            document.SetValue(SettingsSection, "PreCaptureSequence", settings.PreCaptureSequence);
+
+        if (!string.IsNullOrWhiteSpace(settings.PostCaptureSequence))
+            document.SetValue(SettingsSection, "PostCaptureSequence", settings.PostCaptureSequence);
+
         await document.SaveAsync(path, cancellationToken);
     }
 
@@ -196,6 +209,12 @@ public sealed class ProjectService : IProjectService
                 .Select(pair => new LaunchParameterPreset(pair.Key, pair.Value, string.Empty, true)))
             .OrderBy(preset => preset.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
+        var configuredSequences = layered.GetSection(ConsoleSequencesSection);
+        var sequences = configuredSequences
+            .Select(kvp => new ConsoleSequencePreset(kvp.Key, kvp.Value, string.Empty))
+            .ToList();
+
         return new ProjectSettings(
             layered.GetValue(SettingsSection, "PackageName") ?? defaults.PackageName,
             layered.GetValue(SettingsSection, "UnrealProjectName") ?? defaults.UnrealProjectName,
@@ -206,7 +225,10 @@ public sealed class ProjectService : IProjectService
             layered.GetValue(SettingsSection, "AdbPath") ?? defaults.AdbPath,
             layered.GetValue(SettingsSection, "DefaultCaptureTag") ?? defaults.DefaultCaptureTag,
             layered.GetValue(SettingsSection, "DefaultExportDirectory") ?? defaults.DefaultExportDirectory,
-            presets);
+            presets,
+            sequences,
+            layered.GetValue(SettingsSection, "PreCaptureSequence"),
+            layered.GetValue(SettingsSection, "PostCaptureSequence"));
     }
 
     private static string RequireValue(IniDocument document, string key) => document.GetValue(DescriptorSection, key) is { Length: > 0 } value ? value : throw new InvalidDataException($".ukit 缺少必需字段 {DescriptorSection}/{key}。");

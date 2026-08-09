@@ -9,6 +9,7 @@ using UnrealKit.Core.RenderDoc;
 using UnrealKit.Core.Processes;
 using System.Linq;
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.Console;
 
 return await RunAsync(args);
 
@@ -91,18 +92,177 @@ static async Task<int> RunAdbAsync(string[] arguments)
 static async Task<int> RunAppAsync(string[] arguments)
 {
     var (commandArguments, adbPath) = ParseAdbPath(arguments);
-    if (commandArguments.Length == 0 || !string.Equals(commandArguments[0], "start", StringComparison.OrdinalIgnoreCase))
+    if (commandArguments.Length == 0)
     {
-        Console.Error.WriteLine("Usage: unrealkit app start --project <project.ukit> --device <serial>|auto [--adb-path <path>]");
-        return 2;
+        return FailAppUsage();
     }
 
-    var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(commandArguments[1..], "--project"));
+    return commandArguments[0].ToLowerInvariant() switch
+    {
+        "start" => await RunAppStartAsync(commandArguments[1..], adbPath),
+        "console" => await RunAppConsoleAsync(commandArguments[1..], adbPath),
+        _ => FailAppUsage()
+    };
+}
+
+static async Task<int> RunAppStartAsync(string[] options, string? adbPath)
+{
+    var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(options, "--project"));
     var adbService = CreateAdbService(adbPath, project.Settings.AdbPath);
-    var serialNumber = await ResolveDeviceSerialAsync(adbService, commandArguments[1..]);
+    var serialNumber = await ResolveDeviceSerialAsync(adbService, options);
     var service = new LaunchParameterService(adbService);
     await service.StartApplicationAsync(project, serialNumber);
     return 0;
+}
+
+static async Task<int> RunAppConsoleAsync(string[] arguments, string? adbPath)
+{
+    var (commandArguments, parsedAdbPath) = ParseAdbPath(arguments);
+    if (commandArguments.Length == 0)
+    {
+        return FailAppConsoleUsage();
+    }
+
+    adbPath ??= parsedAdbPath;
+
+    return commandArguments[0].ToLowerInvariant() switch
+    {
+        "send" => await RunConsoleSendAsync(commandArguments[1..], adbPath),
+        "run" => await RunConsoleSequenceAsync(commandArguments[1..], adbPath),
+        _ => FailAppConsoleUsage()
+    };
+}
+
+static async Task<int> RunConsoleSendAsync(string[] options, string? adbPath)
+{
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--device", "--cmd", "--project", "--adb-path" });
+    var command = GetRequiredOption(options, "--cmd");
+
+    string? projectAdbPath = null;
+    string? packageName = null;
+    var projectOpt = GetOptionalOption(options, "--project");
+    if (projectOpt is not null)
+    {
+        var project = await new ProjectService().OpenProjectAsync(projectOpt);
+        projectAdbPath = project.Settings.AdbPath;
+        packageName = project.Settings.PackageName;
+    }
+
+    var adbService = CreateAdbService(adbPath, projectAdbPath);
+    var deviceSerial = await ResolveDeviceSerialAsync(adbService, options);
+    var result = await adbService.SendConsoleCommandAsync(deviceSerial, command, packageName);
+
+    Console.WriteLine($"Sent console command to {deviceSerial}: {command}");
+    if (result.Succeeded)
+    {
+        Console.WriteLine("Command dispatched successfully.");
+        if (!string.IsNullOrWhiteSpace(result.StandardOutput))
+            Console.WriteLine(result.StandardOutput);
+    }
+    else
+    {
+        Console.Error.WriteLine($"Failed with exit code {result.ExitCode}.");
+        if (!string.IsNullOrWhiteSpace(result.StandardError))
+            Console.Error.WriteLine(result.StandardError);
+        return 1;
+    }
+
+    return 0;
+}
+
+static async Task<int> RunConsoleSequenceAsync(string[] options, string? adbPath)
+{
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--device", "--sequence", "--cmds", "--adb-path" });
+    var projectPath = GetRequiredOption(options, "--project");
+    var sequenceName = GetOptionalOption(options, "--sequence");
+    var inlineCmds = GetOptionalOption(options, "--cmds");
+
+    if (sequenceName is null && inlineCmds is null)
+    {
+        Console.Error.WriteLine("Either --sequence or --cmds is required.");
+        return 2;
+    }
+
+    var project = await new ProjectService().OpenProjectAsync(projectPath);
+    var adbService = CreateAdbService(adbPath, project.Settings.AdbPath);
+    var deviceSerial = await ResolveDeviceSerialAsync(adbService, options);
+
+    CommandSequenceDefinition sequence;
+    if (sequenceName is not null)
+    {
+        var preset = project.Settings.ConsoleSequences
+            .FirstOrDefault(s => string.Equals(s.Name, sequenceName, StringComparison.OrdinalIgnoreCase));
+        if (preset is null)
+        {
+            var available = string.Join(", ", project.Settings.ConsoleSequences.Select(s => s.Name));
+            Console.Error.WriteLine($"Sequence '{sequenceName}' not found in project presets. Available: {available}");
+            return 2;
+        }
+
+        sequence = preset.ToSequenceDefinition();
+    }
+    else
+    {
+        var preset = new ConsoleSequencePreset("inline", inlineCmds!, string.Empty);
+        sequence = preset.ToSequenceDefinition();
+    }
+
+    var consoleService = new ConsoleCommandService(adbService);
+    var request = new SequenceExecutionRequest(sequence, deviceSerial, project.Settings.PackageName);
+
+    Console.WriteLine($"Running sequence: {sequence.Name}");
+    Console.WriteLine($"Device: {deviceSerial}");
+    Console.WriteLine($"Steps: {sequence.Steps.Count}");
+    Console.WriteLine();
+
+    var result = await consoleService.RunSequenceAsync(request);
+
+    foreach (var stepResult in result.StepResults)
+    {
+        var status = stepResult.Succeeded ? "OK" : "FAIL";
+        var desc = stepResult.Step.Type switch
+        {
+            SequenceStepType.Command => $"CMD: {stepResult.Step.Command?.Command}",
+            SequenceStepType.Wait => $"WAIT: {stepResult.Step.WaitDuration?.TotalSeconds ?? 0:F1}s",
+            SequenceStepType.Tag => $"TAG: {stepResult.Step.Marker}",
+            SequenceStepType.Group => $"GROUP: {stepResult.Step.Marker}",
+            _ => stepResult.Step.Type.ToString()
+        };
+
+        Console.WriteLine($"  [{status}] Step {stepResult.StepIndex + 1}: {desc}");
+        if (stepResult.CommandResult is { } cmdResult)
+        {
+            Console.WriteLine($"         Exit: {cmdResult.ExitCode}, Duration: {cmdResult.Duration.TotalMilliseconds:F0}ms");
+            if (!string.IsNullOrWhiteSpace(cmdResult.StandardOutput))
+                Console.WriteLine($"         Output: {cmdResult.StandardOutput}");
+            if (!string.IsNullOrWhiteSpace(cmdResult.StandardError))
+                Console.Error.WriteLine($"         Error: {cmdResult.StandardError}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(stepResult.Error))
+            Console.Error.WriteLine($"         Error: {stepResult.Error}");
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"Sequence completed: {result.SuccessfulSteps}/{result.TotalSteps} steps OK, {result.FailedSteps} failed. Duration: {result.Duration.TotalSeconds:F1}s");
+    return result.Succeeded ? 0 : 1;
+}
+
+static int FailAppUsage()
+{
+    Console.Error.WriteLine("Usage:");
+    Console.Error.WriteLine("  unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]");
+    Console.Error.WriteLine("  unrealkit app console send --device <serial> --cmd <command> [--project <project.ukit>] [--adb-path <path>]");
+    Console.Error.WriteLine("  unrealkit app console run --project <project.ukit> --device <serial> [--sequence <name>] [--cmds <inline>] [--adb-path <path>]");
+    return 2;
+}
+
+static int FailAppConsoleUsage()
+{
+    Console.Error.WriteLine("Usage:");
+    Console.Error.WriteLine("  unrealkit app console send --device <serial> --cmd <command> [--project <project.ukit>] [--adb-path <path>]");
+    Console.Error.WriteLine("  unrealkit app console run --project <project.ukit> --device <serial> [--sequence <name>] [--cmds <inline>] [--adb-path <path>]");
+    return 2;
 }
 
 static async Task<int> RunCommandLineAsync(string[] arguments)
@@ -167,7 +327,8 @@ static async Task<int> RunCaptureRunAsync(string[] arguments, string? adbPath)
     var tag = GetOptionalOption(arguments, "--tag") ?? project.Settings.DefaultCaptureTag;
     var device = await GetSelectedAvailableDeviceAsync(adbService, serialNumber);
     var skipSaved = arguments.Any(option => string.Equals(option, "--skip-saved", StringComparison.OrdinalIgnoreCase));
-    var result = await new CaptureService(adbService).CaptureAsync(new CaptureRequest(project, device, tag, SkipSaved: skipSaved));
+    var consoleService = new ConsoleCommandService(adbService);
+    var result = await new CaptureService(adbService, consoleService).CaptureAsync(new CaptureRequest(project, device, tag, SkipSaved: skipSaved));
     WriteCaptureResult(result, json);
     return 0;
 }
@@ -1506,6 +1667,8 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit adb connect <host:port> [--adb-path <path>]");
     Console.WriteLine("  unrealkit adb disconnect <host:port> [--adb-path <path>]");
     Console.WriteLine("  unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]");
+    Console.WriteLine("  unrealkit app console send --device <serial> --cmd <command> [--project <project.ukit>] [--adb-path <path>]");
+    Console.WriteLine("  unrealkit app console run --project <project.ukit> --device <serial> [--sequence <name>] [--cmds <inline>] [--adb-path <path>]");
     Console.WriteLine("  unrealkit commandline push --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--remote-path <path>] [--adb-path <path>]");
     Console.WriteLine("  unrealkit commandline delete --project <project.ukit> --device <serial> [--remote-path <path>] [--adb-path <path>]");
     Console.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial>|auto [--tag <tag>] [--format text|json] [--skip-saved] [--adb-path <path>]");

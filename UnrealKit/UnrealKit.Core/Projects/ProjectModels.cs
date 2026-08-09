@@ -1,4 +1,4 @@
-using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.Diagnostics;
 
 namespace UnrealKit.Core.Projects;
 
@@ -16,6 +16,43 @@ public sealed record UkitProjectDescriptor(
         CurrentFormatVersion, projectName, "Content", "Config", "Saved", "Intermediate");
 }
 
+public sealed record ConsoleSequencePreset(string Name, string StepsDefinition, string Description)
+{
+    public static ConsoleSequencePreset Create(string name, string stepsDefinition, string? description = null) =>
+        new(name.Trim(), stepsDefinition.Trim(), description?.Trim() ?? string.Empty);
+
+    /// <summary>
+    /// 将步骤定义字符串解析为命令序列定义。
+    /// 格式：cmd1; wait 2000; cmd2; tag marker; cmd3
+    /// </summary>
+    public Console.CommandSequenceDefinition ToSequenceDefinition()
+    {
+        var steps = new List<Console.SequenceStep>();
+        foreach (var part in StepsDefinition.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var trimmed = part.Trim();
+            if (trimmed.StartsWith("wait ", StringComparison.OrdinalIgnoreCase))
+            {
+                var msText = trimmed[5..].Trim();
+                if (int.TryParse(msText, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var ms) && ms > 0)
+                    steps.Add(Console.SequenceStep.CreateWait(TimeSpan.FromMilliseconds(ms), trimmed));
+                else
+                    throw new FormatException($"无效的等待时间: {msText}");
+            }
+            else if (trimmed.StartsWith("tag ", StringComparison.OrdinalIgnoreCase))
+            {
+                steps.Add(Console.SequenceStep.CreateTag(trimmed[4..].Trim()));
+            }
+            else
+            {
+                steps.Add(Console.SequenceStep.CreateCommand(trimmed));
+            }
+        }
+
+        return Console.CommandSequenceDefinition.Create(Name, Description, steps);
+    }
+}
+
 public sealed record LaunchParameterPreset(string Name, string Arguments, string Description, bool IsComposable);
 
 public sealed record ProjectSettings(
@@ -28,7 +65,10 @@ public sealed record ProjectSettings(
     string AdbPath,
     string DefaultCaptureTag,
     string DefaultExportDirectory,
-    IReadOnlyList<LaunchParameterPreset> LaunchParameterPresets)
+    IReadOnlyList<LaunchParameterPreset> LaunchParameterPresets,
+    IReadOnlyList<ConsoleSequencePreset> ConsoleSequences,
+    string? PreCaptureSequence,
+    string? PostCaptureSequence)
 {
     public static ProjectSettings CreateDefaults(string projectName) => new(
         string.Empty,
@@ -40,7 +80,10 @@ public sealed record ProjectSettings(
         string.Empty,
         "Default",
         "Saved/Exports",
-        LaunchParameterPresetDefaults.All);
+        LaunchParameterPresetDefaults.All,
+        [],
+        null,
+        null);
 }
 
 public static class LaunchParameterPresetDefaults

@@ -1,9 +1,10 @@
-using UnrealKit.Core.Adb;
+﻿using UnrealKit.Core.Adb;
+using UnrealKit.Core.Console;
 using UnrealKit.Core.Operations;
 
 namespace UnrealKit.Core.Capture;
 
-public sealed class CaptureService(IAdbService? adbService = null, TimeProvider? timeProvider = null) : ICaptureService
+public sealed class CaptureService(IAdbService? adbService = null, IConsoleCommandService? consoleService = null, TimeProvider? timeProvider = null) : ICaptureService
 {
     private const string Platform = "Android";
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
@@ -44,23 +45,60 @@ public sealed class CaptureService(IAdbService? adbService = null, TimeProvider?
 
     private async Task<CaptureResult> CaptureToStagingAsync(CaptureRequest request, CapturePlan plan, DateTimeOffset startedAt, string stagingDirectory, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
+        // Pre-capture console sequence
+        var preSequenceName = request.Project.Settings.PreCaptureSequence;
+        if (!string.IsNullOrWhiteSpace(preSequenceName) && consoleService is not null)
+        {
+            var preset = request.Project.Settings.ConsoleSequences
+                .FirstOrDefault(s => string.Equals(s.Name, preSequenceName, StringComparison.OrdinalIgnoreCase));
+            if (preset is not null)
+            {
+                progress?.Report(new OperationProgress("capture", "PreSequence", 0, 4, $"Running pre-capture sequence: {preSequenceName}"));
+                var seqDef = preset.ToSequenceDefinition();
+                await consoleService.RunSequenceAsync(
+                    new SequenceExecutionRequest(seqDef, request.Device.SerialNumber, request.Project.Settings.PackageName),
+                    progress, cancellationToken);
+            }
+        }
+
+        var totalSteps = 3;
+        var currentStep = 0;
+
         var memInfoDirectory = Path.Combine(stagingDirectory, "MemInfo");
         Directory.CreateDirectory(memInfoDirectory);
-        progress?.Report(new OperationProgress("capture", "MemInfo", 1, 3, $"Collecting dumpsys meminfo for {request.Project.Settings.PackageName}."));
+        currentStep++;
+        progress?.Report(new OperationProgress("capture", "MemInfo", currentStep, totalSteps, $"Collecting dumpsys meminfo for {request.Project.Settings.PackageName}."));
         var memInfo = await adbService!.RunDumpsysAsync(request.Device.SerialNumber, request.Project.Settings.PackageName, progress, cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(memInfoDirectory, $"meminfo_{startedAt:yyyyMMdd-HHmmss}.txt"), memInfo.StandardOutput, cancellationToken);
 
         if (!request.SkipSaved)
         {
-            progress?.Report(new OperationProgress("capture", "Saved", 2, 3, $"Pulling UE Saved data from {plan.DeviceSavedDirectory}."));
+            progress?.Report(new OperationProgress("capture", "Saved", currentStep + 1, totalSteps, $"Pulling UE Saved data from {plan.DeviceSavedDirectory}."));
             await adbService!.PullDirectoryAsync(request.Device.SerialNumber, plan.DeviceSavedDirectory, Path.Combine(stagingDirectory, "Saved"), progress, cancellationToken);
         }
 
         var manifest = await CreateManifestAsync(request, plan, startedAt, stagingDirectory, cancellationToken);
-        progress?.Report(new OperationProgress("capture", "Manifest", 3, 3, "Writing capture manifest and archiving original data."));
+        progress?.Report(new OperationProgress("capture", "Manifest", currentStep + 2, totalSteps, "Writing capture manifest and archiving original data."));
         await WriteManifestAsync(stagingDirectory, manifest, cancellationToken);
         Directory.CreateDirectory(Path.GetDirectoryName(plan.CaptureDirectory)!);
         Directory.Move(stagingDirectory, plan.CaptureDirectory);
+
+        // Post-capture console sequence
+        var postSequenceName = request.Project.Settings.PostCaptureSequence;
+        if (!string.IsNullOrWhiteSpace(postSequenceName) && consoleService is not null)
+        {
+            var preset = request.Project.Settings.ConsoleSequences
+                .FirstOrDefault(s => string.Equals(s.Name, postSequenceName, StringComparison.OrdinalIgnoreCase));
+            if (preset is not null)
+            {
+                progress?.Report(new OperationProgress("capture", "PostSequence", null, null, $"Running post-capture sequence: {postSequenceName}"));
+                var seqDef = preset.ToSequenceDefinition();
+                await consoleService.RunSequenceAsync(
+                    new SequenceExecutionRequest(seqDef, request.Device.SerialNumber, request.Project.Settings.PackageName),
+                    progress, cancellationToken);
+            }
+        }
+
         return new CaptureResult(plan, Path.Combine(plan.CaptureDirectory, "CaptureManifest.json"), manifest);
     }
 

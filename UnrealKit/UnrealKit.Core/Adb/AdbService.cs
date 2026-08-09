@@ -1,4 +1,4 @@
-using UnrealKit.Core.Operations;
+﻿using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 
 namespace UnrealKit.Core.Adb;
@@ -82,12 +82,86 @@ public sealed class AdbService : IAdbService
         return RunDeviceCommandAsync(serialNumber, ["shell", "rm", "-f", "--", remotePath], progress, cancellationToken);
     }
 
-    public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    
+    public Task<ProcessExecutionResult> SendConsoleCommandAsync(string serialNumber, string command, string? packageName = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ValidateSerialNumber(serialNumber);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        var arguments = new List<string> { "shell", "am", "broadcast", "-a", "android.intent.action.RUN", "-e", "cmd", command };
+        if (!string.IsNullOrWhiteSpace(packageName))
+        {
+            ValidatePackageName(packageName);
+            arguments.Add(packageName);
+        }
+
+        return RunDeviceCommandAsync(serialNumber, arguments, progress, cancellationToken);
+    }
+public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         ValidateSerialNumber(serialNumber);
         ValidatePackageName(packageName);
         return RunDeviceCommandAsync(serialNumber, ["shell", "dumpsys", "meminfo", packageName], progress, cancellationToken);
     }
+
+    public async IAsyncEnumerable<string> StreamLogcatAsync(
+        string serialNumber,
+        string? filter = null,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ValidateSerialNumber(serialNumber);
+        var arguments = new List<string> { "-s", serialNumber, "logcat", "-v", "threadtime" };
+        if (!string.IsNullOrWhiteSpace(filter))
+        {
+            arguments.Add("-e");
+            arguments.Add(filter);
+        }
+
+        var processArguments = arguments.ToArray();
+        using var process = new System.Diagnostics.Process
+        {
+            StartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = _adbPath,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            },
+            EnableRaisingEvents = true
+        };
+
+        foreach (var arg in processArguments)
+            process.StartInfo.ArgumentList.Add(arg);
+
+        process.Start();
+
+        using var registration = cancellationToken.Register(() =>
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+        });
+
+        try
+        {
+            while (!process.StandardOutput.EndOfStream)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var line = await process.StandardOutput.ReadLineAsync(cancellationToken);
+                if (line is not null)
+                    yield return line;
+            }
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                process.WaitForExit();
+            }
+        }
+    }
+
+    // Expose _adbPath for logcat streaming
+    private string AdbPath => _adbPath;
 
     private Task<ProcessExecutionResult> RunDeviceCommandAsync(string serialNumber, IReadOnlyList<string> arguments, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) =>
         RunRequiredAsync(["-s", serialNumber, .. arguments], progress, cancellationToken);

@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -15,6 +15,7 @@ using UnrealKit.Core.Projects;
 using UnrealKit.Core.Analysis;
 using System.Text;
 using UnrealKit.Core.RenderDoc;
+using UnrealKit.Core.Console;
 
 namespace UnrealKit.Desktop;
 
@@ -77,6 +78,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _renderDocStandardOutput = string.Empty;
     private string _renderDocStandardError = string.Empty;
     private string _renderDocSummary = "Configure Python and RenderDoc script paths, then execute.";
+    private string _consoleCommandText = string.Empty;
+    private string _consoleOutput = "Send a console command to the selected device.";
+    private bool _consoleIsSending;
     private UkitProject? _project;
     private AdbDevice? _selectedDevice;
     private CaptureFileInfo? _selectedCaptureResultFile;
@@ -97,7 +101,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
-        NavigationItems = ["工程", "设备", "启动参数", "采集", "解析", "结果", "导出", "静态相机", "基线差分", "历史趋势", "RenderDoc", "日志与设置"];
+        NavigationItems = ["工程", "设备", "启动参数", "采集", "控制台", "解析", "结果", "导出", "静态相机", "基线差分", "历史趋势", "RenderDoc", "日志与设置"];
         _selectedNavigationItem = NavigationItems[0];
         CreateProjectCommand = new AsyncDelegateCommand(CreateProjectAsync, CanCreateProject);
         OpenProjectCommand = new AsyncDelegateCommand(OpenProjectAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ProjectFilePath));
@@ -120,6 +124,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             && !string.IsNullOrWhiteSpace(_renderDocPythonPath)
             && !string.IsNullOrWhiteSpace(_renderDocScriptPath));
         OpenRenderDocOutputDirCommand = new DelegateCommand(OpenRenderDocOutputDir, () => !string.IsNullOrWhiteSpace(_renderDocOutputDir) && Directory.Exists(_renderDocOutputDir));
+        _sendConsoleCommandCommand = new AsyncDelegateCommand(SendConsoleCommandAsync, () => !IsBusy && _selectedDevice is not null && !string.IsNullOrWhiteSpace(_consoleCommandText));
         ExportCaptureDataCommand = new AsyncDelegateCommand(ExportCaptureDataAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ExportInputPath) && !string.IsNullOrWhiteSpace(ExportOutputPath));
     }
 
@@ -189,6 +194,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "设备" => "刷新 ADB 设备并明确选择目标设备；不会依赖默认第一台设备。",
         "启动参数" => "选择预设并预览 uecommandline.txt，然后推送到已明确选择的设备。",
         "采集" => "将采集数据归档到新的 Content Capture，避免覆盖历史数据。",
+        "控制台" => "向运行中的 UE Android 应用发送控制台指令，支持序列编排和 logcat 条件执行。",
         "解析" => "明确选择输入文件，查看格式诊断和解析结果。",
         "结果" => "查看摘要、筛选表格并将派生结果导出到 Saved。",
         "导出" => "选择解析结果，指定输出格式和路径，导出 CSV/TSV/XLSX。",
@@ -1045,9 +1051,59 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
     }
 
+        public string ConsoleCommandText
+    {
+        get => _consoleCommandText;
+        set { if (SetField(ref _consoleCommandText, value)) _sendConsoleCommandCommand.RaiseCanExecuteChanged(); }
+    }
+
+    public string ConsoleOutput
+    {
+        get => _consoleOutput;
+        set => SetField(ref _consoleOutput, value ?? "Send a console command to the selected device.");
+    }
+
+    public bool ConsoleIsSending
+    {
+        get => _consoleIsSending;
+        set => SetField(ref _consoleIsSending, value);
+    }
+
+    public ICommand SendConsoleCommandCommand => _sendConsoleCommandCommand;
+    private readonly AsyncDelegateCommand _sendConsoleCommandCommand;
+
+    private async Task SendConsoleCommandAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_consoleCommandText) || _selectedDevice is null) return;
+
+        var adbService = _adbServiceFactory.Create(_project?.Settings, output: null);
+        var consoleService = new ConsoleCommandService(adbService);
+        ConsoleIsSending = true;
+        ConsoleOutput = $"Sending: {_consoleCommandText}...";
+        try
+        {
+            var result = await consoleService.SendAsync(
+                _selectedDevice.SerialNumber,
+                ConsoleCommand.Create(_consoleCommandText),
+                _project?.Settings.PackageName);
+
+            ConsoleOutput = result.Succeeded
+                ? $"[OK] {_consoleCommandText}`nExit: {result.ExitCode}`n{result.StandardOutput}"
+                : $"[FAIL] {_consoleCommandText}`nExit: {result.ExitCode}`n{result.StandardError}";
+        }
+        catch (Exception ex)
+        {
+            ConsoleOutput = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            ConsoleIsSending = false;
+        }
+    }
+
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }

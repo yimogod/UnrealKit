@@ -1,4 +1,4 @@
-<Window x:Class="UnrealKit.Desktop.MainWindow"
+﻿<Window x:Class="UnrealKit.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="UnrealKit" Height="680" Width="1120" MinHeight="520" MinWidth="900">
