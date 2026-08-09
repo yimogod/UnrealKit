@@ -11,7 +11,9 @@ UnrealKit is a desktop tool for Unreal Engine Android performance data capture a
 - **Parsing** — Offline parsing of Android meminfo, UE memreport, and static camera performance logs with structured diagnostics.
 - **Export** — Export to CSV, TSV, and real XLSX with metadata, details, and diagnostics.
 - **GUI (WPF)** — Full desktop application with 8 pages: Project, Devices, Launch Params, Capture, Parse, Results, Export, Log & Settings.
-- **CLI** — Full coverage: `project create/info/validate`, `adb`, `app start`, `commandline push/delete`, `capture run/list/info`, `parse`, `export`. Machine-readable `--format json` supported.
+- **Baseline Diff** — Compare a current meminfo, memreport, or static camera report against a baseline, with per-metric delta, direction, and explicit missing-value handling.
+- **Historical Trends** — Aggregate a metric across many captures filtered by platform, tag, device, and date range; export to CSV, TSV, or multi-sheet XLSX.
+- **CLI** — Full coverage: `project create/info/validate`, `adb`, `app start`, `commandline push/delete`, `capture run/list/info`, `parse`, `export`, `analyze diff/trend`. Machine-readable `--format json` supported.
 
 ## Prerequisites
 
@@ -67,7 +69,14 @@ unrealkit parse capture-files --capture-dir <path>
 unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]
 unrealkit export meminfo --input <file> --output <file.csv|file.tsv|file.xlsx> [--include-details] [--capture-id <id>]
 unrealkit export memreport --input <file> --output <file.csv|file.tsv|file.xlsx> [--include-details] [--capture-id <id>]
+unrealkit analyze diff --baseline <file> --current <file> [--source meminfo|memreport|static-camera] [--metrics <list>] [--only-changed] [--format text|json]
+unrealkit analyze diff --project <project.ukit> --baseline <capture-id> --current <capture-id> [--baseline-file <filename>] [--current-file <filename>] [--source <source>] [--metrics <list>] [--only-changed] [--format text|json]
+unrealkit analyze trend --project <project.ukit> [--source <source>] [--platform <platform>] [--tag <tag>] [--device <serial>] [--from <yyyy-MM-dd>] [--to <yyyy-MM-dd>] [--metrics <list>] [--file <filename>] [--output <file.csv|file.tsv|file.xlsx>] [--include-points] [--format text|json]
 ```
+
+`analyze diff` compares a current report against a baseline of the same type. Metrics are keyed as `Group/Name`; `--metrics` accepts either a bare name or the full `Group/Name`, comma-separated or repeated. A metric present on only one side reports as missing rather than zero. Exit code is non-zero when either report fails to parse.
+
+`analyze trend` follows the same metrics across every capture matching the filters, oldest to newest. `--from` / `--to` take `yyyy-MM-dd` and are inclusive. A capture whose input is ambiguous or unparsable is excluded with a specific diagnostic rather than silently skipped — pass `--file` to name the file to read from each capture. Per-point deltas step from the previous capture that had a value, so a gap in the middle is not read as a drop to zero.
 
 ## Capture Directory Convention
 
@@ -94,7 +103,7 @@ unrealkit export memreport --input <file> --output <file.csv|file.tsv|file.xlsx>
 :: Debug build
 Script\Build-Debug.bat
 
-:: Run tests (79 passing)
+:: Run tests (126 passing)
 dotnet test UnrealKit\UnrealKit.Tests
 
 :: Self-contained publish (win-x64 standalone)
@@ -105,7 +114,8 @@ Script\Publish-Shipping.bat
 
 - ADB path resolution: explicit path > project config > environment > PATH. Multiple adb versions may conflict; use project config to disambiguate.
 - Agent analysis adapters are reserved but not yet implemented.
-- Phase 2 features (static camera reports, baseline diff, historical trends, RenderDoc integration) are planned for future releases.
+- Baseline diff and historical trends are available via CLI only; the WPF diff and trend pages are not yet implemented.
+- Remaining Phase 2 features (static camera HTML reports, RenderDoc integration, agent analysis) are planned for future releases.
 
 ## License
 

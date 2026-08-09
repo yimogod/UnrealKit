@@ -1,0 +1,50 @@
+LogInit: OS: Android (14), CPU: 23127PN0CC, GPU: Adreno (TM) 750
+LogAndroid:   SRC_DeviceMake: Xiaomi
+LogAndroid:   SRC_ConfigRuleVar[SRC_GpuVendor]: Qualcomm
+LogAndroid:   SRC_VulkanAvailable: true
+LogAndroid:   SRC_VulkanVersion: 1.3.128
+LogInit: Display: Some random log line
+!!!Do Perf Start!!!
+Perf: PointNum:3
+Perf: AProfilerStaticScene::FocusCamera 0
+Perf: CamName Camera_Base_0
+Perf: ------- Current Camera Stat Info ----------- 0
+Perf: frame 16.84
+Perf: game 6.25
+Perf: draw 2.88
+Perf: rhi 3.09
+Perf: gpu 5.98
+Perf: mem -768212992
+Perf: dc 192
+Perf: prim 239429
+Perf: ------- Current Camera Stat Info End -----------
+Perf: 
+Perf: 
+Perf: AProfilerStaticScene::FocusCamera 1
+Perf: CamName Camera_Mid_1
+Perf: ------- Current Camera Stat Info ----------- 1
+Perf: frame 22.10
+Perf: game 8.50
+Perf: draw 5.20
+Perf: rhi 4.80
+Perf: gpu 10.30
+Perf: mem -850000000
+Perf: dc 420
+Perf: prim 520000
+Perf: ------- Current Camera Stat Info End -----------
+Perf: 
+Perf: 
+Perf: AProfilerStaticScene::FocusCamera 2
+Perf: CamName Camera_High_2
+Perf: ------- Current Camera Stat Info ----------- 2
+Perf: frame 35.00
+Perf: game 12.00
+Perf: draw 8.00
+Perf: rhi 6.00
+Perf: gpu 15.00
+Perf: mem -900000000
+Perf: dc 550
+Perf: prim 750000
+Perf: ------- Current Camera Stat Info End -----------
+!!!Do Perf End!!!
+LogInit: Display: Application shutdown

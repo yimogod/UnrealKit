@@ -1,0 +1,23 @@
+Applications Memory Usage (in Kilobytes):
+Uptime: 225436 Realtime: 225436
+
+** MEMINFO in pid 4318 [com.example.performance] **
+                   Pss  Private  Private  SwapPss
+                 Total    Dirty    Clean    Dirty
+                ------   ------   ------   ------
+  Native Heap    15000    14000        0        0
+  Dalvik Heap     7000     6900        0        0
+
+ App Summary
+                       Pss(KB)
+                        Java Heap:     7000
+                      Native Heap:    15000
+                             Code:     3000
+                            Stack:      512
+                         Graphics:     6144
+                    Private Other:     2048
+                          TOTAL:   33,704
+
+ Objects
+               Views:        8
+           ViewRootImpl:        1

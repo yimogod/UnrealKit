@@ -12,7 +12,7 @@
 
 ## 命令结构
 
-顶层动词：`project`、`adb`、`app`、`commandline`、`capture`、`parse`、`export`。
+顶层动词：`project`、`adb`、`app`、`commandline`、`capture`、`parse`、`export`、`analyze`。
 
 ```text
 unrealkit project create <dir> --name <name>
@@ -50,6 +50,21 @@ unrealkit export meminfo --input <file> --output <file.csv|file.tsv|file.xlsx>
                          [--include-details] [--capture-id <id>]
 unrealkit export memreport --input <file> --output <file.csv|file.tsv|file.xlsx>
                            [--include-details] [--capture-id <id>]
+
+unrealkit analyze diff --baseline <file> --current <file>
+                       [--source meminfo|memreport|static-camera]
+                       [--metrics <name[,name...]>] [--only-changed] [--format text|json]
+unrealkit analyze diff --project <project.ukit> --baseline <capture-id> --current <capture-id>
+                       [--baseline-file <filename>] [--current-file <filename>]
+                       [--source meminfo|memreport|static-camera]
+                       [--metrics <name[,name...]>] [--only-changed] [--format text|json]
+
+unrealkit analyze trend --project <project.ukit>
+                        [--source meminfo|memreport|static-camera]
+                        [--platform <platform>] [--tag <tag>] [--device <serial>]
+                        [--from <yyyy-MM-dd>] [--to <yyyy-MM-dd>]
+                        [--metrics <name[,name...]>] [--file <filename>]
+                        [--output <file.csv|file.tsv|file.xlsx>] [--include-points] [--format text|json]
 ```
 
 新增子命令时保持「动词 + 名词」结构，并同步更新 `README.md` 的 CLI 参考与本文。
@@ -61,6 +76,23 @@ unrealkit export memreport --input <file> --output <file.csv|file.tsv|file.xlsx>
 - `--adb-path` 为最高优先级的 adb 来源，解析顺序见 `Doc/设备操作与文件安全.md`。
 - `--format` 默认为 `text`；`json` 输出必须是单个可解析的 JSON 文档，不与人类可读日志混排。
 - 输出文件的扩展名决定格式，规则见 `Doc/解析导出与诊断.md`。
+
+`analyze diff` 专有约定：
+
+- `--source` 默认 `meminfo`；两侧必须是同一类型的报告，跨类型比较返回 `BDF101` Error。
+- 不带 `--project` 时 `--baseline` / `--current` 是文件路径；带 `--project` 时它们是 Capture ID 或采集目录路径。
+- `--baseline-file` / `--current-file` 只在带 `--project` 时有效，用于在归档内显式指定输入文件。
+- 归档内同类文件多于一份时报错并列出候选，不取「第一份」；`--baseline` 的 Capture ID 命中多个归档时同样报错。
+- `--metrics` 接受裸指标名或完整 `Group/Name`，可逗号分隔或重复传入；未命中的名字产生 `BDF201` Warning，不失败。
+- `--only-changed` 只影响呈现，不改变统计汇总和退出码。
+
+`analyze trend` 专有约定：
+
+- `--from` / `--to` 只接受 `yyyy-MM-dd`，按日期含两端；起始晚于结束时报错而非返回空结果。
+- `--device` 依据 `CaptureManifest.json` 匹配；缺少 manifest 的归档无法归属设备，按 `TRD104` Warning 排除，不假定命中。
+- 归档内同类文件不唯一时该次采集被排除（`TRD103`），用 `--file` 指定在每次采集中读取的文件名。这样避免同一条曲线上不同点读的是不同输入。
+- 单次采集解析失败只排除该点（`TRD202`），不使整个区间失败；原始解析码以 Warning 级透传，带 `[CaptureId]` 前缀。
+- `--output` 的扩展名决定格式：`.csv` / `.tsv` 走 `TrendExportService`，`.xlsx` 走 `XlsxTrendExportService`。`--include-points` 追加逐次采集明细，摘要独立可用。
 
 ## 退出码
 

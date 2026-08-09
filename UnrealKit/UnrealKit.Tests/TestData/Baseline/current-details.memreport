@@ -1,0 +1,12 @@
+Changelist: 123999
+
+Listing all textures.
+Name | Dimensions | Format | Memory
+Texture2D /Game/Textures/T_Stone | 2048x1024 | PF_DXT1 | 2 MB
+
+Render target memory:
+Name | Dimensions | Format | Memory
+TextureRenderTarget2D /Game/UI/RT_Minimap | 1024x1024 | PF_B8G8R8A8 | 4 MB
+
+Obj List:
+Class=Texture2D, Count=48, NumKBytes=9216

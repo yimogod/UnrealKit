@@ -1,0 +1,42 @@
+LogInit: OS: Android (13), CPU: SM8550, GPU: Adreno (TM) 740
+LogAndroid:   SRC_DeviceMake: Samsung
+LogAndroid:   SRC_ConfigRuleVar[SRC_GpuVendor]: Qualcomm
+LogAndroid:   SRC_VulkanAvailable: true
+LogAndroid:   SRC_VulkanVersion: 1.3.255
+!!!Do Perf Start!!!
+Perf: PointNum:5
+Perf: AProfilerStaticScene::FocusCamera 0
+Perf: CamName Camera_A
+Perf: ------- Current Camera Stat Info ----------- 0
+Perf: frame 18.50
+Perf: game 7.00
+Perf: draw 3.20
+Perf: rhi 3.50
+Perf: gpu 6.80
+Perf: mem -700000000
+Perf: dc 250
+Perf: prim 300000
+Perf: ------- Current Camera Stat Info End -----------
+Perf: 
+Perf: 
+Perf: AProfilerStaticScene::FocusCamera 1
+Perf: CamName Camera_B
+Perf: ------- Current Camera Stat Info ----------- 1
+Perf: frame 20.00
+Perf: game 8.00
+Perf: draw 4.00
+Perf: rhi 4.00
+Perf: gpu 9.00
+Perf: mem -720000000
+Perf: dc 300
+Perf: prim 400000
+Perf: ------- Current Camera Stat Info End -----------
+Perf: 
+Perf: 
+Perf: AProfilerStaticScene::FocusCamera 2
+Perf: CamName Camera_C
+Perf: ------- Current Camera Stat Info ----------- 2
+Perf: frame 25.00
+Perf: game 10.00
+Perf: draw 6.00
+!!!Do Perf End!!!

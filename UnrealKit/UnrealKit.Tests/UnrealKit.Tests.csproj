@@ -32,4 +32,10 @@
   <ItemGroup>
     <None Update="TestData\StaticCamera\*.log" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Update="TestData\Baseline\*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="TestData\Baseline\*.memreport" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="TestData\Baseline\*.log" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

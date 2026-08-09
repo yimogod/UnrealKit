@@ -1,5 +1,6 @@
 using System.Text.Json;
 using UnrealKit.Core.Adb;
+using UnrealKit.Core.Analysis;
 using UnrealKit.Core.Capture;
 using UnrealKit.Core.Export;
 using UnrealKit.Core.Launch;
@@ -29,6 +30,7 @@ static async Task<int> RunAsync(string[] arguments)
             "capture" => await RunCaptureAsync(arguments[1..]),
             "parse" => await RunParseAsync(arguments[1..]),
             "export" => await RunExportAsync(arguments[1..]),
+            "analyze" => await RunAnalyzeAsync(arguments[1..]),
             _ => FailUnknownCommand()
         };
     }
@@ -285,6 +287,495 @@ static async Task<int> RunExportAsync(string[] arguments)
         }
     }
     return 0;
+}
+
+static async Task<int> RunAnalyzeAsync(string[] arguments)
+{
+    if (arguments.Length == 0)
+    {
+        return FailAnalyzeUsage();
+    }
+
+    return arguments[0].ToLowerInvariant() switch
+    {
+        "diff" => await RunAnalyzeDiffAsync(arguments[1..]),
+        "trend" => await RunAnalyzeTrendAsync(arguments[1..]),
+        _ => FailAnalyzeUsage()
+    };
+}
+
+static async Task<int> RunAnalyzeTrendAsync(string[] options)
+{
+    EnsureOnlyOptions(
+        options,
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "--project", "--source", "--platform", "--tag", "--device", "--from", "--to",
+            "--metrics", "--file", "--output", "--format", "--include-points"
+        },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--include-points" });
+
+    var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(options, "--project"));
+    var source = ParseDiffSource(GetOptionalOption(options, "--source"));
+    var metrics = GetOptions(options, "--metrics")
+        .SelectMany(value => value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        .ToArray();
+    var includePoints = options.Any(option => string.Equals(option, "--include-points", StringComparison.OrdinalIgnoreCase));
+    var output = GetOptionalOption(options, "--output");
+    var json = IsJsonFormat(options);
+
+    var result = await new TrendService().BuildTrendAsync(new TrendRequest(
+        project,
+        source,
+        GetOptionalOption(options, "--platform"),
+        GetOptionalOption(options, "--tag"),
+        GetOptionalOption(options, "--device"),
+        ParseTrendDate(GetOptionalOption(options, "--from"), "--from"),
+        ParseTrendDate(GetOptionalOption(options, "--to"), "--to"),
+        metrics.Length == 0 ? null : metrics,
+        GetOptionalOption(options, "--file")));
+
+    string? exportedPath = null;
+    if (output is not null)
+    {
+        var request = new TrendExportRequest(result, output, DateTimeOffset.UtcNow, includePoints);
+        exportedPath = output.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
+            ? (await new XlsxTrendExportService().ExportAsync(request)).OutputFilePath
+            : (await new TrendExportService().ExportAsync(request)).OutputFilePath;
+    }
+
+    WriteTrendResult(result, includePoints, exportedPath, json);
+    return result.IsSuccess ? 0 : 1;
+}
+
+static DateTimeOffset? ParseTrendDate(string? value, string optionName)
+{
+    if (value is null)
+    {
+        return null;
+    }
+
+    if (!DateTimeOffset.TryParseExact(
+            value,
+            "yyyy-MM-dd",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+            out var parsed))
+    {
+        throw new ArgumentException($"{optionName} must be a date in yyyy-MM-dd format.");
+    }
+
+    return parsed;
+}
+
+static void WriteTrendResult(TrendResult result, bool includePoints, string? exportedPath, bool json)
+{
+    if (json)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            Source = result.Source.ToString(),
+            result.ProjectFilePath,
+            result.Platform,
+            result.Tag,
+            result.DeviceSerialNumber,
+            From = result.From?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+            To = result.To?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+            result.IsSuccess,
+            ExportedFilePath = exportedPath,
+            Summary = new
+            {
+                CaptureCount = result.Captures.Count,
+                MetricCount = result.Series.Count,
+                result.RegressedCount,
+                result.ImprovedCount,
+                result.UnchangedCount
+            },
+            Captures = result.Captures.Select(capture => new
+            {
+                capture.CaptureId,
+                CaptureDate = capture.CaptureDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+                capture.Platform,
+                capture.Tag,
+                capture.DeviceSerialNumber,
+                capture.DeviceModel,
+                capture.InputPath
+            }),
+            Series = result.Series.Select(series => new
+            {
+                series.Group,
+                series.Name,
+                series.Unit,
+                Direction = series.Direction.ToString(),
+                series.PointCount,
+                series.PresentCount,
+                series.MissingCount,
+                series.First,
+                series.Last,
+                series.Minimum,
+                series.Maximum,
+                series.Average,
+                series.TotalDelta,
+                series.TotalDeltaPercent,
+                Assessment = series.OverallAssessment.ToString(),
+                Points = includePoints
+                    ? series.Points.Select(point => new
+                    {
+                        point.CaptureId,
+                        CaptureDate = point.CaptureDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+                        point.Value,
+                        point.DeltaFromPrevious,
+                        Assessment = point.Assessment.ToString()
+                    })
+                    : null
+            }),
+            Diagnostics = result.Diagnostics.Select(diagnostic => new
+            {
+                Severity = diagnostic.Severity.ToString(),
+                diagnostic.Code,
+                diagnostic.Message,
+                diagnostic.Path,
+                diagnostic.SuggestedFix
+            })
+        }, new JsonSerializerOptions { WriteIndented = true }));
+        return;
+    }
+
+    Console.WriteLine($"Source: {result.Source}");
+    Console.WriteLine($"Project: {result.ProjectFilePath}");
+    Console.WriteLine($"Filters: platform={result.Platform ?? "any"} tag={result.Tag ?? "any"} device={result.DeviceSerialNumber ?? "any"} from={FormatTrendDate(result.From)} to={FormatTrendDate(result.To)}");
+
+    if (result.Captures.Count > 0)
+    {
+        Console.WriteLine();
+        Console.WriteLine("Captures (oldest to newest):");
+        foreach (var capture in result.Captures)
+        {
+            Console.WriteLine($"  {capture.CaptureDate:yyyy-MM-dd}  {capture.CaptureId}  tag={capture.Tag}  device={capture.DeviceSerialNumber ?? "unknown"}");
+        }
+    }
+
+    if (result.Series.Count > 0)
+    {
+        Console.WriteLine();
+        Console.WriteLine($"{"Metric",-46} {"Unit",-6} {"Points",7} {"First",14} {"Last",14} {"Delta",14} {"Delta%",9}  Assessment");
+        foreach (var series in result.Series)
+        {
+            Console.WriteLine(string.Join(' ',
+                Truncate($"{series.Group}/{series.Name}", 46).PadRight(46),
+                series.Unit.PadRight(6),
+                $"{series.PresentCount}/{series.PointCount}".PadLeft(7),
+                FormatDiffValue(series.First).PadLeft(14),
+                FormatDiffValue(series.Last).PadLeft(14),
+                FormatDiffDelta(series.TotalDelta).PadLeft(14),
+                FormatDiffPercent(series.TotalDeltaPercent).PadLeft(9),
+                $" {DescribeAssessment(series.OverallAssessment)}"));
+
+            if (!includePoints)
+            {
+                continue;
+            }
+
+            foreach (var point in series.Points)
+            {
+                Console.WriteLine($"      {point.CaptureDate:yyyy-MM-dd}  {Truncate(point.CaptureId, 34).PadRight(34)} {FormatDiffValue(point.Value).PadLeft(14)} {FormatPointDelta(point).PadLeft(14)}");
+            }
+        }
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"{result.Captures.Count} capture(s), {result.Series.Count} metric(s): {result.RegressedCount} regressed, {result.ImprovedCount} improved, {result.UnchangedCount} unchanged.");
+    if (exportedPath is not null)
+    {
+        Console.WriteLine(exportedPath);
+    }
+
+    foreach (var diagnostic in result.Diagnostics)
+    {
+        Console.Error.WriteLine($"[{diagnostic.Severity}] {diagnostic.Code}: {diagnostic.Message}");
+        if (!string.IsNullOrWhiteSpace(diagnostic.SuggestedFix))
+        {
+            Console.Error.WriteLine($"  Fix: {diagnostic.SuggestedFix}");
+        }
+    }
+}
+
+// A point with a value but no previous value to compare against has no delta yet. That is different
+// from a point whose measurement is missing, so the two are not shown the same way.
+static string FormatPointDelta(TrendPoint point) => point.DeltaFromPrevious is not null
+    ? FormatDiffDelta(point.DeltaFromPrevious)
+    : point.Value is null ? "missing" : "-";
+
+static string FormatTrendDate(DateTimeOffset? value) =>
+    value?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) ?? "any";
+
+static string DescribeAssessment(MetricDiffAssessment assessment) => assessment switch
+{
+    MetricDiffAssessment.Regressed => "regressed",
+    MetricDiffAssessment.Improved => "improved",
+    MetricDiffAssessment.Unchanged => "unchanged",
+    MetricDiffAssessment.Changed => "changed",
+    _ => "unknown"
+};
+
+static async Task<int> RunAnalyzeDiffAsync(string[] options)
+{
+    EnsureOnlyOptions(
+        options,
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "--source", "--baseline", "--current", "--project", "--baseline-file", "--current-file", "--metrics", "--format", "--only-changed"
+        },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--only-changed" });
+
+    var source = ParseDiffSource(GetOptionalOption(options, "--source"));
+    var baseline = GetRequiredOption(options, "--baseline");
+    var current = GetRequiredOption(options, "--current");
+    var projectPath = GetOptionalOption(options, "--project");
+    var metrics = GetOptions(options, "--metrics")
+        .SelectMany(value => value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        .ToArray();
+    var onlyChanged = options.Any(option => string.Equals(option, "--only-changed", StringComparison.OrdinalIgnoreCase));
+    var json = IsJsonFormat(options);
+
+    string baselinePath;
+    string currentPath;
+    string? baselineLabel = null;
+    string? currentLabel = null;
+
+    if (projectPath is null)
+    {
+        if (GetOptionalOption(options, "--baseline-file") is not null || GetOptionalOption(options, "--current-file") is not null)
+        {
+            throw new ArgumentException("--baseline-file and --current-file require --project, because they name a file inside a capture archive.");
+        }
+
+        baselinePath = baseline;
+        currentPath = current;
+    }
+    else
+    {
+        var project = await new ProjectService().OpenProjectAsync(projectPath);
+        var analysisService = new CaptureAnalysisService();
+        var captures = await analysisService.ListCaptureDirectoriesAsync(project, platform: null, tag: null);
+        var baselineDirectory = ResolveCaptureDirectory(captures, baseline);
+        var currentDirectory = ResolveCaptureDirectory(captures, current);
+        baselinePath = await ResolveCaptureFileAsync(analysisService, baselineDirectory, GetOptionalOption(options, "--baseline-file"), source, "--baseline-file");
+        currentPath = await ResolveCaptureFileAsync(analysisService, currentDirectory, GetOptionalOption(options, "--current-file"), source, "--current-file");
+        baselineLabel = Path.GetFileName(baselineDirectory);
+        currentLabel = Path.GetFileName(currentDirectory);
+    }
+
+    var result = await new BaselineService().DiffAsync(new BaselineDiffRequest(
+        source,
+        baselinePath,
+        currentPath,
+        metrics.Length == 0 ? null : metrics,
+        baselineLabel,
+        currentLabel));
+
+    WriteBaselineDiffResult(result, onlyChanged, json);
+    return result.IsSuccess ? 0 : 1;
+}
+
+static BaselineDiffSource ParseDiffSource(string? value) => (value ?? "meminfo").ToLowerInvariant() switch
+{
+    "meminfo" => BaselineDiffSource.MemInfo,
+    "memreport" => BaselineDiffSource.MemReport,
+    "static-camera" => BaselineDiffSource.StaticCamera,
+    _ => throw new ArgumentException("--source must be one of meminfo, memreport, or static-camera.")
+};
+
+static string ResolveCaptureDirectory(IReadOnlyList<CaptureDirectoryInfo> captures, string captureIdOrPath)
+{
+    if (Path.IsPathRooted(captureIdOrPath) || captureIdOrPath.Contains('/') || captureIdOrPath.Contains('\\'))
+    {
+        var fullPath = Path.GetFullPath(captureIdOrPath);
+        if (!Directory.Exists(fullPath))
+        {
+            throw new ArgumentException($"Capture directory not found: {fullPath}");
+        }
+
+        return fullPath;
+    }
+
+    var matches = captures.Where(capture => string.Equals(capture.CaptureId, captureIdOrPath, StringComparison.Ordinal)).ToArray();
+    return matches.Length switch
+    {
+        1 => matches[0].FullPath,
+        0 => throw new ArgumentException($"Capture not found: {captureIdOrPath}. Use 'unrealkit parse capture-list --project <project.ukit>' to list available captures."),
+        _ => throw new ArgumentException($"Capture ID '{captureIdOrPath}' matches {matches.Length} archives. Pass the capture directory path instead: {string.Join(", ", matches.Select(match => match.RelativePath))}")
+    };
+}
+
+static async Task<string> ResolveCaptureFileAsync(
+    CaptureAnalysisService service,
+    string captureDirectory,
+    string? fileName,
+    BaselineDiffSource source,
+    string optionName)
+{
+    var files = await service.ListCaptureFilesAsync(captureDirectory);
+    if (fileName is not null)
+    {
+        var named = files.FirstOrDefault(file => string.Equals(file.FileName, fileName, StringComparison.Ordinal));
+        if (named is null)
+        {
+            throw new ArgumentException($"File '{fileName}' not found in capture '{Path.GetFileName(captureDirectory)}'. Available files: {string.Join(", ", files.Select(file => file.FileName))}");
+        }
+
+        return named.FullPath;
+    }
+
+    var category = source switch
+    {
+        BaselineDiffSource.MemInfo => "MemInfo",
+        BaselineDiffSource.MemReport => "Saved",
+        BaselineDiffSource.StaticCamera => "Saved",
+        _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unsupported baseline diff source.")
+    };
+
+    var candidates = files.Where(file => string.Equals(file.Category, category, StringComparison.OrdinalIgnoreCase)).ToArray();
+    return candidates.Length switch
+    {
+        1 => candidates[0].FullPath,
+        0 => throw new ArgumentException($"No {category} files found in capture '{Path.GetFileName(captureDirectory)}'. Use {optionName} <filename> to name the input explicitly."),
+        _ => throw new ArgumentException($"Capture '{Path.GetFileName(captureDirectory)}' contains {candidates.Length} {category} files. Use {optionName} <filename> to select one: {string.Join(", ", candidates.Select(file => file.FileName))}")
+    };
+}
+
+static void WriteBaselineDiffResult(BaselineDiffResult result, bool onlyChanged, bool json)
+{
+    var metrics = onlyChanged
+        ? result.Metrics.Where(metric => metric.Assessment != MetricDiffAssessment.Unchanged).ToArray()
+        : result.Metrics.ToArray();
+
+    if (json)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            Source = result.Source.ToString(),
+            result.BaselineInputPath,
+            result.CurrentInputPath,
+            result.BaselineLabel,
+            result.CurrentLabel,
+            result.IsSuccess,
+            Summary = new
+            {
+                Total = result.Metrics.Count,
+                result.RegressedCount,
+                result.ImprovedCount,
+                result.UnchangedCount,
+                result.MissingCount
+            },
+            Metrics = metrics.Select(metric => new
+            {
+                metric.Group,
+                metric.Name,
+                metric.Unit,
+                Direction = metric.Direction.ToString(),
+                metric.BaselineValue,
+                metric.CurrentValue,
+                metric.Delta,
+                metric.DeltaPercent,
+                Status = metric.Status.ToString(),
+                Assessment = metric.Assessment.ToString(),
+                metric.BaselineLineNumber,
+                metric.CurrentLineNumber
+            }),
+            Diagnostics = result.Diagnostics.Select(diagnostic => new
+            {
+                Severity = diagnostic.Severity.ToString(),
+                diagnostic.Code,
+                diagnostic.Message,
+                diagnostic.Path,
+                diagnostic.LineNumber,
+                diagnostic.SuggestedFix
+            })
+        }, new JsonSerializerOptions { WriteIndented = true }));
+        return;
+    }
+
+    Console.WriteLine($"Source: {result.Source}");
+    Console.WriteLine($"Baseline: {result.BaselineInputPath}{(result.BaselineLabel is null ? string.Empty : $" ({result.BaselineLabel})")}");
+    Console.WriteLine($"Current:  {result.CurrentInputPath}{(result.CurrentLabel is null ? string.Empty : $" ({result.CurrentLabel})")}");
+
+    if (metrics.Length > 0)
+    {
+        Console.WriteLine();
+        Console.WriteLine($"{"Metric",-46} {"Unit",-6} {"Baseline",14} {"Current",14} {"Delta",14} {"Delta%",9}  Assessment");
+        foreach (var metric in metrics)
+        {
+            Console.WriteLine(string.Join(' ',
+                Truncate($"{metric.Group}/{metric.Name}", 46).PadRight(46),
+                metric.Unit.PadRight(6),
+                FormatDiffValue(metric.BaselineValue).PadLeft(14),
+                FormatDiffValue(metric.CurrentValue).PadLeft(14),
+                FormatDiffDelta(metric.Delta).PadLeft(14),
+                FormatDiffPercent(metric.DeltaPercent).PadLeft(9),
+                $" {DescribeDiff(metric)}"));
+        }
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"{result.Metrics.Count} metric(s): {result.RegressedCount} regressed, {result.ImprovedCount} improved, {result.UnchangedCount} unchanged, {result.MissingCount} missing.");
+    if (onlyChanged && metrics.Length != result.Metrics.Count)
+    {
+        Console.WriteLine($"{result.Metrics.Count - metrics.Length} unchanged metric(s) hidden by --only-changed.");
+    }
+
+    foreach (var diagnostic in result.Diagnostics)
+    {
+        var line = diagnostic.LineNumber is null ? string.Empty : $" line {diagnostic.LineNumber}";
+        Console.Error.WriteLine($"[{diagnostic.Severity}] {diagnostic.Code}{line}: {diagnostic.Message}");
+        if (!string.IsNullOrWhiteSpace(diagnostic.SuggestedFix))
+        {
+            Console.Error.WriteLine($"  Fix: {diagnostic.SuggestedFix}");
+        }
+    }
+}
+
+static string DescribeDiff(MetricDiff metric) => metric.Status switch
+{
+    MetricDiffStatus.MissingInBaseline => "missing in baseline",
+    MetricDiffStatus.MissingInCurrent => "missing in current",
+    MetricDiffStatus.MissingInBoth => "missing in both",
+    _ => metric.Assessment switch
+    {
+        MetricDiffAssessment.Regressed => "regressed",
+        MetricDiffAssessment.Improved => "improved",
+        MetricDiffAssessment.Unchanged => "unchanged",
+        MetricDiffAssessment.Changed => "changed",
+        _ => "unknown"
+    }
+};
+
+static string FormatDiffValue(double? value) => value?.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) ?? "missing";
+
+static string FormatDiffDelta(double? value) => value is null
+    ? "missing"
+    : value.Value.ToString("+0.###;-0.###;0", System.Globalization.CultureInfo.InvariantCulture);
+
+static string FormatDiffPercent(double? value) => value is null
+    ? "-"
+    : value.Value.ToString("+0.##;-0.##;0", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+static string Truncate(string value, int maxLength) => value.Length <= maxLength ? value : value[..(maxLength - 1)] + "…";
+
+static int FailAnalyzeUsage()
+{
+    Console.Error.WriteLine("Usage:");
+    Console.Error.WriteLine("  unrealkit analyze diff --baseline <file> --current <file> [--source meminfo|memreport|static-camera]");
+    Console.Error.WriteLine("                         [--metrics <name[,name...]>] [--only-changed] [--format text|json]");
+    Console.Error.WriteLine("  unrealkit analyze diff --project <project.ukit> --baseline <capture-id> --current <capture-id>");
+    Console.Error.WriteLine("                         [--baseline-file <filename>] [--current-file <filename>] [--source <source>]");
+    Console.Error.WriteLine("                         [--metrics <name[,name...]>] [--only-changed] [--format text|json]");
+    Console.Error.WriteLine("  unrealkit analyze trend --project <project.ukit> [--source meminfo|memreport|static-camera]");
+    Console.Error.WriteLine("                          [--platform <platform>] [--tag <tag>] [--device <serial>]");
+    Console.Error.WriteLine("                          [--from <yyyy-MM-dd>] [--to <yyyy-MM-dd>] [--metrics <name[,name...]>]");
+    Console.Error.WriteLine("                          [--file <filename>] [--output <file.csv|file.tsv|file.xlsx>]");
+    Console.Error.WriteLine("                          [--include-points] [--format text|json]");
+    return 2;
 }
 
 static async Task<int> CreateProjectAsync(IProjectService service, string[] arguments)
@@ -916,4 +1407,7 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit parse static-camera --input <log> [--screenshots <dir>] [--format json]");
     Console.WriteLine("  unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
   Console.WriteLine("  unrealkit export memreport --input <memreport.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
+    Console.WriteLine("  unrealkit analyze diff --baseline <file> --current <file> [--source meminfo|memreport|static-camera] [--metrics <list>] [--only-changed] [--format text|json]");
+    Console.WriteLine("  unrealkit analyze diff --project <project.ukit> --baseline <capture-id> --current <capture-id> [--baseline-file <filename>] [--current-file <filename>] [--source <source>] [--metrics <list>] [--only-changed] [--format text|json]");
+    Console.WriteLine("  unrealkit analyze trend --project <project.ukit> [--source <source>] [--platform <platform>] [--tag <tag>] [--device <serial>] [--from <yyyy-MM-dd>] [--to <yyyy-MM-dd>] [--metrics <list>] [--file <filename>] [--output <file.csv|file.tsv|file.xlsx>] [--include-points] [--format text|json]");
 }

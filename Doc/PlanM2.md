@@ -2,7 +2,7 @@
 
 基于 旧版Python性能检查工具功能分析.md 第二阶段 + 第三阶段能力。
 
-最后更新：2026-08-09 | 框架 .NET 9 / WPF | 79 测试通过 | P1 静态相机 Core+CLI 完成
+最后更新：2026-08-09 | 框架 .NET 9 / WPF | 126 测试通过 | P1 静态相机、P2 基线差分、P3 历史趋势 Core+CLI 完成
 
 ---
 
@@ -26,17 +26,17 @@
 
 ### P2：基线差分
 
-- [ ] BaselineService：双 Capture / 双文件加载，逐指标差分
-- [ ] 区分"基线"和"当前"，标注单位、正负方向、缺失项
-- [ ] CLI：`analyze diff --baseline <id> --current <id> [--metrics <list>]`
-- [ ] WPF：差分结果表格（基线列、当前列、差值列、方向指示）
+- [x] BaselineService：双 Capture / 双文件加载，逐指标差分（meminfo / memreport / 静态相机三种来源）
+- [x] 区分"基线"和"当前"，标注单位、正负方向、缺失项（`MetricDirection` / `MetricDiffStatus` 四态）
+- [x] CLI：`analyze diff --baseline <id> --current <id> [--metrics <list>] [--only-changed] [--format json]`
+- [ ] WPF：差分结果表格（基线列、当前列、差值列、方向指示）（后续迭代）
 
 ### P3：历史趋势
 
-- [ ] TrendService：按 Tag/场景/设备/日期聚合多 Capture 的指标序列
-- [ ] 导出趋势 CSV/TSV/XLSX（真实多工作表 Excel）
-- [ ] CLI：`analyze trend --project <project.ukit> [--tag <tag>] [--from <date>] [--to <date>]`
-- [ ] WPF：趋势图表（折线图、可选指标、时间范围滑块）
+- [x] TrendService：按 Tag/平台/设备/日期聚合多 Capture 的指标序列
+- [x] 导出趋势 CSV/TSV/XLSX（真实多工作表 Excel）
+- [x] CLI：`analyze trend --project <project.ukit> [--tag <tag>] [--from <date>] [--to <date>] [--metrics <list>] [--output <file>] [--include-points]`
+- [ ] WPF：趋势图表（折线图、可选指标、时间范围滑块）（后续迭代）
 
 ### P4：RenderDoc 集成
 
@@ -57,7 +57,9 @@
 ## 下一步优先级
 
 1. ~~**P1 静态相机**~~ — Core 解析器 + CLI 已完成（HTML 报告、WPF 页面后续迭代）
-2. **P2 基线差分** — 建立对比分析基础
-3. **P3 历史趋势** — 在基线基础上扩展时间维度
+2. ~~**P2 基线差分**~~ — `BaselineService` + `analyze diff` 已完成（WPF 差分页后续迭代）
+3. ~~**P3 历史趋势**~~ — `TrendService` + 趋势导出 + `analyze trend` 已完成（WPF 趋势图表后续迭代）
 4. **P4 RenderDoc** — 独立能力集成
 5. **P5 Agent 分析** — 最高层分析能力
+
+WPF 页面（静态相机、差分、趋势）作为一批后续迭代统一补齐，Core 与 CLI 已先行落地。

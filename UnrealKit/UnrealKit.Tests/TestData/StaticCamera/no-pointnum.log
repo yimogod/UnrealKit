@@ -1,0 +1,16 @@
+LogInit: OS: Android (14)
+!!!Do Perf Start!!!
+Perf: NoPointNumHere
+Perf: AProfilerStaticScene::FocusCamera 0
+Perf: CamName TestCamera
+Perf: ------- Current Camera Stat Info ----------- 0
+Perf: frame 10.00
+Perf: game 5.00
+Perf: draw 2.00
+Perf: rhi 2.00
+Perf: gpu 4.00
+Perf: mem -500000000
+Perf: dc 100
+Perf: prim 100000
+Perf: ------- Current Camera Stat Info End -----------
+!!!Do Perf End!!!

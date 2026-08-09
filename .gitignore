@@ -117,3 +117,6 @@ BundleArtifacts/
 *.bak
 *.orig
 *.dmp
+
+# Test sample logs are inputs, not local output, and must be versioned
+!UnrealKit/UnrealKit.Tests/TestData/**/*.log
