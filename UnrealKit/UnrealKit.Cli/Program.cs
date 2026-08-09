@@ -5,6 +5,7 @@ using UnrealKit.Core.Capture;
 using UnrealKit.Core.Export;
 using UnrealKit.Core.Launch;
 using UnrealKit.Core.Parsing;
+using UnrealKit.Core.RenderDoc;
 using UnrealKit.Core.Processes;
 using System.Linq;
 using UnrealKit.Core.Projects;
@@ -31,6 +32,7 @@ static async Task<int> RunAsync(string[] arguments)
             "parse" => await RunParseAsync(arguments[1..]),
             "export" => await RunExportAsync(arguments[1..]),
             "analyze" => await RunAnalyzeAsync(arguments[1..]),
+            "renderdoc" => await RunRenderDocAsync(arguments[1..]),
             _ => FailUnknownCommand()
         };
     }
@@ -762,6 +764,115 @@ static string FormatDiffPercent(double? value) => value is null
 
 static string Truncate(string value, int maxLength) => value.Length <= maxLength ? value : value[..(maxLength - 1)] + "…";
 
+
+static async Task<int> RunRenderDocAsync(string[] arguments)
+{
+    if (arguments.Length == 0)
+    {
+        return FailRenderDocUsage();
+    }
+
+    return arguments[0].ToLowerInvariant() switch
+    {
+        "run" => await RunRenderDocRunAsync(arguments[1..]),
+        _ => FailRenderDocUsage()
+    };
+}
+
+static async Task<int> RunRenderDocRunAsync(string[] options)
+{
+    EnsureOnlyOptions(
+        options,
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "--python", "--script", "--args", "--output", "--workdir", "--format"
+        });
+
+    var pythonExecutable = GetRequiredOption(options, "--python");
+    var scriptPath = GetRequiredOption(options, "--script");
+    var scriptArguments = GetOptions(options, "--args")
+        .SelectMany(value => value.Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        .ToArray();
+    var outputDirectory = GetOptionalOption(options, "--output");
+    var workingDirectory = GetOptionalOption(options, "--workdir");
+    var json = IsJsonFormat(options);
+
+    var request = new RenderDocExecutionRequest(
+        PythonExecutable: Path.GetFullPath(pythonExecutable),
+        ScriptPath: Path.GetFullPath(scriptPath),
+        ScriptArguments: scriptArguments,
+        OutputDirectory: outputDirectory is not null ? Path.GetFullPath(outputDirectory) : null,
+        WorkingDirectory: workingDirectory is not null ? Path.GetFullPath(workingDirectory) : null);
+
+    var service = new RenderDocService(new ProcessRunner());
+    var result = await service.ExecuteAsync(request);
+
+    if (json)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            result.ExitCode,
+            result.Succeeded,
+            result.OutputDirectory,
+            DurationSeconds = result.Duration.TotalSeconds,
+            StandardOutput = result.StandardOutput.Length > 0 ? result.StandardOutput : null,
+            StandardError = result.StandardError.Length > 0 ? result.StandardError : null,
+            Diagnostics = result.Diagnostics.Select(d => new
+            {
+                Severity = d.Severity.ToString(),
+                d.Code,
+                d.Message,
+                d.Path,
+                d.SuggestedFix,
+                d.LineNumber
+            })
+        }, new JsonSerializerOptions { WriteIndented = true }));
+    }
+    else
+    {
+        Console.WriteLine($"Script: {scriptPath}");
+        Console.WriteLine($"Python: {pythonExecutable}");
+        Console.WriteLine($"Exit code: {result.ExitCode} ({(result.Succeeded ? "success" : "failed")})");
+        Console.WriteLine($"Duration: {result.Duration.TotalSeconds:F1}s");
+        if (result.OutputDirectory is not null)
+        {
+            Console.WriteLine($"Output: {result.OutputDirectory}");
+        }
+
+        if (result.StandardOutput.Length > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- stdout ---");
+            Console.WriteLine(result.StandardOutput.TrimEnd());
+        }
+
+        if (result.StandardError.Length > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- stderr ---");
+            Console.WriteLine(result.StandardError.TrimEnd());
+        }
+
+        foreach (var diagnostic in result.Diagnostics)
+        {
+            Console.Error.WriteLine($"[{diagnostic.Severity}] {diagnostic.Code}: {diagnostic.Message}");
+            if (!string.IsNullOrWhiteSpace(diagnostic.SuggestedFix))
+            {
+                Console.Error.WriteLine($"  Fix: {diagnostic.SuggestedFix}");
+            }
+        }
+    }
+
+    return result.Succeeded ? 0 : 1;
+}
+
+static int FailRenderDocUsage()
+{
+    Console.Error.WriteLine("Usage:");
+    Console.Error.WriteLine("  unrealkit renderdoc run --python <python.exe> --script <script.py> [--args <space-separated args>] [--output <dir>] [--workdir <dir>] [--format text|json]");
+    return 2;
+}
+
 static int FailAnalyzeUsage()
 {
     Console.Error.WriteLine("Usage:");
@@ -1410,4 +1521,5 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit analyze diff --baseline <file> --current <file> [--source meminfo|memreport|static-camera] [--metrics <list>] [--only-changed] [--format text|json]");
     Console.WriteLine("  unrealkit analyze diff --project <project.ukit> --baseline <capture-id> --current <capture-id> [--baseline-file <filename>] [--current-file <filename>] [--source <source>] [--metrics <list>] [--only-changed] [--format text|json]");
     Console.WriteLine("  unrealkit analyze trend --project <project.ukit> [--source <source>] [--platform <platform>] [--tag <tag>] [--device <serial>] [--from <yyyy-MM-dd>] [--to <yyyy-MM-dd>] [--metrics <list>] [--file <filename>] [--output <file.csv|file.tsv|file.xlsx>] [--include-points] [--format text|json]");
+    Console.WriteLine("  unrealkit renderdoc run --python <python.exe> --script <script.py> [--args <space-separated args>] [--output <dir>] [--workdir <dir>] [--format text|json]");
 }
