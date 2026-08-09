@@ -72,6 +72,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _renderDocScriptPath = string.Empty;
     private string _renderDocArguments = string.Empty;
     private string _renderDocOutputDir = string.Empty;
+    private string _renderDocTimeout = string.Empty;
+    private string _renderDocWorkingDir = string.Empty;
+    private string _renderDocStandardOutput = string.Empty;
+    private string _renderDocStandardError = string.Empty;
     private string _renderDocSummary = "Configure Python and RenderDoc script paths, then execute.";
     private UkitProject? _project;
     private AdbDevice? _selectedDevice;
@@ -115,6 +119,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         RunRenderDocCommand = new AsyncDelegateCommand(RunRenderDocAsync, () => !IsBusy
             && !string.IsNullOrWhiteSpace(_renderDocPythonPath)
             && !string.IsNullOrWhiteSpace(_renderDocScriptPath));
+        OpenRenderDocOutputDirCommand = new DelegateCommand(OpenRenderDocOutputDir, () => !string.IsNullOrWhiteSpace(_renderDocOutputDir) && Directory.Exists(_renderDocOutputDir));
         ExportCaptureDataCommand = new AsyncDelegateCommand(ExportCaptureDataAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ExportInputPath) && !string.IsNullOrWhiteSpace(ExportOutputPath));
     }
 
@@ -166,6 +171,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand RunDiffCommand { get; }
     public ICommand RunTrendCommand { get; }
     public ICommand RunRenderDocCommand { get; }
+    public ICommand OpenRenderDocOutputDirCommand { get; }
 
     public string SelectedNavigationItem
     {
@@ -232,7 +238,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string RenderDocPythonPath { get => _renderDocPythonPath; set { if (SetField(ref _renderDocPythonPath, value)) RaiseCommandStates(); } }
     public string RenderDocScriptPath { get => _renderDocScriptPath; set { if (SetField(ref _renderDocScriptPath, value)) RaiseCommandStates(); } }
     public string RenderDocArguments { get => _renderDocArguments; set { if (SetField(ref _renderDocArguments, value)) RaiseCommandStates(); } }
-    public string RenderDocOutputDir { get => _renderDocOutputDir; set { if (SetField(ref _renderDocOutputDir, value)) RaiseCommandStates(); } }
+    public string RenderDocOutputDir { get => _renderDocOutputDir; set { if (SetField(ref _renderDocOutputDir, value)) { RaiseCommandStates(); (OpenRenderDocOutputDirCommand as DelegateCommand)?.RaiseCanExecuteChanged(); } } }
+    public string RenderDocTimeout { get => _renderDocTimeout; set => SetField(ref _renderDocTimeout, value); }
+    public string RenderDocWorkingDir { get => _renderDocWorkingDir; set => SetField(ref _renderDocWorkingDir, value); }
+    public string RenderDocStandardOutput { get => _renderDocStandardOutput; private set => SetField(ref _renderDocStandardOutput, value); }
+    public string RenderDocStandardError { get => _renderDocStandardError; private set => SetField(ref _renderDocStandardError, value); }
     public string RenderDocSummary { get => _renderDocSummary; private set => SetField(ref _renderDocSummary, value); }
 
     public IReadOnlyList<string> DiffSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
@@ -920,6 +930,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         StatusMessage = $"Trend: {result.Series.Count} series across {result.Captures.Count} capture(s).";
     });
 
+    private void OpenRenderDocOutputDir()
+    {
+        if (!string.IsNullOrWhiteSpace(RenderDocOutputDir) && Directory.Exists(RenderDocOutputDir))
+            System.Diagnostics.Process.Start("explorer.exe", RenderDocOutputDir);
+    }
+
     private async Task RunRenderDocAsync() => await RunAsync("Running RenderDoc script...", async _ =>
     {
         var request = new RenderDocExecutionRequest(
@@ -928,11 +944,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ScriptArguments: string.IsNullOrWhiteSpace(RenderDocArguments)
                 ? []
                 : RenderDocArguments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-            OutputDirectory: string.IsNullOrWhiteSpace(RenderDocOutputDir) ? null : RenderDocOutputDir);
+            OutputDirectory: string.IsNullOrWhiteSpace(RenderDocOutputDir) ? null : RenderDocOutputDir,
+            WorkingDirectory: string.IsNullOrWhiteSpace(RenderDocWorkingDir) ? null : RenderDocWorkingDir,
+            Timeout: int.TryParse(RenderDocTimeout, out var t) && t > 0 ? TimeSpan.FromSeconds(t) : null);
 
         var service = new RenderDocService(new ProcessRunner());
         var result = await service.ExecuteAsync(request, OperationCancellationToken);
 
+        RenderDocStandardError = result.StandardError;
+        RenderDocStandardOutput = result.StandardOutput;
         RenderDocDiagnostics.Clear();
 
         foreach (var diag in result.Diagnostics)

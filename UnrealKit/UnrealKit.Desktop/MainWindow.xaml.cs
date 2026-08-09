@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using Microsoft.Win32;
 using UnrealKit.Core.Projects;
 
@@ -195,6 +195,19 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
         {
             viewModel.RenderDocOutputDir = dialog.FolderName;
+        }
+    }
+
+    private void BrowseRenderDocWorkingDir_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Select working directory",
+        };
+
+        if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
+        {
+            viewModel.RenderDocWorkingDir = dialog.FolderName;
         }
     }
 
