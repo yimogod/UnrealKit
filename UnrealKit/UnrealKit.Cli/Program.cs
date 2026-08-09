@@ -30,6 +30,7 @@ static async Task<int> RunAsync(string[] arguments)
             "adb" => await RunAdbAsync(arguments[1..]),
             "app" => await RunAppAsync(arguments[1..]),
             "commandline" => await RunCommandLineAsync(arguments[1..]),
+            "devices" => await RunDevicesAsync(arguments[1..]),
             "capture" => await RunCaptureAsync(arguments[1..]),
             "parse" => await RunParseAsync(arguments[1..]),
             "export" => await RunExportAsync(arguments[1..]),
@@ -1053,14 +1054,28 @@ static int FailAnalyzeUsage()
 
 static async Task<int> CreateProjectAsync(IProjectService service, string[] arguments)
 {
-    if (arguments.Length != 3 || !string.Equals(arguments[1], "--name", StringComparison.OrdinalIgnoreCase))
+    var directory = GetPositionalArgument(arguments, 0);
+    var name = GetOptionalOption(arguments, "--name");
+    var platform = GetOptionalOption(arguments, "--platform");
+
+    if (string.IsNullOrWhiteSpace(directory) || string.IsNullOrWhiteSpace(name))
     {
-        Console.Error.WriteLine("Usage: unrealkit project create <directory> --name <name>");
+        Console.Error.WriteLine("Usage: unrealkit project create <directory> --name <name> [--platform Android|Win64]");
         return 2;
     }
 
-    var result = await service.CreateProjectAsync(new CreateProjectRequest(arguments[0], arguments[2]));
+    var result = await service.CreateProjectAsync(new CreateProjectRequest(directory, name));
     Console.WriteLine($"Created project: {result.Project.ProjectFilePath}");
+
+    if (!string.IsNullOrWhiteSpace(platform)
+        && Enum.TryParse<TargetPlatform>(platform, ignoreCase: true, out var targetPlatform)
+        && targetPlatform != result.Project.Settings.Platform)
+    {
+        var settings = result.Project.Settings with { Platform = targetPlatform };
+        await service.UpdateSettingsAsync(result.Project, settings);
+        Console.WriteLine($"Platform set to: {targetPlatform}");
+    }
+
     return WriteValidation(result.Validation);
 }
 
@@ -1657,12 +1672,62 @@ static int FailParseUsage()
 
 static int FailExportUsage() { Console.Error.WriteLine("Usage: unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]"); Console.Error.WriteLine("       unrealkit export memreport --input <memreport.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]"); return 2; }
 
+static async Task<int> RunDevicesAsync(string[] arguments)
+{
+    if (arguments.Length > 0)
+    {
+        Console.Error.WriteLine("Usage: unrealkit devices");
+        return 2;
+    }
+
+    var deviceServices = new List<IDeviceService> { new Win64DeviceService() };
+
+    // Try ADB for Android devices
+    try
+    {
+        var adbPath = GetOptionalOption(arguments, "--adb-path");
+        var adbService = CreateAdbService(adbPath);
+        deviceServices.Add(new AdbDeviceService(adbService));
+    }
+    catch
+    {
+        // ADB not available, only Win64 will be shown
+    }
+
+    foreach (var service in deviceServices)
+    {
+        try
+        {
+            var devices = await service.ListDevicesAsync();
+            foreach (var device in devices)
+            {
+                var status = device.IsAvailable ? "available" : "unavailable";
+                Console.WriteLine($"{device.Id,-20} {device.Name,-30} {device.Platform,-10} {status}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to list devices from {service.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    return 0;
+}
+
+static string? GetPositionalArgument(string[] arguments, int index)
+{
+    if (index >= 0 && index < arguments.Length && !arguments[index].StartsWith('-'))
+        return arguments[index];
+    return null;
+}
+
 static void PrintUsage()
 {
     Console.WriteLine("UnrealKit CLI");
-    Console.WriteLine("  unrealkit project create <directory> --name <name>");
+    Console.WriteLine("  unrealkit project create <directory> --name <name> [--platform Android|Win64]");
     Console.WriteLine("  unrealkit project info <project.ukit> [--format json]");
     Console.WriteLine("  unrealkit project validate <project.ukit>");
+    Console.WriteLine("  unrealkit devices");
     Console.WriteLine("  unrealkit adb version [--adb-path <path>]");
     Console.WriteLine("  unrealkit adb devices [--adb-path <path>]");
     Console.WriteLine("  unrealkit adb connect <host:port> [--adb-path <path>]");

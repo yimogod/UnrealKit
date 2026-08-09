@@ -1,4 +1,4 @@
-using UnrealKit.Core.Projects;
+﻿using UnrealKit.Core.Projects;
 using UnrealKit.Core.Runtime;
 
 namespace UnrealKit.Tests;
@@ -98,7 +98,29 @@ public sealed class ProjectServiceTests : IDisposable
         Assert.Equal(AppContext.BaseDirectory, ApplicationPaths.AppDir);
     }
 
-    public void Dispose()
+
+    [Fact]
+    public async Task UpdateSettingsAsync_PersistsWin64PlatformFields()
+    {
+        var projectDirectory = Path.Combine(_temporaryDirectory, "Win64Project");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "Win64Project"));
+        var settings = created.Project.Settings with
+        {
+            Platform = TargetPlatform.Win64,
+            Win64Executable = @"C:\Game\MyGame.exe",
+            Win64WorkingDirectory = @"C:\Game",
+            PackageName = "MyGame-Win64-Shipping"
+        };
+
+        await service.UpdateSettingsAsync(created.Project, settings);
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal(TargetPlatform.Win64, reopened.Settings.Platform);
+        Assert.Equal(@"C:\Game\MyGame.exe", reopened.Settings.Win64Executable);
+        Assert.Equal(@"C:\Game", reopened.Settings.Win64WorkingDirectory);
+        Assert.Equal("MyGame-Win64-Shipping", reopened.Settings.PackageName);
+    }    public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))
         {

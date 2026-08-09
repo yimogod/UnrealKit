@@ -1,4 +1,4 @@
-﻿using UnrealKit.Core.Diagnostics;
+using UnrealKit.Core.Diagnostics;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Runtime;
 
@@ -174,6 +174,11 @@ public sealed class ProjectService : IProjectService
         document.SetValue(SettingsSection, "AdbPath", settings.AdbPath);
         document.SetValue(SettingsSection, "DefaultCaptureTag", settings.DefaultCaptureTag);
         document.SetValue(SettingsSection, "DefaultExportDirectory", settings.DefaultExportDirectory);
+        document.SetValue(SettingsSection, "Platform", settings.Platform.ToString());
+        if (!string.IsNullOrWhiteSpace(settings.Win64Executable))
+            document.SetValue(SettingsSection, "Win64Executable", settings.Win64Executable);
+        if (!string.IsNullOrWhiteSpace(settings.Win64WorkingDirectory))
+            document.SetValue(SettingsSection, "Win64WorkingDirectory", settings.Win64WorkingDirectory);
         foreach (var preset in settings.LaunchParameterPresets)
         {
             document.SetValue(PresetsSection, preset.Name, preset.Arguments);
@@ -228,7 +233,10 @@ public sealed class ProjectService : IProjectService
             presets,
             sequences,
             layered.GetValue(SettingsSection, "PreCaptureSequence"),
-            layered.GetValue(SettingsSection, "PostCaptureSequence"));
+            layered.GetValue(SettingsSection, "PostCaptureSequence"),
+            ParsePlatform(layered.GetValue(SettingsSection, "Platform")),
+            layered.GetValue(SettingsSection, "Win64Executable"),
+            layered.GetValue(SettingsSection, "Win64WorkingDirectory"));
     }
 
     private static string RequireValue(IniDocument document, string key) => document.GetValue(DescriptorSection, key) is { Length: > 0 } value ? value : throw new InvalidDataException($".ukit 缺少必需字段 {DescriptorSection}/{key}。");
@@ -297,6 +305,11 @@ public sealed class ProjectService : IProjectService
             diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, "UKIT007", $"缺少必需工程目录: {rootName}", directoryPath, "创建该目录或修正 .ukit 中的根目录配置。"));
         }
     }
+
+    private static TargetPlatform ParsePlatform(string? value) =>
+        value is not null && Enum.TryParse<TargetPlatform>(value, ignoreCase: true, out var platform)
+            ? platform
+            : TargetPlatform.Android;
 
     private static void Report(IProgress<OperationProgress>? progress, string operationId, string stage, string message, int? current = null, int? total = null) => progress?.Report(new OperationProgress(operationId, stage, current, total, message));
 }
