@@ -542,6 +542,62 @@
                                     </TabControl>
                                 </StackPanel>
                             </ScrollViewer>
+                        </Grid>
+                        <Grid>
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedNavigationItem}" Value="RenderDoc">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="RenderDoc 集成" FontSize="18" FontWeight="SemiBold" />
+                                <TextBlock Text="运行 RenderDoc Python 脚本，捕获 GPU 帧分析数据。输出结果保存到指定目录。" Margin="0,10,0,16" TextWrapping="Wrap" />
+                                <TextBlock Text="Python 路径" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <DockPanel LastChildFill="True">
+                                    <Button Content="浏览…" Click="BrowseRenderDocPython_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                                    <TextBox Text="{Binding RenderDocPythonPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                                </DockPanel>
+                                <TextBlock Text="脚本路径" FontWeight="SemiBold" Margin="0,12,0,6" />
+                                <DockPanel LastChildFill="True">
+                                    <Button Content="浏览…" Click="BrowseRenderDocScript_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                                    <TextBox Text="{Binding RenderDocScriptPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                                </DockPanel>
+                                <TextBlock Text="脚本参数 (可选，空格分隔)" FontWeight="SemiBold" Margin="0,12,0,6" />
+                                <TextBox Text="{Binding RenderDocArguments, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                                <TextBlock Text="输出目录 (可选)" FontWeight="SemiBold" Margin="0,12,0,6" />
+                                <DockPanel LastChildFill="True">
+                                    <Button Content="浏览…" Click="BrowseRenderDocOutputDir_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                                    <TextBox Text="{Binding RenderDocOutputDir, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                                </DockPanel>
+                                <Button Content="执行" Command="{Binding RunRenderDocCommand}" HorizontalAlignment="Left" Padding="18,8" Margin="0,16,0,0" />
+                            </StackPanel>
+                            <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding RenderDocSummary}" FontWeight="SemiBold" FontSize="16" TextWrapping="Wrap" />
+                                    <TabControl MinHeight="350" Margin="0,12,0,0">
+                                        <TabItem Header="Diagnostics">
+                                            <DataGrid ItemsSource="{Binding RenderDocDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="90" />
+                                                    <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="90" />
+                                                    <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="70" />
+                                                    <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </TabItem>
+                                    </TabControl>
+                                </StackPanel>
+                            </ScrollViewer>
                         </Grid>        </Grid>
         <Border Grid.Row="2" Background="White" BorderBrush="#FFE2E6EA" BorderThickness="0,1,0,0" Padding="12,8"><TextBlock Text="{Binding StatusMessage}" Foreground="#FF52616B" /></Border>
     </Grid>

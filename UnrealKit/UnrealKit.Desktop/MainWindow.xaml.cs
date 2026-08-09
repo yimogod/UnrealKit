@@ -151,4 +151,50 @@ public partial class MainWindow : Window
             viewModel.DiffCurrentPath = dialog.FileName;
         }
     }
+
+    private void BrowseRenderDocPython_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Select Python executable",
+            Filter = "Executable files (*.exe)|*.exe|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
+        {
+            viewModel.RenderDocPythonPath = dialog.FileName;
+        }
+    }
+
+    private void BrowseRenderDocScript_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Select RenderDoc Python script",
+            Filter = "Python scripts (*.py)|*.py|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
+        {
+            viewModel.RenderDocScriptPath = dialog.FileName;
+        }
+    }
+
+    private void BrowseRenderDocOutputDir_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Select output directory",
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
+        {
+            viewModel.RenderDocOutputDir = dialog.FolderName;
+        }
+    }
 }

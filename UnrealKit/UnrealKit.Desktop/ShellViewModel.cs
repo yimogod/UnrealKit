@@ -13,6 +13,8 @@ using UnrealKit.Core.Processes;
 using System.Linq;
 using UnrealKit.Core.Projects;
 using UnrealKit.Core.Analysis;
+using System.Text;
+using UnrealKit.Core.RenderDoc;
 
 namespace UnrealKit.Desktop;
 
@@ -64,6 +66,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _trendSource = "StaticCamera";
     private string _trendMetricFilter = string.Empty;
     private string _trendSummary = "Open a project, then click Build Trend.";
+    private string _renderDocPythonPath = string.Empty;
+    private string _renderDocScriptPath = string.Empty;
+    private string _renderDocArguments = string.Empty;
+    private string _renderDocOutputDir = string.Empty;
+    private string _renderDocSummary = "Configure Python and RenderDoc script paths, then execute.";
     private UkitProject? _project;
     private AdbDevice? _selectedDevice;
     private CaptureFileInfo? _selectedCaptureResultFile;
@@ -84,7 +91,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
-        NavigationItems = ["工程", "设备", "启动参数", "采集", "解析", "结果", "导出", "静态相机", "基线差分", "历史趋势", "日志与设置"];
+        NavigationItems = ["工程", "设备", "启动参数", "采集", "解析", "结果", "导出", "静态相机", "基线差分", "历史趋势", "RenderDoc", "日志与设置"];
         _selectedNavigationItem = NavigationItems[0];
         CreateProjectCommand = new AsyncDelegateCommand(CreateProjectAsync, CanCreateProject);
         OpenProjectCommand = new AsyncDelegateCommand(OpenProjectAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ProjectFilePath));
@@ -103,6 +110,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         ParseStaticCameraCommand = new AsyncDelegateCommand(ParseStaticCameraAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ScpLogPath));
         RunDiffCommand = new AsyncDelegateCommand(RunDiffAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(DiffBaselinePath) && !string.IsNullOrWhiteSpace(DiffCurrentPath));
         RunTrendCommand = new AsyncDelegateCommand(RunTrendAsync, () => !IsBusy && _project is not null);
+        RunRenderDocCommand = new AsyncDelegateCommand(RunRenderDocAsync, () => !IsBusy
+            && !string.IsNullOrWhiteSpace(_renderDocPythonPath)
+            && !string.IsNullOrWhiteSpace(_renderDocScriptPath));
         ExportCaptureDataCommand = new AsyncDelegateCommand(ExportCaptureDataAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ExportInputPath) && !string.IsNullOrWhiteSpace(ExportOutputPath));
     }
 
@@ -129,6 +139,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<TrendCaptureOption> TrendCaptures { get; } = [];
     public ObservableCollection<TrendSeriesOption> TrendSeries { get; } = [];
     public ObservableCollection<TrendDiagnosticOption> TrendDiagnostics { get; } = [];
+    public ObservableCollection<RenderDocDiagnosticOption> RenderDocDiagnostics { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
     public ICommand RefreshDevicesCommand { get; }
@@ -147,6 +158,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand ParseStaticCameraCommand { get; }
     public ICommand RunDiffCommand { get; }
     public ICommand RunTrendCommand { get; }
+    public ICommand RunRenderDocCommand { get; }
 
     public string SelectedNavigationItem
     {
@@ -209,6 +221,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string TrendSource { get => _trendSource; set { if (SetField(ref _trendSource, value)) RaiseCommandStates(); } }
     public string TrendMetricFilter { get => _trendMetricFilter; set { if (SetField(ref _trendMetricFilter, value)) RaiseCommandStates(); } }
     public string TrendSummary { get => _trendSummary; private set => SetField(ref _trendSummary, value); }
+
+    public string RenderDocPythonPath { get => _renderDocPythonPath; set { if (SetField(ref _renderDocPythonPath, value)) RaiseCommandStates(); } }
+    public string RenderDocScriptPath { get => _renderDocScriptPath; set { if (SetField(ref _renderDocScriptPath, value)) RaiseCommandStates(); } }
+    public string RenderDocArguments { get => _renderDocArguments; set { if (SetField(ref _renderDocArguments, value)) RaiseCommandStates(); } }
+    public string RenderDocOutputDir { get => _renderDocOutputDir; set { if (SetField(ref _renderDocOutputDir, value)) RaiseCommandStates(); } }
+    public string RenderDocSummary { get => _renderDocSummary; private set => SetField(ref _renderDocSummary, value); }
+
     public IReadOnlyList<string> DiffSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
     public IReadOnlyList<string> TrendSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
@@ -892,9 +911,44 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         StatusMessage = $"Trend: {result.Series.Count} series across {result.Captures.Count} capture(s).";
     });
 
+    private async Task RunRenderDocAsync() => await RunAsync("Running RenderDoc script...", async _ =>
+    {
+        var request = new RenderDocExecutionRequest(
+            PythonExecutable: RenderDocPythonPath,
+            ScriptPath: RenderDocScriptPath,
+            ScriptArguments: string.IsNullOrWhiteSpace(RenderDocArguments)
+                ? []
+                : RenderDocArguments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            OutputDirectory: string.IsNullOrWhiteSpace(RenderDocOutputDir) ? null : RenderDocOutputDir);
+
+        var service = new RenderDocService(new ProcessRunner());
+        var result = await service.ExecuteAsync(request, OperationCancellationToken);
+
+        RenderDocDiagnostics.Clear();
+
+        foreach (var diag in result.Diagnostics)
+            RenderDocDiagnostics.Add(new RenderDocDiagnosticOption(
+                diag.Severity.ToString(), diag.Code, diag.LineNumber?.ToString() ?? "-", diag.Message));
+
+        RenderDocSummary = result.Succeeded
+            ? $"Exit code: {result.ExitCode} | Duration: {result.Duration.TotalSeconds:F1}s | Output dir: {result.OutputDirectory ?? "(none)"}"
+            : $"Exit code: {result.ExitCode} | Duration: {result.Duration.TotalSeconds:F1}s | Error: {result.StandardError.TrimEnd().Split('\n').LastOrDefault()?.Trim() ?? "unknown"}";
+
+        var log = new StringBuilder();
+        log.AppendLine("=== RenderDoc Script Output ===");
+        log.AppendLine(result.StandardOutput);
+        if (!string.IsNullOrWhiteSpace(result.StandardError))
+        {
+            log.AppendLine("=== Standard Error ===");
+            log.AppendLine(result.StandardError);
+        }
+        StatusMessage = $"RenderDoc finished (exit {result.ExitCode}).";
+        AddOperationLog(log.ToString());
+    });
+
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
@@ -981,3 +1035,5 @@ public sealed record TrendCaptureOption(string CaptureId, string CaptureDate, st
 public sealed record TrendSeriesOption(string Group, string Name, string Unit, string Direction, int Points, int Present, int Missing, string Min, string Max, string Avg, string First, string Last, string TotalDelta, string TotalDeltaPercent, string Assessment);
 
 public sealed record TrendDiagnosticOption(string Severity, string Code, string Line, string Message);
+
+public sealed record RenderDocDiagnosticOption(string Severity, string Code, string Line, string Message);
