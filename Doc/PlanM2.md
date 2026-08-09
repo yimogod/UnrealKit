@@ -2,7 +2,7 @@
 
 基于 旧版Python性能检查工具功能分析.md 第二阶段 + 第三阶段能力。
 
-最后更新：2026-08-09 | 框架 .NET 9 / WPF | 126 测试通过 | P1 静态相机、P2 基线差分、P3 历史趋势 Core+CLI 完成
+最后更新：2026-08-09 | 框架 .NET 9 / WPF | P1-P5 Core+CLI 完成，P1-P4 RenderDoc CLI 完成，P5 Agent 模板完成
 
 ---
 
@@ -41,25 +41,26 @@
 ### P4：RenderDoc 集成
 
 - [ ] RenderDoc Python 脚本保留为独立能力，不做 C# 重写
-- [ ] RenderDoc 适配层：通过 CLI 调用 Python 脚本、管理输出目录
-- [ ] WPF：RenderDoc 页（脚本路径配置、参数设置、输出浏览）
+- [x] RenderDoc 适配层：通过 CLI 调用 Python 脚本、管理输出目录
+- [ ] WPF：RenderDoc 页（脚本路径配置、参数设置、输出浏览）（后续迭代）
 
 ### P5：Agent 分析
 
-- [ ] AgentAnalysisService：基于捕获的强类型数据 + 受控摘要执行分析
-- [ ] 可替换的 LLM 适配层（不在 Core 直接依赖模型 SDK）
-- [ ] CLI：非交互式分析 (`analyze agent --capture <id> --preset <name> --output <dir>`)
-- [ ] WPF：Agent 分析页（Capture 选择、提示词预览、外部服务确认、报告查看）
-- [ ] Agent 报告保存到 `Saved/Analysis/<AnalysisId>/`
+
+- [x] 项目创建时自动写入 AGENTS.md 宪章与 .codex/skills/ukit-analyze 分析技能
+- [x] Agent 自行选择 LLM（Claude/Codex），打开项目目录即可按宪章+Skill 执行分析
+- [x] 分析报告保存到 Saved/Analysis/<analysis-id>/（由 Agent 管理）
+- [ ] 后续可扩展更多分析 Skill 模板
 
 ---
 
 ## 下一步优先级
 
-1. ~~**P1 静态相机**~~ — Core 解析器 + CLI 已完成（HTML 报告、WPF 页面后续迭代）
-2. ~~**P2 基线差分**~~ — `BaselineService` + `analyze diff` 已完成（WPF 差分页后续迭代）
-3. ~~**P3 历史趋势**~~ — `TrendService` + 趋势导出 + `analyze trend` 已完成（WPF 趋势图表后续迭代）
-4. **P4 RenderDoc** — 独立能力集成
-5. **P5 Agent 分析** — 最高层分析能力
+1. ~~**P1 静态相机**~~ -- Core 解析器 + CLI 已完成（HTML 报告、WPF 页面后续迭代）
+2. ~~**P2 基线差分**~~ -- BaselineService + nalyze diff 已完成（WPF 差分页后续迭代）
+3. ~~**P3 历史趋势**~~ -- TrendService + 趋势导出 + nalyze trend 已完成（WPF 趋势图表后续迭代）
+4. ~~**P4 RenderDoc**~~ -- Core RenderDocService + CLI enderdoc run 已完成（WPF 页后续迭代）
+5. ~~**P5 Agent 分析**~~ -- 项目模板（AGENTS.md + Skill）已完成，Agent 自行选择 LLM 分析
+6. **WPF 页面补齐** -- 静态相机、差分、趋势、RenderDoc 页面一批补齐
 
 WPF 页面（静态相机、差分、趋势）作为一批后续迭代统一补齐，Core 与 CLI 已先行落地。

@@ -40,7 +40,8 @@ public sealed class ProjectService : IProjectService
         }
 
         Report(progress, operationId, "Creating", "正在写入工程描述与默认配置。", 1, 2);
-        await WriteDescriptorAsync(descriptorPath, descriptor, cancellationToken);
+                await WriteAgentTemplatesAsync(rootDirectory, request.ProjectName, cancellationToken);
+await WriteDescriptorAsync(descriptorPath, descriptor, cancellationToken);
         await WriteSettingsAsync(Path.Combine(rootDirectory, descriptor.ConfigRoot, "DefaultGame.ini"), settings, cancellationToken);
         var validation = await ValidateProjectAsync(descriptorPath, progress, cancellationToken);
         Report(progress, operationId, "Completed", "工程创建完成。", 2, 2);
@@ -110,6 +111,20 @@ public sealed class ProjectService : IProjectService
 
         Report(progress, operationId, "Completed", "工程校验完成。", 2, 2);
         return new ProjectValidationResult(diagnostics);
+    }
+
+
+    private static async Task WriteAgentTemplatesAsync(string rootDirectory, string projectName, CancellationToken cancellationToken)
+    {
+        // AGENTS.md
+        var agentsMdPath = Path.Combine(rootDirectory, AgentTemplates.AgentsMdFileName);
+        await File.WriteAllTextAsync(agentsMdPath, AgentTemplates.AgentsMdContent(projectName), cancellationToken);
+
+        // SKILL.md for .codex/skills/ukit-analyze
+        var skillDir = Path.Combine(rootDirectory, AgentTemplates.SkillDirectory);
+        Directory.CreateDirectory(skillDir);
+        var skillPath = Path.Combine(skillDir, AgentTemplates.SkillFileName);
+        await File.WriteAllTextAsync(skillPath, AgentTemplates.SkillMdContent, cancellationToken);
     }
 
     private static async Task WriteDescriptorAsync(string path, UkitProjectDescriptor descriptor, CancellationToken cancellationToken)
