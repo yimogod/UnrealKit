@@ -1,5 +1,6 @@
-using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.Diagnostics;
 using UnrealKit.Core.Operations;
+using UnrealKit.Core.Runtime;
 
 namespace UnrealKit.Core.Projects;
 
@@ -8,6 +9,7 @@ public sealed class ProjectService : IProjectService
     private const string DescriptorSection = "UnrealKit.Project";
     private const string SettingsSection = "UnrealKit.ProjectSettings";
     private const string PresetsSection = "UnrealKit.LaunchPresets";
+    private const string BaseGameIniFileName = "BaseGame.ini";
     private readonly IOperationLogger _logger;
 
     public ProjectService(IOperationLogger? logger = null)
@@ -40,8 +42,8 @@ public sealed class ProjectService : IProjectService
         }
 
         Report(progress, operationId, "Creating", "正在写入工程描述与默认配置。", 1, 2);
-                await WriteAgentTemplatesAsync(rootDirectory, request.ProjectName, cancellationToken);
-await WriteDescriptorAsync(descriptorPath, descriptor, cancellationToken);
+        await WriteAgentTemplatesAsync(rootDirectory, request.ProjectName, cancellationToken);
+        await WriteDescriptorAsync(descriptorPath, descriptor, cancellationToken);
         await WriteSettingsAsync(Path.Combine(rootDirectory, descriptor.ConfigRoot, "DefaultGame.ini"), settings, cancellationToken);
         var validation = await ValidateProjectAsync(descriptorPath, progress, cancellationToken);
         Report(progress, operationId, "Completed", "工程创建完成。", 2, 2);
@@ -78,30 +80,33 @@ await WriteDescriptorAsync(descriptorPath, descriptor, cancellationToken);
     public async Task<ProjectValidationResult> ValidateProjectAsync(string projectFilePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         const string operationId = "project-validate";
-        var diagnostics = new List<Diagnostic>();
         var fullPath = GetProjectFilePath(projectFilePath);
+        var rootDirectory = Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("无法确定工程根目录。");
+        Report(progress, operationId, "Validating", "正在校验工程结构与格式。", 1, 2);
+        var diagnostics = new List<Diagnostic>();
         UkitProjectDescriptor descriptor;
         try
         {
             descriptor = await ReadDescriptorAsync(fullPath, cancellationToken);
         }
-        catch (Exception exception) when (exception is InvalidDataException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new ProjectValidationResult([new Diagnostic(DiagnosticSeverity.Error, "UKIT001", exception.Message, fullPath, "修复或恢复 .ukit 文件后重试。")]);
+            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, "UKIT001", "无法读取工程描述文件。", fullPath, $"详细信息: {ex.Message}"));
+            Report(progress, operationId, "Completed", "校验完成。", 2, 2);
+            return new ProjectValidationResult(diagnostics);
         }
 
-        Report(progress, operationId, "Checking", "正在校验工程目录和配置。", 1, 2);
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateProjectName(descriptor.ProjectName, diagnostics, fullPath);
+        ValidateRoot(descriptor.ContentRoot, nameof(descriptor.ContentRoot), rootDirectory, diagnostics);
+        ValidateRoot(descriptor.ConfigRoot, nameof(descriptor.ConfigRoot), rootDirectory, diagnostics);
+        ValidateRoot(descriptor.SavedRoot, nameof(descriptor.SavedRoot), rootDirectory, diagnostics);
+        ValidateRoot(descriptor.IntermediateRoot, nameof(descriptor.IntermediateRoot), rootDirectory, diagnostics);
+
         if (descriptor.FormatVersion != UkitProjectDescriptor.CurrentFormatVersion)
         {
-            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, "UKIT002", $"不支持工程格式版本 {descriptor.FormatVersion}。当前版本仅支持 {UkitProjectDescriptor.CurrentFormatVersion}。", fullPath, "使用兼容版本或未来的迁移工具。"));
+            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, "UKIT002", $"不支持的工程格式版本: {descriptor.FormatVersion}（当前版本: {UkitProjectDescriptor.CurrentFormatVersion}）", fullPath, "使用新版 UnrealKit 重新创建工程或查阅迁移文档。"));
         }
-
-        ValidateProjectName(descriptor.ProjectName, diagnostics, fullPath);
-        var rootDirectory = Path.GetDirectoryName(fullPath) ?? string.Empty;
-        ValidateRoot(descriptor.ContentRoot, "ContentRoot", rootDirectory, diagnostics);
-        ValidateRoot(descriptor.ConfigRoot, "ConfigRoot", rootDirectory, diagnostics);
-        ValidateRoot(descriptor.SavedRoot, "SavedRoot", rootDirectory, diagnostics);
-        ValidateRoot(descriptor.IntermediateRoot, "IntermediateRoot", rootDirectory, diagnostics);
 
         var settingsPath = Path.Combine(rootDirectory, descriptor.ConfigRoot, "DefaultGame.ini");
         if (!File.Exists(settingsPath))
@@ -109,10 +114,11 @@ await WriteDescriptorAsync(descriptorPath, descriptor, cancellationToken);
             diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "UKIT003", "未找到可选配置文件 DefaultGame.ini。", settingsPath, "创建 Config/DefaultGame.ini 以保存项目默认配置。"));
         }
 
-        Report(progress, operationId, "Completed", "工程校验完成。", 2, 2);
+        Report(progress, operationId, "Completed", "校验完成。", 2, 2);
         return new ProjectValidationResult(diagnostics);
     }
 
+    public static string ResolveBaseGameIniPath() => Path.Combine(ApplicationPaths.AppDir, BaseGameIniFileName);
 
     private static async Task WriteAgentTemplatesAsync(string rootDirectory, string projectName, CancellationToken cancellationToken)
     {
@@ -174,16 +180,13 @@ await WriteDescriptorAsync(descriptorPath, descriptor, cancellationToken);
         await document.SaveAsync(path, cancellationToken);
     }
 
-    private static async Task<ProjectSettings> ReadSettingsAsync(string path, string projectName, CancellationToken cancellationToken)
+    private static async Task<ProjectSettings> ReadSettingsAsync(string defaultGameIniPath, string projectName, CancellationToken cancellationToken)
     {
         var defaults = ProjectSettings.CreateDefaults(projectName);
-        if (!File.Exists(path))
-        {
-            return defaults;
-        }
+        var basePath = ResolveBaseGameIniPath();
+        var layered = await LayeredIniDocument.FromFilesAsync(basePath, defaultGameIniPath, cancellationToken);
 
-        var document = IniDocument.Parse(await File.ReadAllTextAsync(path, cancellationToken));
-        var configuredPresets = document.GetSection(PresetsSection);
+        var configuredPresets = layered.GetSection(PresetsSection);
         var presets = LaunchParameterPresetDefaults.All
             .Select(defaultPreset => configuredPresets.TryGetValue(defaultPreset.Name, out var arguments)
                 ? defaultPreset with { Arguments = arguments }
@@ -194,15 +197,15 @@ await WriteDescriptorAsync(descriptorPath, descriptor, cancellationToken);
             .OrderBy(preset => preset.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         return new ProjectSettings(
-            document.GetValue(SettingsSection, "PackageName") ?? defaults.PackageName,
-            document.GetValue(SettingsSection, "UnrealProjectName") ?? defaults.UnrealProjectName,
-            document.GetValue(SettingsSection, "Activity") ?? defaults.Activity,
-            document.GetValue(SettingsSection, "DeviceGameRootTemplate") ?? defaults.DeviceGameRootTemplate,
-            document.GetValue(SettingsSection, "DeviceSavedRootTemplate") ?? defaults.DeviceSavedRootTemplate,
-            document.GetValue(SettingsSection, "LocalWorkingDirectory") ?? defaults.LocalWorkingDirectory,
-            document.GetValue(SettingsSection, "AdbPath") ?? defaults.AdbPath,
-            document.GetValue(SettingsSection, "DefaultCaptureTag") ?? defaults.DefaultCaptureTag,
-            document.GetValue(SettingsSection, "DefaultExportDirectory") ?? defaults.DefaultExportDirectory,
+            layered.GetValue(SettingsSection, "PackageName") ?? defaults.PackageName,
+            layered.GetValue(SettingsSection, "UnrealProjectName") ?? defaults.UnrealProjectName,
+            layered.GetValue(SettingsSection, "Activity") ?? defaults.Activity,
+            layered.GetValue(SettingsSection, "DeviceGameRootTemplate") ?? defaults.DeviceGameRootTemplate,
+            layered.GetValue(SettingsSection, "DeviceSavedRootTemplate") ?? defaults.DeviceSavedRootTemplate,
+            layered.GetValue(SettingsSection, "LocalWorkingDirectory") ?? defaults.LocalWorkingDirectory,
+            layered.GetValue(SettingsSection, "AdbPath") ?? defaults.AdbPath,
+            layered.GetValue(SettingsSection, "DefaultCaptureTag") ?? defaults.DefaultCaptureTag,
+            layered.GetValue(SettingsSection, "DefaultExportDirectory") ?? defaults.DefaultExportDirectory,
             presets);
     }
 

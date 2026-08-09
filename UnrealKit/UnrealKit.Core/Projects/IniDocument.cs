@@ -1,8 +1,8 @@
-using System.Text;
+﻿using System.Text;
 
 namespace UnrealKit.Core.Projects;
 
-internal sealed class IniDocument
+public sealed class IniDocument
 {
     private readonly Dictionary<string, Dictionary<string, string>> _sections = new(StringComparer.OrdinalIgnoreCase);
 
@@ -22,6 +22,11 @@ internal sealed class IniDocument
 
         values[key] = value;
     }
+
+    public bool HasSection(string section) => _sections.ContainsKey(section);
+
+    public bool HasValue(string section, string key) =>
+        _sections.TryGetValue(section, out var values) && values.ContainsKey(key);
 
     public static IniDocument Parse(string content)
     {
