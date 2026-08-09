@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -12,6 +12,7 @@ using UnrealKit.Core.Parsing;
 using UnrealKit.Core.Processes;
 using System.Linq;
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.Analysis;
 
 namespace UnrealKit.Desktop;
 
@@ -49,6 +50,20 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _launchParameterPreview = "请先打开工程以加载启动参数预设。";
     private string _launchOperationSummary = "请先打开工程并选择状态为 device 的设备。";
     private string _operationStage = "Idle";
+    private string _scpLogPath = string.Empty;
+    private string _scpScreenshotsDir = string.Empty;
+    private string _scpParseDescription = "Select a static camera perf log and optional screenshots directory.";
+    private string _diffBaselinePath = string.Empty;
+    private string _diffCurrentPath = string.Empty;
+    private string _diffSource = "StaticCamera";
+    private string _diffMetricFilter = string.Empty;
+    private string _diffSummary = "Select a source type and two input files, then click Diff.";
+    private string _trendTag = string.Empty;
+    private string _trendFrom = string.Empty;
+    private string _trendTo = string.Empty;
+    private string _trendSource = "StaticCamera";
+    private string _trendMetricFilter = string.Empty;
+    private string _trendSummary = "Open a project, then click Build Trend.";
     private UkitProject? _project;
     private AdbDevice? _selectedDevice;
     private CaptureFileInfo? _selectedCaptureResultFile;
@@ -69,7 +84,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
-        NavigationItems = ["工程", "设备", "启动参数", "采集", "解析", "结果", "导出", "日志与设置"];
+        NavigationItems = ["工程", "设备", "启动参数", "采集", "解析", "结果", "导出", "静态相机", "基线差分", "历史趋势", "日志与设置"];
         _selectedNavigationItem = NavigationItems[0];
         CreateProjectCommand = new AsyncDelegateCommand(CreateProjectAsync, CanCreateProject);
         OpenProjectCommand = new AsyncDelegateCommand(OpenProjectAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ProjectFilePath));
@@ -85,6 +100,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         RefreshCaptureResultsCommand = new AsyncDelegateCommand(RefreshCaptureResultsAsync, () => !IsBusy && _project is not null);
         ViewCaptureResultFileCommand = new AsyncDelegateCommand(ViewCaptureResultFileAsync, () => !IsBusy && SelectedCaptureResultFile is not null);
         ParseMemReportCommand = new AsyncDelegateCommand(ParseMemReportAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(MemReportInputPath));
+        ParseStaticCameraCommand = new AsyncDelegateCommand(ParseStaticCameraAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ScpLogPath));
+        RunDiffCommand = new AsyncDelegateCommand(RunDiffAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(DiffBaselinePath) && !string.IsNullOrWhiteSpace(DiffCurrentPath));
+        RunTrendCommand = new AsyncDelegateCommand(RunTrendAsync, () => !IsBusy && _project is not null);
         ExportCaptureDataCommand = new AsyncDelegateCommand(ExportCaptureDataAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ExportInputPath) && !string.IsNullOrWhiteSpace(ExportOutputPath));
     }
 
@@ -103,6 +121,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<MemReportMetricOption> MemReportMetrics { get; } = [];
     public ObservableCollection<MemReportSummaryOption> MemReportSummaries { get; } = [];
     public ObservableCollection<string> OperationLogs { get; } = [];
+    public ObservableCollection<ScpFrameOption> ScpFrames { get; } = [];
+    public ObservableCollection<ScpAverageOption> ScpAverages { get; } = [];
+    public ObservableCollection<ScpDiagnosticOption> ScpDiagnostics { get; } = [];
+    public ObservableCollection<DiffResultOption> DiffResults { get; } = [];
+    public ObservableCollection<DiffDiagnosticOption> DiffDiagnostics { get; } = [];
+    public ObservableCollection<TrendCaptureOption> TrendCaptures { get; } = [];
+    public ObservableCollection<TrendSeriesOption> TrendSeries { get; } = [];
+    public ObservableCollection<TrendDiagnosticOption> TrendDiagnostics { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
     public ICommand RefreshDevicesCommand { get; }
@@ -118,6 +144,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand ViewCaptureResultFileCommand { get; }
     public ICommand ParseMemReportCommand { get; }
     public ICommand ExportCaptureDataCommand { get; }
+    public ICommand ParseStaticCameraCommand { get; }
+    public ICommand RunDiffCommand { get; }
+    public ICommand RunTrendCommand { get; }
 
     public string SelectedNavigationItem
     {
@@ -166,6 +195,22 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string MemReportInputPath { get => _memReportInputPath; set { if (SetField(ref _memReportInputPath, value)) RaiseCommandStates(); } }
     public string MemReportParseDescription { get => _memReportParseDescription; private set => SetField(ref _memReportParseDescription, value); }
     public string MemReportParsedAt { get => _memReportParsedAt; private set => SetField(ref _memReportParsedAt, value); }
+    public string ScpLogPath { get => _scpLogPath; set { if (SetField(ref _scpLogPath, value)) RaiseCommandStates(); } }
+    public string ScpScreenshotsDir { get => _scpScreenshotsDir; set { if (SetField(ref _scpScreenshotsDir, value)) RaiseCommandStates(); } }
+    public string ScpParseDescription { get => _scpParseDescription; private set => SetField(ref _scpParseDescription, value); }
+    public string DiffBaselinePath { get => _diffBaselinePath; set { if (SetField(ref _diffBaselinePath, value)) RaiseCommandStates(); } }
+    public string DiffCurrentPath { get => _diffCurrentPath; set { if (SetField(ref _diffCurrentPath, value)) RaiseCommandStates(); } }
+    public string DiffSource { get => _diffSource; set { if (SetField(ref _diffSource, value)) RaiseCommandStates(); } }
+    public string DiffMetricFilter { get => _diffMetricFilter; set { if (SetField(ref _diffMetricFilter, value)) RaiseCommandStates(); } }
+    public string DiffSummary { get => _diffSummary; private set => SetField(ref _diffSummary, value); }
+    public string TrendTag { get => _trendTag; set { if (SetField(ref _trendTag, value)) RaiseCommandStates(); } }
+    public string TrendFrom { get => _trendFrom; set { if (SetField(ref _trendFrom, value)) RaiseCommandStates(); } }
+    public string TrendTo { get => _trendTo; set { if (SetField(ref _trendTo, value)) RaiseCommandStates(); } }
+    public string TrendSource { get => _trendSource; set { if (SetField(ref _trendSource, value)) RaiseCommandStates(); } }
+    public string TrendMetricFilter { get => _trendMetricFilter; set { if (SetField(ref _trendMetricFilter, value)) RaiseCommandStates(); } }
+    public string TrendSummary { get => _trendSummary; private set => SetField(ref _trendSummary, value); }
+    public IReadOnlyList<string> DiffSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
+    public IReadOnlyList<string> TrendSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
     public string LaunchOperationSummary { get => _launchOperationSummary; private set => SetField(ref _launchOperationSummary, value); }
     public string OperationStage { get => _operationStage; private set => SetField(ref _operationStage, value); }
@@ -700,9 +745,156 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
     }
 
+    private async Task ParseStaticCameraAsync() => await RunAsync("Parsing static camera perf log...", async _ =>
+    {
+        var inputPath = Path.GetFullPath(ScpLogPath);
+        if (!File.Exists(inputPath)) throw new FileNotFoundException("Static camera perf log not found.", inputPath);
+
+        var parser = new StaticCameraPerfParser();
+        StaticCameraPerfParseResult result;
+        if (!string.IsNullOrWhiteSpace(ScpScreenshotsDir) && Directory.Exists(ScpScreenshotsDir))
+            result = await parser.ParseFileAsync(inputPath, ScpScreenshotsDir, OperationCancellationToken);
+        else
+            result = await parser.ParseFileAsync(inputPath, OperationCancellationToken);
+
+        ScpFrames.Clear();
+        ScpAverages.Clear();
+        ScpDiagnostics.Clear();
+
+        if (result.Report is not null)
+        {
+            ScpParseDescription = $"Cameras: {result.Report.CameraCount} | Parsed: {result.Report.ParseCameraCount} | Status: {result.Report.Completeness}";
+            foreach (var frame in result.Report.Frames)
+            {
+                ScpFrames.Add(new ScpFrameOption(
+                    frame.Index, frame.CameraName,
+                    frame.FrameTimeMs.ToString("F2"), frame.GameTimeMs.ToString("F2"),
+                    frame.DrawTimeMs.ToString("F2"), frame.RhiTimeMs.ToString("F2"),
+                    frame.GpuTimeMs.ToString("F2"), frame.MemoryBytes.ToString(),
+                    frame.DrawCalls.ToString(), frame.Triangles.ToString(),
+                    frame.Screenshots.Count, frame.FirstLineNumber));
+            }
+
+            var avg = result.Report.Average;
+            ScpAverages.Add(new ScpAverageOption(
+                avg.FrameTimeMs.ToString("F2"), avg.GameTimeMs.ToString("F2"),
+                avg.DrawTimeMs.ToString("F2"), avg.RhiTimeMs.ToString("F2"),
+                avg.GpuTimeMs.ToString("F2"), avg.MemoryBytes.ToString(),
+                avg.DrawCalls.ToString(), avg.Triangles.ToString()));
+        }
+        else
+        {
+            ScpParseDescription = "Parse failed — see diagnostics.";
+        }
+
+        foreach (var diag in result.Diagnostics)
+            ScpDiagnostics.Add(new ScpDiagnosticOption(diag.Severity.ToString(), diag.Code, diag.LineNumber?.ToString() ?? "-", diag.Message));
+
+        StatusMessage = result.IsSuccess ? $"Parsed {result.Report?.ParseCameraCount ?? 0} camera(s) from {inputPath}" : "Static camera parse completed with errors.";
+    });
+
+    private async Task RunDiffAsync() => await RunAsync("Running baseline diff...", async _ =>
+    {
+        var source = DiffSource switch
+        {
+            "MemInfo" => BaselineDiffSource.MemInfo,
+            "MemReport" => BaselineDiffSource.MemReport,
+            _ => BaselineDiffSource.StaticCamera
+        };
+
+        var metricFilter = string.IsNullOrWhiteSpace(DiffMetricFilter)
+            ? null
+            : (IReadOnlyList<string>)DiffMetricFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var request = new BaselineDiffRequest(source, DiffBaselinePath, DiffCurrentPath, metricFilter, "Baseline", "Current");
+        var service = new BaselineService();
+        var result = await service.DiffAsync(request, OperationCancellationToken);
+
+        DiffResults.Clear();
+        DiffDiagnostics.Clear();
+
+        foreach (var diff in result.Metrics)
+        {
+            DiffResults.Add(new DiffResultOption(
+                diff.Group, diff.Name, diff.Unit, diff.Direction.ToString(),
+                diff.BaselineValue?.ToString("F2") ?? "-",
+                diff.CurrentValue?.ToString("F2") ?? "-",
+                diff.Delta?.ToString("F2") ?? "-",
+                diff.DeltaPercent?.ToString("F1") ?? "-",
+                diff.Status.ToString(), diff.Assessment.ToString()));
+        }
+
+        foreach (var diag in result.Diagnostics)
+            DiffDiagnostics.Add(new DiffDiagnosticOption(diag.Severity.ToString(), diag.Code, diag.LineNumber?.ToString() ?? "-", diag.Message));
+
+        DiffSummary = result.IsSuccess
+            ? $"Regressed: {result.RegressedCount} | Improved: {result.ImprovedCount} | Unchanged: {result.UnchangedCount} | Missing: {result.MissingCount}"
+            : "Diff completed with errors.";
+
+        StatusMessage = $"Diff: {result.Metrics.Count} metric(s) compared.";
+    });
+
+    private async Task RunTrendAsync() => await RunAsync("Building trend...", async _ =>
+    {
+        if (_project is null) { StatusMessage = "No project open."; return; }
+
+        var source = TrendSource switch
+        {
+            "MemInfo" => BaselineDiffSource.MemInfo,
+            "MemReport" => BaselineDiffSource.MemReport,
+            _ => BaselineDiffSource.StaticCamera
+        };
+
+        var metricFilter = string.IsNullOrWhiteSpace(TrendMetricFilter)
+            ? null
+            : (IReadOnlyList<string>)TrendMetricFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        DateTimeOffset? from = DateTimeOffset.TryParse(TrendFrom, out var f) ? f : null;
+        DateTimeOffset? to = DateTimeOffset.TryParse(TrendTo, out var t) ? t : null;
+
+        var request = new TrendRequest(_project, source,
+            Tag: string.IsNullOrWhiteSpace(TrendTag) ? null : TrendTag.Trim(),
+            From: from, To: to,
+            MetricFilter: metricFilter);
+
+        var service = new TrendService();
+        var result = await service.BuildTrendAsync(request, OperationCancellationToken);
+
+        TrendCaptures.Clear();
+        TrendSeries.Clear();
+        TrendDiagnostics.Clear();
+
+        foreach (var capture in result.Captures)
+            TrendCaptures.Add(new TrendCaptureOption(capture.CaptureId, capture.CaptureDate.ToString("yyyy-MM-dd HH:mm"), capture.Platform, capture.Tag, capture.DeviceModel ?? "-"));
+
+        foreach (var series in result.Series)
+        {
+            TrendSeries.Add(new TrendSeriesOption(
+                series.Group, series.Name, series.Unit, series.Direction.ToString(),
+                series.PointCount, series.PresentCount, series.MissingCount,
+                series.Minimum?.ToString("F2") ?? "-",
+                series.Maximum?.ToString("F2") ?? "-",
+                series.Average?.ToString("F2") ?? "-",
+                series.First?.ToString("F2") ?? "-",
+                series.Last?.ToString("F2") ?? "-",
+                series.TotalDelta?.ToString("F2") ?? "-",
+                series.TotalDeltaPercent?.ToString("F1") ?? "-",
+                series.OverallAssessment.ToString()));
+        }
+
+        foreach (var diag in result.Diagnostics)
+            TrendDiagnostics.Add(new TrendDiagnosticOption(diag.Severity.ToString(), diag.Code, diag.LineNumber?.ToString() ?? "-", diag.Message));
+
+        TrendSummary = result.IsSuccess
+            ? $"{result.Captures.Count} capture(s) | {result.Series.Count} series | Regressed: {result.RegressedCount} | Improved: {result.ImprovedCount}"
+            : "Trend build completed with errors.";
+
+        StatusMessage = $"Trend: {result.Series.Count} series across {result.Captures.Count} capture(s).";
+    });
+
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
@@ -773,3 +965,19 @@ public sealed class LaunchParameterPresetOption(LaunchParameterPreset preset) : 
         }
     }
 }
+
+public sealed record ScpFrameOption(int Index, string CameraName, string FrameTimeMs, string GameTimeMs, string DrawTimeMs, string RhiTimeMs, string GpuTimeMs, string MemoryBytes, string DrawCalls, string Triangles, int Screenshots, int Line);
+
+public sealed record ScpAverageOption(string FrameTimeMs, string GameTimeMs, string DrawTimeMs, string RhiTimeMs, string GpuTimeMs, string MemoryBytes, string DrawCalls, string Triangles);
+
+public sealed record ScpDiagnosticOption(string Severity, string Code, string Line, string Message);
+
+public sealed record DiffResultOption(string Group, string Name, string Unit, string Direction, string BaselineValue, string CurrentValue, string Delta, string DeltaPercent, string Status, string Assessment);
+
+public sealed record DiffDiagnosticOption(string Severity, string Code, string Line, string Message);
+
+public sealed record TrendCaptureOption(string CaptureId, string CaptureDate, string Platform, string Tag, string DeviceModel);
+
+public sealed record TrendSeriesOption(string Group, string Name, string Unit, string Direction, int Points, int Present, int Missing, string Min, string Max, string Avg, string First, string Last, string TotalDelta, string TotalDeltaPercent, string Assessment);
+
+public sealed record TrendDiagnosticOption(string Severity, string Code, string Line, string Message);

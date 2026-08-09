@@ -1,4 +1,4 @@
-<Window x:Class="UnrealKit.Desktop.MainWindow"
+﻿<Window x:Class="UnrealKit.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="UnrealKit" Height="680" Width="1120" MinHeight="520" MinWidth="900">
@@ -301,7 +301,248 @@
                                 </StackPanel>
                             </ScrollViewer>
                         </Grid>
-        </Grid>
+
+                        <Grid>
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedNavigationItem}" Value="静态相机">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="静态相机性能解析" FontSize="18" FontWeight="SemiBold" />
+                                <TextBlock Text="选择包含 !!!Do Perf Start!!! / !!!Do Perf End!!! 标记的日志文件，可选指定截图目录进行关联。" Margin="0,10,0,16" TextWrapping="Wrap" />
+                                <TextBlock Text="日志文件" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <DockPanel LastChildFill="True">
+                                    <Button Content="浏览…" Click="BrowseScpLog_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                                    <TextBox Text="{Binding ScpLogPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                                </DockPanel>
+                                <TextBlock Text="截图目录 (可选)" FontWeight="SemiBold" Margin="0,12,0,6" />
+                                <DockPanel LastChildFill="True">
+                                    <Button Content="浏览…" Click="BrowseScpScreenshots_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                                    <TextBox Text="{Binding ScpScreenshotsDir, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                                </DockPanel>
+                                <Button Content="解析" Command="{Binding ParseStaticCameraCommand}" HorizontalAlignment="Left" Padding="18,8" Margin="0,16,0,0" />
+                            </StackPanel>
+                            <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding ScpParseDescription}" FontWeight="SemiBold" FontSize="16" />
+                                    <TabControl MinHeight="350" Margin="0,12,0,0">
+                                        <TabItem Header="Frames">
+                                            <DataGrid ItemsSource="{Binding ScpFrames}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="40" />
+                                                    <DataGridTextColumn Header="Camera" Binding="{Binding CameraName}" Width="120" />
+                                                    <DataGridTextColumn Header="Frame ms" Binding="{Binding FrameTimeMs}" Width="80" />
+                                                    <DataGridTextColumn Header="Game ms" Binding="{Binding GameTimeMs}" Width="80" />
+                                                    <DataGridTextColumn Header="Draw ms" Binding="{Binding DrawTimeMs}" Width="80" />
+                                                    <DataGridTextColumn Header="RHI ms" Binding="{Binding RhiTimeMs}" Width="80" />
+                                                    <DataGridTextColumn Header="GPU ms" Binding="{Binding GpuTimeMs}" Width="80" />
+                                                    <DataGridTextColumn Header="Memory" Binding="{Binding MemoryBytes}" Width="90" />
+                                                    <DataGridTextColumn Header="DrawCalls" Binding="{Binding DrawCalls}" Width="80" />
+                                                    <DataGridTextColumn Header="Triangles" Binding="{Binding Triangles}" Width="80" />
+                                                    <DataGridTextColumn Header="Screenshots" Binding="{Binding Screenshots}" Width="80" />
+                                                    <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="60" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </TabItem>
+                                        <TabItem Header="Averages">
+                                            <DataGrid ItemsSource="{Binding ScpAverages}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" HeadersVisibility="Column">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Frame ms" Binding="{Binding FrameTimeMs}" Width="100" />
+                                                    <DataGridTextColumn Header="Game ms" Binding="{Binding GameTimeMs}" Width="100" />
+                                                    <DataGridTextColumn Header="Draw ms" Binding="{Binding DrawTimeMs}" Width="100" />
+                                                    <DataGridTextColumn Header="RHI ms" Binding="{Binding RhiTimeMs}" Width="100" />
+                                                    <DataGridTextColumn Header="GPU ms" Binding="{Binding GpuTimeMs}" Width="100" />
+                                                    <DataGridTextColumn Header="Memory" Binding="{Binding MemoryBytes}" Width="100" />
+                                                    <DataGridTextColumn Header="DrawCalls" Binding="{Binding DrawCalls}" Width="100" />
+                                                    <DataGridTextColumn Header="Triangles" Binding="{Binding Triangles}" Width="100" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </TabItem>
+                                        <TabItem Header="Diagnostics">
+                                            <DataGrid ItemsSource="{Binding ScpDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="90" />
+                                                    <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="90" />
+                                                    <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="70" />
+                                                    <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </TabItem>
+                                    </TabControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                        <Grid>
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedNavigationItem}" Value="基线差分">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="基线差分比较" FontSize="18" FontWeight="SemiBold" />
+                                <TextBlock Text="比较两份同类型报告，逐指标计算差值，标注改善/回归方向。" Margin="0,10,0,16" TextWrapping="Wrap" />
+                                <TextBlock Text="数据源" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <ComboBox ItemsSource="{Binding DiffSourceOptions}" SelectedItem="{Binding DiffSource}" Padding="8,6" />
+                                <TextBlock Text="基线文件" FontWeight="SemiBold" Margin="0,12,0,6" />
+                                <DockPanel LastChildFill="True">
+                                    <Button Content="浏览…" Click="BrowseDiffBaseline_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                                    <TextBox Text="{Binding DiffBaselinePath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                                </DockPanel>
+                                <TextBlock Text="当前文件" FontWeight="SemiBold" Margin="0,12,0,6" />
+                                <DockPanel LastChildFill="True">
+                                    <Button Content="浏览…" Click="BrowseDiffCurrent_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                                    <TextBox Text="{Binding DiffCurrentPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                                </DockPanel>
+                                <TextBlock Text="指标过滤 (逗号分隔, 可选)" FontWeight="SemiBold" Margin="0,12,0,6" />
+                                <TextBox Text="{Binding DiffMetricFilter, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                                <Button Content="执行差分" Command="{Binding RunDiffCommand}" HorizontalAlignment="Left" Padding="18,8" Margin="0,16,0,0" />
+                            </StackPanel>
+                            <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding DiffSummary}" FontWeight="SemiBold" FontSize="16" />
+                                    <TabControl MinHeight="350" Margin="0,12,0,0">
+                                        <TabItem Header="Diff Results">
+                                            <DataGrid ItemsSource="{Binding DiffResults}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Group" Binding="{Binding Group}" Width="100" />
+                                                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="140" />
+                                                    <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" Width="70" />
+                                                    <DataGridTextColumn Header="Direction" Binding="{Binding Direction}" Width="100" />
+                                                    <DataGridTextColumn Header="Baseline" Binding="{Binding BaselineValue}" Width="90" />
+                                                    <DataGridTextColumn Header="Current" Binding="{Binding CurrentValue}" Width="90" />
+                                                    <DataGridTextColumn Header="Delta" Binding="{Binding Delta}" Width="90" />
+                                                    <DataGridTextColumn Header="Delta %" Binding="{Binding DeltaPercent}" Width="80" />
+                                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="110" />
+                                                    <DataGridTextColumn Header="Assessment" Binding="{Binding Assessment}" Width="100" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </TabItem>
+                                        <TabItem Header="Diagnostics">
+                                            <DataGrid ItemsSource="{Binding DiffDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="90" />
+                                                    <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="90" />
+                                                    <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="70" />
+                                                    <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </TabItem>
+                                    </TabControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                        <Grid>
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedNavigationItem}" Value="历史趋势">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="历史趋势分析" FontSize="18" FontWeight="SemiBold" />
+                                <TextBlock Text="基于工程中已归档的采集数据，按时间序列聚合指标变化趋势。需先打开工程。" Margin="0,10,0,16" TextWrapping="Wrap" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                        <TextBlock Text="数据源" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                        <ComboBox ItemsSource="{Binding TrendSourceOptions}" SelectedItem="{Binding TrendSource}" Padding="8,6" />
+                                        <TextBlock Text="Tag 过滤" FontWeight="SemiBold" Margin="0,12,0,6" />
+                                        <TextBox Text="{Binding TrendTag, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                        <TextBlock Text="起始日期" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                        <TextBox Text="{Binding TrendFrom, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                                        <TextBlock Text="结束日期" FontWeight="SemiBold" Margin="0,12,0,6" />
+                                        <TextBox Text="{Binding TrendTo, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock Text="指标过滤 (逗号分隔, 可选)" FontWeight="SemiBold" Margin="0,12,0,6" />
+                                <TextBox Text="{Binding TrendMetricFilter, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                                <Button Content="构建趋势" Command="{Binding RunTrendCommand}" HorizontalAlignment="Left" Padding="18,8" Margin="0,16,0,0" />
+                            </StackPanel>
+                            <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding TrendSummary}" FontWeight="SemiBold" FontSize="16" />
+                                    <TabControl MinHeight="350" Margin="0,12,0,0">
+                                        <TabItem Header="Captures">
+                                            <DataGrid ItemsSource="{Binding TrendCaptures}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="ID" Binding="{Binding CaptureId}" Width="120" />
+                                                    <DataGridTextColumn Header="Date" Binding="{Binding CaptureDate}" Width="140" />
+                                                    <DataGridTextColumn Header="Platform" Binding="{Binding Platform}" Width="80" />
+                                                    <DataGridTextColumn Header="Tag" Binding="{Binding Tag}" Width="100" />
+                                                    <DataGridTextColumn Header="Device" Binding="{Binding DeviceModel}" Width="*" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </TabItem>
+                                        <TabItem Header="Series">
+                                            <DataGrid ItemsSource="{Binding TrendSeries}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Group" Binding="{Binding Group}" Width="90" />
+                                                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="130" />
+                                                    <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" Width="60" />
+                                                    <DataGridTextColumn Header="Dir" Binding="{Binding Direction}" Width="90" />
+                                                    <DataGridTextColumn Header="Points" Binding="{Binding Points}" Width="55" />
+                                                    <DataGridTextColumn Header="Present" Binding="{Binding Present}" Width="60" />
+                                                    <DataGridTextColumn Header="Missing" Binding="{Binding Missing}" Width="60" />
+                                                    <DataGridTextColumn Header="Min" Binding="{Binding Min}" Width="80" />
+                                                    <DataGridTextColumn Header="Max" Binding="{Binding Max}" Width="80" />
+                                                    <DataGridTextColumn Header="Avg" Binding="{Binding Avg}" Width="80" />
+                                                    <DataGridTextColumn Header="First" Binding="{Binding First}" Width="80" />
+                                                    <DataGridTextColumn Header="Last" Binding="{Binding Last}" Width="80" />
+                                                    <DataGridTextColumn Header="Delta" Binding="{Binding TotalDelta}" Width="80" />
+                                                    <DataGridTextColumn Header="Delta %" Binding="{Binding TotalDeltaPercent}" Width="70" />
+                                                    <DataGridTextColumn Header="Assessment" Binding="{Binding Assessment}" Width="*" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </TabItem>
+                                        <TabItem Header="Diagnostics">
+                                            <DataGrid ItemsSource="{Binding TrendDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="90" />
+                                                    <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="90" />
+                                                    <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="70" />
+                                                    <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </TabItem>
+                                    </TabControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>        </Grid>
         <Border Grid.Row="2" Background="White" BorderBrush="#FFE2E6EA" BorderThickness="0,1,0,0" Padding="12,8"><TextBlock Text="{Binding StatusMessage}" Foreground="#FF52616B" /></Border>
     </Grid>
 </Window>

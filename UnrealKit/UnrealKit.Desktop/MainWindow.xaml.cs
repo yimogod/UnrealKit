@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using Microsoft.Win32;
 using UnrealKit.Core.Projects;
 
@@ -87,6 +87,68 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
         {
             viewModel.MemInfoInputPath = dialog.FileName;
+        }
+    }
+
+    private void BrowseScpLog_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Select static camera perf log",
+            Filter = "Log files (*.log)|*.log|Text files (*.txt)|*.txt|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
+        {
+            viewModel.ScpLogPath = dialog.FileName;
+        }
+    }
+
+    private void BrowseScpScreenshots_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Select screenshots directory",
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
+        {
+            viewModel.ScpScreenshotsDir = dialog.FolderName;
+        }
+    }
+
+    private void BrowseDiffBaseline_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Select baseline report",
+            Filter = "All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
+        {
+            viewModel.DiffBaselinePath = dialog.FileName;
+        }
+    }
+
+    private void BrowseDiffCurrent_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Select current report",
+            Filter = "All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) == true && DataContext is ShellViewModel viewModel)
+        {
+            viewModel.DiffCurrentPath = dialog.FileName;
         }
     }
 }
