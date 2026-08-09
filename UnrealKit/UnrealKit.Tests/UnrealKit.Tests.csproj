@@ -29,4 +29,7 @@
     <None Update="TestData\MemReport\*.memreport" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="TestData\StaticCamera\*.log" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

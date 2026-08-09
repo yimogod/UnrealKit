@@ -232,6 +232,7 @@ static async Task<int> RunParseAsync(string[] arguments)
         "capture-files" => await ListCaptureFilesAsync(arguments[1..]),
         "capture-meminfo" => await ParseCaptureMemInfoAsync(arguments[1..]),
         "memreport" => await ParseMemReportAsync(arguments[1..]),
+        "static-camera" => await ParseStaticCameraAsync(arguments[1..]),
         _ => FailParseUsage()
     };
 }
@@ -815,6 +816,69 @@ static void WriteMemReportParseResult(UnrealMemReportParseResult result, bool js
 }
 
 
+
+static async Task<int> ParseStaticCameraAsync(string[] options)
+{
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--input", "--screenshots", "--format" });
+    var input = GetRequiredOption(options, "--input");
+    var screenshots = GetOptionalOption(options, "--screenshots");
+    var parser = new StaticCameraPerfParser();
+    StaticCameraPerfParseResult result;
+    if (!string.IsNullOrWhiteSpace(screenshots) && Directory.Exists(screenshots))
+        result = await parser.ParseFileAsync(input, screenshots);
+    else
+        result = await parser.ParseFileAsync(input);
+    var json = IsJsonFormat(options);
+    WriteStaticCameraParseResult(result, json);
+    return result.IsSuccess ? 0 : 1;
+}
+
+static void WriteStaticCameraParseResult(StaticCameraPerfParseResult result, bool json)
+{
+    if (json)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+        return;
+    }
+
+    if (result.Report is not null)
+    {
+        Console.WriteLine($"Input: {result.InputPath}");
+        Console.WriteLine($"Cameras: {result.Report.ParseCameraCount} of {result.Report.CameraCount} ({(result.Report.Completeness == StaticCameraPerfDataCompleteness.Complete ? "complete" : "truncated")})");
+        Console.WriteLine();
+        Console.WriteLine("Device Info:");
+        if (result.Report.DeviceInfo.OsPlatform is not null) Console.WriteLine($"  OS: {result.Report.DeviceInfo.OsPlatform}");
+        if (result.Report.DeviceInfo.DeviceMake is not null) Console.WriteLine($"  Device: {result.Report.DeviceInfo.DeviceMake}");
+        if (result.Report.DeviceInfo.GpuVendor is not null) Console.WriteLine($"  GPU: {result.Report.DeviceInfo.GpuVendor}");
+        if (result.Report.DeviceInfo.VulkanAvailable.HasValue) Console.WriteLine($"  Vulkan: {result.Report.DeviceInfo.VulkanVersion ?? "available"}");
+        Console.WriteLine();
+        Console.WriteLine("Averages:");
+        Console.WriteLine($"  Frame: {result.Report.Average.FrameTimeMs} ms");
+        Console.WriteLine($"  Game:  {result.Report.Average.GameTimeMs} ms");
+        Console.WriteLine($"  Draw:  {result.Report.Average.DrawTimeMs} ms");
+        Console.WriteLine($"  RHI:   {result.Report.Average.RhiTimeMs} ms");
+        Console.WriteLine($"  GPU:   {result.Report.Average.GpuTimeMs} ms");
+        Console.WriteLine($"  DC:    {result.Report.Average.DrawCalls}");
+        Console.WriteLine($"  Prim:  {result.Report.Average.Triangles:N0}");
+        Console.WriteLine();
+        Console.WriteLine("Per-Camera:");
+        foreach (var frame in result.Report.Frames)
+        {
+            Console.WriteLine($"  [{frame.Index}] {frame.CameraName}: Frame={frame.FrameTimeMs}ms Game={frame.GameTimeMs}ms Draw={frame.DrawTimeMs}ms RHI={frame.RhiTimeMs}ms GPU={frame.GpuTimeMs}ms DC={frame.DrawCalls} Prim={frame.Triangles:N0}");
+            if (frame.Screenshots.Count > 0)
+                Console.WriteLine($"       Screenshots: {frame.Screenshots.Count}");
+        }
+    }
+
+    foreach (var diagnostic in result.Diagnostics)
+    {
+        var line = diagnostic.LineNumber is null ? string.Empty : $" line {diagnostic.LineNumber}";
+        Console.Error.WriteLine($"[{diagnostic.Severity}] {diagnostic.Code}{line}: {diagnostic.Message}");
+        if (!string.IsNullOrWhiteSpace(diagnostic.SuggestedFix))
+            Console.Error.WriteLine($"  Fix: {diagnostic.SuggestedFix}");
+    }
+}
+
 static int FailParseUsage()
 {
     Console.Error.WriteLine("Usage:");
@@ -823,6 +887,7 @@ static int FailParseUsage()
     Console.Error.WriteLine("  unrealkit parse capture-list --project <project.ukit> [--platform <platform>] [--tag <tag>]");
     Console.Error.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
     Console.Error.WriteLine("  unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]");
+    Console.Error.WriteLine("  unrealkit parse static-camera --input <log> [--screenshots <dir>] [--format json]");
     return 2;
 }
 
@@ -848,6 +913,7 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit parse capture-list --project <project.ukit> [--platform <platform>] [--tag <tag>]");
     Console.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
     Console.WriteLine("  unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]");
+    Console.WriteLine("  unrealkit parse static-camera --input <log> [--screenshots <dir>] [--format json]");
     Console.WriteLine("  unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
   Console.WriteLine("  unrealkit export memreport --input <memreport.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
 }
