@@ -22,13 +22,14 @@ public sealed class DesktopShellViewModelTests
 
         await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
         await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+        viewModel.SelectedDevice = viewModel.Devices.First(d => d.Platform == "Android");
         Assert.NotNull(viewModel.SelectedDevice);
-        Assert.Equal("R58M123ABC", viewModel.SelectedDevice?.SerialNumber);
+        Assert.Equal("R58M123ABC", viewModel.SelectedDevice?.Id);
         await ((AsyncDelegateCommand)viewModel.PushLaunchParametersCommand).ExecuteAsync();
         await ((AsyncDelegateCommand)viewModel.StartApplicationCommand).ExecuteAsync();
         await ((AsyncDelegateCommand)viewModel.DeleteLaunchParametersCommand).ExecuteAsync();
 
-        Assert.Equal("R58M123ABC", viewModel.SelectedDevice?.SerialNumber);
+        Assert.Equal("R58M123ABC", viewModel.SelectedDevice?.Id);
         Assert.Contains("R58M123ABC", viewModel.LaunchOperationSummary);
         Assert.Contains("com.example.game", viewModel.LaunchOperationSummary);
         Assert.Contains("uecommandline.txt", viewModel.LaunchParameterPreview);
@@ -53,7 +54,7 @@ public sealed class DesktopShellViewModelTests
 
         await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
         await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
-        viewModel.SelectedDevice = viewModel.Devices.Single();
+        viewModel.SelectedDevice = viewModel.Devices.First(d => d.Platform == "Android");
         await ((AsyncDelegateCommand)viewModel.DeleteLaunchParametersCommand).ExecuteAsync();
 
         Assert.True(confirmation.WasAsked);

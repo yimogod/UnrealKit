@@ -42,6 +42,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _adbPath = string.Empty;
     private string _memInfoInputPath = string.Empty;
     private string _memInfoProcessDescription = "Select a meminfo text file to begin offline parsing.";
+    private string _platform = "Android";
+    private string _win64Executable = string.Empty;
+    private string _win64WorkingDirectory = string.Empty;
     private string _memInfoParsedAt = string.Empty;
     private string _captureResultsCount = "Select a project then browse capture entries.";
     private string _exportInputPath = string.Empty;
@@ -87,7 +90,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _consoleSequenceOutput = "Run a sequence to see results here.";
     private bool _isConsoleSequenceRunning;
     private UkitProject? _project;
-    private AdbDevice? _selectedDevice;
+    private IDevice? _selectedDevice;
     private CaptureFileInfo? _selectedCaptureResultFile;
     private bool _isBusy;
     private CancellationTokenSource? _operationCancellation;
@@ -136,7 +139,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public IReadOnlyList<string> NavigationItems { get; }
-    public ObservableCollection<AdbDevice> Devices { get; } = [];
+    public ObservableCollection<IDevice> Devices { get; } = [];
     public ObservableCollection<ConsoleSequencePreset> ConsoleSequencePresets { get; } = [];
     public ObservableCollection<LaunchParameterPresetOption> LaunchParameterPresets { get; } = [];
     public ObservableCollection<MemInfoMetricOption> MemInfoMetrics { get; } = [];
@@ -222,6 +225,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string Activity { get => _activity; set => SetField(ref _activity, value); }
     public string DeviceSavedRootTemplate { get => _deviceSavedRootTemplate; set => SetField(ref _deviceSavedRootTemplate, value); }
     public string AdbPath { get => _adbPath; set => SetField(ref _adbPath, value); }
+
+    public string Platform { get => _platform; set { if (SetField(ref _platform, value)) { OnPropertyChanged(nameof(IsAndroid)); OnPropertyChanged(nameof(IsWin64)); } } }
+    public bool IsAndroid => _platform == "Android";
+    public bool IsWin64 => _platform == "Win64";
+    public string Win64Executable { get => _win64Executable; set => SetField(ref _win64Executable, value); }
+    public string Win64WorkingDirectory { get => _win64WorkingDirectory; set => SetField(ref _win64WorkingDirectory, value); }
     public string MemInfoInputPath { get => _memInfoInputPath; set { if (SetField(ref _memInfoInputPath, value)) RaiseCommandStates(); } }
     public string MemInfoProcessDescription { get => _memInfoProcessDescription; private set => SetField(ref _memInfoProcessDescription, value); }
     public string MemInfoParsedAt { get => _memInfoParsedAt; private set => SetField(ref _memInfoParsedAt, value); }
@@ -266,7 +275,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string ProjectTitle => _project is null ? "当前工程：未打开" : $"当前工程：{_project.Descriptor.ProjectName}";
     public bool IsBusy { get => _isBusy; private set { if (SetField(ref _isBusy, value)) RaiseCommandStates(); } }
 
-    public AdbDevice? SelectedDevice
+    public IDevice? SelectedDevice
     {
         get => _selectedDevice;
         set
@@ -291,7 +300,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     public string SelectedDeviceDescription => SelectedDevice is null
         ? "尚未选择设备。"
-        : $"{SelectedDevice.SerialNumber} · {SelectedDevice.Status} · {SelectedDevice.Model ?? SelectedDevice.DeviceName ?? "未知型号"}";
+        : $"{SelectedDevice.Id} · {(SelectedDevice.IsAvailable ? "device" : "offline")} · {SelectedDevice.Name ?? "未知名称"}";
 
     private bool CanCreateProject() =>
         !IsBusy &&
@@ -329,8 +338,21 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         StatusMessage = $"已连接 {WirelessEndpoint.Trim()}，请从列表中明确选择目标设备。";
     });
 
-    private async Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress> progress, CancellationToken cancellationToken) =>
-        await CreateAdbService().ListDevicesAsync(progress, cancellationToken);
+    private async Task<IReadOnlyList<IDevice>> ListDevicesAsync(IProgress<OperationProgress> progress, CancellationToken cancellationToken)
+    {
+        var devices = new List<IDevice> { new Win64Device() };
+        try
+        {
+            var adbService = CreateAdbService();
+            var adbDevices = await adbService.ListDevicesAsync(progress, cancellationToken);
+            devices.AddRange(adbDevices.Select(d => (IDevice)new AdbDeviceService.AdbDeviceWrapper(d)));
+        }
+        catch (Exception ex)
+        {
+            AddOperationLog($"ADB device enumeration failed: {ex.Message}");
+        }
+        return devices;
+    }
 
     private IAdbService CreateAdbService()
     {
@@ -338,7 +360,16 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             AddOperationLog($"{output.Timestamp:HH:mm:ss} [{output.Stream}] {output.Text}")));
     }
 
-        private void UpdateDevices(IReadOnlyList<AdbDevice> devices)
+private IDeviceService CreateDeviceServiceForDevice(IDevice device)
+{
+    return device.Platform switch
+    {
+        "Win64" => new Win64DeviceService(new ProcessRunner()),
+        _ => new AdbDeviceService(CreateAdbService())
+    };
+}
+
+        private void UpdateDevices(IReadOnlyList<IDevice> devices)
     {
         Devices.Clear();
         foreach (var device in devices) Devices.Add(device);
@@ -346,7 +377,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         if (available.Length == 1)
         {
             SelectedDevice = available[0];
-            StatusMessage = $"????????????{available[0].SerialNumber} ({available[0].Model ?? "unknown model"})?";
+            StatusMessage = $"????????????{available[0].Id} ({available[0].Name ?? "unknown"})?";
         }
         else
         {
@@ -429,7 +460,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         var result = await new LaunchParameterService(new AdbDeviceService(CreateAdbService())).PushAsync(
             _project!,
-            new LaunchParameterRequest(SelectedDevice!.SerialNumber, GetSelectedPresetNames(), CustomLaunchArguments, RemoteCommandLinePath),
+            new LaunchParameterRequest(SelectedDevice!.Id, GetSelectedPresetNames(), CustomLaunchArguments, RemoteCommandLinePath),
             progress,
             OperationCancellationToken);
         StatusMessage = $"已推送启动参数到：{result.RemotePath}";
@@ -439,19 +470,19 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private Task DeleteLaunchParametersAsync() => RunAsync("正在删除 uecommandline.txt…", async progress =>
     {
         var remotePath = new LaunchParameterService(new AdbDeviceService(CreateAdbService())).GetRemotePath(_project!.Settings, RemoteCommandLinePath);
-        var target = new LaunchOperationTarget(SelectedDevice!.SerialNumber, _project.Settings.PackageName, _project.Settings.Activity, remotePath);
+        var target = new LaunchOperationTarget(SelectedDevice!.Id, _project.Settings.PackageName, _project.Settings.Activity, remotePath);
         if (!await _confirmationService.ConfirmDeleteLaunchParametersAsync(target))
         {
             StatusMessage = "已取消删除设备启动参数。";
             return;
         }
-        await new LaunchParameterService(new AdbDeviceService(CreateAdbService())).DeleteAsync(_project, SelectedDevice!.SerialNumber, RemoteCommandLinePath, progress, OperationCancellationToken);
+        await new LaunchParameterService(new AdbDeviceService(CreateAdbService())).DeleteAsync(_project, SelectedDevice!.Id, RemoteCommandLinePath, progress, OperationCancellationToken);
         StatusMessage = $"已删除设备上的启动参数：{remotePath}";
     });
 
     private Task StartApplicationAsync() => RunAsync("正在启动应用…", async progress =>
     {
-        await new LaunchParameterService(new AdbDeviceService(CreateAdbService())).StartApplicationAsync(_project!, SelectedDevice!.SerialNumber, progress, OperationCancellationToken);
+        await new LaunchParameterService(new AdbDeviceService(CreateAdbService())).StartApplicationAsync(_project!, SelectedDevice!.Id, progress, OperationCancellationToken);
         StatusMessage = $"已发送应用启动请求：{_project!.Settings.PackageName}/{_project.Settings.Activity}";
     });
 
@@ -465,7 +496,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         try
         {
-            var plan = new CaptureService(new AdbDeviceService(CreateAdbService())).CreatePlan(new CaptureRequest(_project, SelectedDevice, CaptureTag));
+            var plan = new CaptureService(CreateDeviceServiceForDevice(SelectedDevice!)).CreatePlan(new CaptureRequest(_project, SelectedDevice, CaptureTag));
             CaptureArchivePreview = $"归档目录：{plan.CaptureDirectory}{Environment.NewLine}设备 Saved：{plan.DeviceSavedDirectory}";
         }
         catch (Exception exception)
@@ -477,7 +508,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private Task RunCaptureAsync() => RunAsync("正在采集并归档原始数据…", async progress =>
     {
         var request = new CaptureRequest(_project!, SelectedDevice!, CaptureTag);
-        var result = await new CaptureService(new AdbDeviceService(CreateAdbService())).CaptureAsync(request, progress, OperationCancellationToken);
+        var result = await new CaptureService(CreateDeviceServiceForDevice(SelectedDevice!)).CaptureAsync(request, progress, OperationCancellationToken);
         CaptureArchivePreview = $"归档目录：{result.Plan.CaptureDirectory}{Environment.NewLine}清单：{result.ManifestPath}";
         StatusMessage = $"采集完成：{result.Plan.CaptureDirectory}";
     });
@@ -590,7 +621,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         try
         {
             var resolvedPath = remotePath ?? new LaunchParameterService(new AdbDeviceService(CreateAdbService())).GetRemotePath(_project.Settings, RemoteCommandLinePath);
-            LaunchOperationSummary = $"设备：{SelectedDevice.SerialNumber}{Environment.NewLine}" +
+            LaunchOperationSummary = $"设备：{SelectedDevice.Id}{Environment.NewLine}" +
                                    $"包名：{_project.Settings.PackageName}{Environment.NewLine}" +
                                    $"Activity：{_project.Settings.Activity}{Environment.NewLine}" +
                                    $"远端路径：{resolvedPath}";
@@ -1120,7 +1151,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         try
         {
             var result = await consoleService.SendAsync(
-                _selectedDevice.SerialNumber,
+                _selectedDevice.Id,
                 ConsoleCommand.Create(_consoleCommandText),
                 _project?.Settings.PackageName);
 
@@ -1163,7 +1194,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             else { ConsoleSequenceOutput = "No sequence selected and no inline commands provided."; return; }
 
             ConsoleSequenceOutput = $"Running sequence: {sequence.Name} ({sequence.Steps.Count} steps)...`n";
-            var request = new SequenceExecutionRequest(sequence, _selectedDevice.SerialNumber, _project?.Settings.PackageName);
+            var request = new SequenceExecutionRequest(sequence, _selectedDevice.Id, _project?.Settings.PackageName);
             var result = await consoleService.RunSequenceAsync(request);
 
             var sb = new System.Text.StringBuilder();
