@@ -1,4 +1,4 @@
-using UnrealKit.Core.Adb;
+﻿using UnrealKit.Core.Adb;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 
@@ -69,6 +69,16 @@ public sealed class AdbDeviceService : IDeviceService
         CancellationToken cancellationToken = default)
     {
         return _adb.StartApplicationAsync(device.Id, target, activity ?? string.Empty, progress, cancellationToken);
+    }
+
+    
+    public Task<ProcessExecutionResult> StopApplicationAsync(
+        IDevice device,
+        string target,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        return _adb.ForceStopApplicationAsync(device.Id, target, progress, cancellationToken);
     }
 
     public Task<ProcessExecutionResult> PushFileAsync(

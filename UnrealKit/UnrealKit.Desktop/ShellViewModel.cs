@@ -1144,20 +1144,34 @@ private IDeviceService CreateDeviceServiceForDevice(IDevice device)
     {
         if (string.IsNullOrWhiteSpace(_consoleCommandText) || _selectedDevice is null) return;
 
-        var adbService = _adbServiceFactory.Create(_project?.Settings, output: null);
-        var consoleService = new ConsoleCommandService(adbService);
         ConsoleIsSending = true;
         ConsoleOutput = $"Sending: {_consoleCommandText}...";
         try
         {
-            var result = await consoleService.SendAsync(
-                _selectedDevice.Id,
-                ConsoleCommand.Create(_consoleCommandText),
-                _project?.Settings.PackageName);
+            if (_selectedDevice.Platform == "Win64")
+            {
+                var deviceService = CreateDeviceServiceForDevice(_selectedDevice);
+                var result = await deviceService.SendConsoleCommandAsync(_selectedDevice, _consoleCommandText,
+                    target: _project?.Settings.PackageName,
+                    cancellationToken: OperationCancellationToken);
 
-            ConsoleOutput = result.Succeeded
-                ? $"[OK] {_consoleCommandText}`nExit: {result.ExitCode}`n{result.StandardOutput}"
-                : $"[FAIL] {_consoleCommandText}`nExit: {result.ExitCode}`n{result.StandardError}";
+                ConsoleOutput = result.ExitCode == 0
+                    ? $"[OK] {_consoleCommandText}`n{result.StandardOutput}"
+                    : $"[FAIL] {_consoleCommandText}`nExit: {result.ExitCode}`n{result.StandardError}";
+            }
+            else
+            {
+                var adbService = _adbServiceFactory.Create(_project?.Settings, output: null);
+                var consoleService = new ConsoleCommandService(adbService);
+                var result = await consoleService.SendAsync(
+                    _selectedDevice.Id,
+                    ConsoleCommand.Create(_consoleCommandText),
+                    _project?.Settings.PackageName);
+
+                ConsoleOutput = result.Succeeded
+                    ? $"[OK] {_consoleCommandText}`nExit: {result.ExitCode}`n{result.StandardOutput}"
+                    : $"[FAIL] {_consoleCommandText}`nExit: {result.ExitCode}`n{result.StandardError}";
+            }
         }
         catch (Exception ex)
         {

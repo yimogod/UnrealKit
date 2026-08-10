@@ -43,7 +43,16 @@ public interface IAdbService
     /// <summary>
     /// 流式读取设备 logcat 输出，返回可取消的异步行流。
     /// </summary>
-    IAsyncEnumerable<string> StreamLogcatAsync(
+
+    /// <summary>
+    /// 強制停止設備上的應用。
+    /// </summary>
+    Task<ProcessExecutionResult> ForceStopApplicationAsync(
+        string serialNumber,
+        string packageName,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+        IAsyncEnumerable<string> StreamLogcatAsync(
         string serialNumber,
         string? filter = null,
         CancellationToken cancellationToken = default);

@@ -83,6 +83,14 @@ public sealed class AdbService : IAdbService
     }
 
     
+    
+    public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ValidateSerialNumber(serialNumber);
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageName);
+        return RunDeviceCommandAsync(serialNumber, ["shell", "am", "force-stop", packageName], progress, cancellationToken);
+    }
+
     public Task<ProcessExecutionResult> SendConsoleCommandAsync(string serialNumber, string command, string? packageName = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         ValidateSerialNumber(serialNumber);

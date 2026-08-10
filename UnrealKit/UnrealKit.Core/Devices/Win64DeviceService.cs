@@ -1,4 +1,4 @@
-using UnrealKit.Core.Operations;
+﻿using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 
 namespace UnrealKit.Core.Devices;
@@ -210,6 +210,58 @@ public sealed class Win64DeviceService : IDeviceService
     }
 
     /// <summary>
+    
+    /// <summary>
+    /// Win64 上停止应用即终止目标进程。
+    /// </summary>
+    public Task<ProcessExecutionResult> StopApplicationAsync(
+        IDevice device,
+        string target,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(target);
+
+        try
+        {
+            var processes = System.Diagnostics.Process.GetProcessesByName(target);
+            if (processes.Length == 0)
+            {
+                return Task.FromResult(new ProcessExecutionResult(1, string.Empty,
+                    $"No process named '{target}' was found.",
+                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+            }
+
+            var killed = 0;
+            foreach (var p in processes)
+            {
+                try
+                {
+                    p.Kill();
+                    p.Dispose();
+                    killed++;
+                }
+                catch (Exception ex)
+                {
+                    p.Dispose();
+                    return Task.FromResult(new ProcessExecutionResult(1, string.Empty,
+                        $"Failed to kill process '{target}' (PID {p.Id}): {ex.Message}",
+                        DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+                }
+            }
+
+            return Task.FromResult(new ProcessExecutionResult(0,
+                $"Stopped {killed} process(es) named '{target}'.",
+                string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new ProcessExecutionResult(1, string.Empty, ex.Message,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        }
+    }
+
     /// Win64 上 "推送" 文件即复制本地文件。
     /// </summary>
     public Task<ProcessExecutionResult> PushFileAsync(

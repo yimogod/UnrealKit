@@ -112,6 +112,8 @@ public sealed class DesktopShellViewModelTests
         public Task<ProcessExecutionResult> PullDirectoryAsync(string serialNumber, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.PullDirectoryAsync(serialNumber, remotePath, localDirectory, progress, cancellationToken);
         public async Task<ProcessExecutionResult> DeleteRemoteFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { Write("adb shell rm"); return await inner.DeleteRemoteFileAsync(serialNumber, remotePath, progress, cancellationToken); }
         public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.RunDumpsysAsync(serialNumber, packageName, progress, cancellationToken);
+        
+        public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.ForceStopApplicationAsync(serialNumber, packageName, progress, cancellationToken);
         public Task<ProcessExecutionResult> SendConsoleCommandAsync(string serialNumber, string command, string? packageName = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.SendConsoleCommandAsync(serialNumber, command, packageName, progress, cancellationToken);
         public IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, CancellationToken cancellationToken = default) => inner.StreamLogcatAsync(serialNumber, filter, cancellationToken);
     }
@@ -135,6 +137,8 @@ public sealed class DesktopShellViewModelTests
         public Task<ProcessExecutionResult> PullDirectoryAsync(string serialNumber, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> DeleteRemoteFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { DeleteSerialNumber = serialNumber; return Task.FromResult(Success); }
         public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        
+        public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
         public Task<ProcessExecutionResult> SendConsoleCommandAsync(string serialNumber, string command, string? packageName = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public async IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await System.Threading.Tasks.Task.CompletedTask; yield break; }
     }

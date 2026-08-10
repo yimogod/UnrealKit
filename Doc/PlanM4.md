@@ -2,7 +2,7 @@
 
 基于第二阶段 P6（Win64 设备基础支持）的延续，将 Win64 支持从 Core 层扩展到全链路（WPF Desktop GUI + Capture + 启动闭环），使 Windows 版 UE 游戏与 Android 获得同等的工具链体验。
 
-最后更新：2026-08-10 | 框架 .NET 9 / WPF | P1-P3 完成 | 构建 0 警告 140/140 测试通过
+最后更新：2026-08-10 | 框架 .NET 9 / WPF | P1-P5 完成 | 构建 0 警告 140/140 测试通过
 
 ---
 
@@ -50,16 +50,16 @@
 - [x] Android 选中时隐藏 Win64 字段（Android 字段同样条件显示）
 - [x] 保存/加载时正确读写 `DefaultGame.ini` 的 `Platform` / `Win64Executable` / `Win64WorkingDirectory`
 
-### P4：Win64 进程启动/停止闭环 ⬜
+### P4：Win64 进程启动/停止闭环 ✅
 
-- [ ] 桌面启动按钮适配 Win64（调用 `Win64DeviceService.StartApplicationAsync`）
-- [ ] 启动状态反馈（进程 PID、是否成功）
-- [ ] 停止进程支持
+- [x] 桌面启动按钮适配 Win64（`ShellViewModel.StartApplicationAsync` 按平台分发）
+- [x] 启动状态反馈（进程路径、退出码）
+- [x] 停止进程支持（`StopApplicationAsync`：Android `am force-stop` / Win64 `Process.Kill()`）
 
-### P5：Win64 控制台指令（可选）⬜
+### P5：Win64 控制台指令 ✅
 
-- [ ] Win64 上 `SendConsoleCommandAsync`：通过 UDP/TCP 本地回环发送 UE 控制台指令
-- [ ] CLI + GUI 适配
+- [x] Win64 上 `SendConsoleCommandAsync`：通过 UE Web Remote Control HTTP API（`PUT localhost:30010/remote/object/call`）
+- [x] Desktop GUI 控制台页适配：`SendConsoleCommandAsync` 按平台分发（Android `am broadcast` / Win64 HTTP）
 
 ### P6：测试与构建验证 ✅
 
@@ -77,6 +77,13 @@
 | `UnrealKit.Desktop/ShellViewModel.cs` | **修改**：AdbDevice → IDevice；新增 Platform/Win64 属性；采集使用工厂 |
 | `UnrealKit.Desktop/MainWindow.xaml` | **修改**：设备列表绑定；新增 Platform 选择器 + Win64 字段 |
 | `UnrealKit.Tests/DesktopShellViewModelTests.cs` | **修改**：适配 IDevice API |
+| `UnrealKit.Core/Adb/IAdbService.cs` | **修改**：新增 `ForceStopApplicationAsync` |
+| `UnrealKit.Core/Adb/AdbService.cs` | **修改**：实现 `ForceStopApplicationAsync` |
+| `UnrealKit.Core/Devices/IDeviceService.cs` | **修改**：新增 `StopApplicationAsync` |
+| `UnrealKit.Core/Devices/AdbDeviceService.cs` | **修改**：实现 `StopApplicationAsync` |
+| `UnrealKit.Core/Devices/Win64DeviceService.cs` | **修改**：实现 `StopApplicationAsync`（进程 Kill） |
+| `UnrealKit.Tests/CaptureServiceTests.cs` | **修改**：FakeAdbService 新增 `ForceStopApplicationAsync` |
+| `UnrealKit.Tests/LaunchParameterServiceTests.cs` | **修改**：RecordingAdbService 新增 `ForceStopApplicationAsync` |
 
 ---
 
@@ -91,6 +98,6 @@
 1. ✅ **P1 Desktop 设备抽象层** -- `IDevice` 替换 `AdbDevice`
 2. ✅ **P2 Desktop 采集统一** -- `IDeviceServiceFactory` + Win64 采集流程
 3. ✅ **P3 Desktop Win64 项目设置** -- Platform 选择 + 字段切换
-4. ⬜ **P4 Win64 进程启停** -- Start/Stop 闭环
-5. ⬜ **P5 Win64 控制台指令** -- 可选远期
+4. ✅ **P4 Win64 进程启停** -- Start/Stop 闭环
+5. ✅ **P5 Win64 控制台指令** -- HTTP Remote Control
 6. ⬜ **P6 端到端集成测试** -- Win64 Capture 全链路

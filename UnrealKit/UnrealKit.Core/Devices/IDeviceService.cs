@@ -1,4 +1,4 @@
-using UnrealKit.Core.Operations;
+﻿using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 
 namespace UnrealKit.Core.Devices;
@@ -64,7 +64,17 @@ public interface IDeviceService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 推送文件到设备。
+
+    /// <summary>
+    /// 停止應用。
+    /// </summary>
+    Task<ProcessExecutionResult> StopApplicationAsync(
+        IDevice device,
+        string target,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+        /// 推送文件到设备。
     /// </summary>
     Task<ProcessExecutionResult> PushFileAsync(
         IDevice device,
