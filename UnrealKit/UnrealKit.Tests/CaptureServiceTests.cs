@@ -1,4 +1,5 @@
 ﻿using UnrealKit.Core.Adb;
+using UnrealKit.Core.Console;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Capture;
 using UnrealKit.Core.Operations;
@@ -29,6 +30,95 @@ public sealed class CaptureServiceTests : IDisposable
         Assert.True(File.Exists(result.ManifestPath));
         Assert.Equal("Nightly", result.Manifest.Tag);
         Assert.All(result.Manifest.InputFiles, file => Assert.NotEmpty(file.Sha256));
+    }
+
+    [Fact]
+    public async Task CaptureAsync_PreSequenceFailure_ThrowsInvalidOperationException()
+    {
+        var project = await new ProjectService().CreateProjectAsync(new CreateProjectRequest(Path.Combine(_temporaryDirectory, "PreSeqProject"), "PreSeqProject"));
+
+        var settings = project.Project.Settings;
+        var updatedSettings = settings with
+        {
+            PackageName = "com.example.preseq",
+            ConsoleSequences = [ConsoleSequencePreset.Create("MyPreSeq", "stat fps")],
+            PreCaptureSequence = "MyPreSeq"
+        };
+        var configuredProject = new UkitProject(project.Project.ProjectFilePath, project.Project.RootDirectory, project.Project.Descriptor, updatedSettings);
+
+        var failedSeq = new CommandSequenceDefinition("MyPreSeq", null, [new SequenceStep(SequenceStepType.Tag, Marker: "fail")]);
+        var failedResult = new SequenceExecutionResult(
+            failedSeq,
+            [new SequenceStepResult(0, Error: "Command failed with exit code 1")],
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow);
+
+        var fakeConsoleService = new FailingConsoleService(failedResult);
+        var service = new CaptureService(new AdbDeviceService(new FakeAdbService()), fakeConsoleService);
+        var device = new AdbDevice("device-01", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, string.Empty);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.CaptureAsync(new CaptureRequest(configuredProject, device, "Nightly")));
+
+        Assert.Contains("Pre-capture sequence 'MyPreSeq' failed", ex.Message);
+        Assert.Contains("Command failed with exit code 1", ex.Message);
+    }
+
+    [Fact]
+    public async Task CaptureAsync_PostSequenceFailure_CompletesWithWarning()
+    {
+        var project = await new ProjectService().CreateProjectAsync(new CreateProjectRequest(Path.Combine(_temporaryDirectory, "PostSeqProject"), "PostSeqProject"));
+
+        var settings = project.Project.Settings;
+        var updatedSettings = settings with
+        {
+            PackageName = "com.example.postseq",
+            ConsoleSequences = [ConsoleSequencePreset.Create("MyPostSeq", "stat fps")],
+            PostCaptureSequence = "MyPostSeq"
+        };
+        var configuredProject = new UkitProject(project.Project.ProjectFilePath, project.Project.RootDirectory, project.Project.Descriptor, updatedSettings);
+
+        var failedSeq = new CommandSequenceDefinition("MyPostSeq", null, [new SequenceStep(SequenceStepType.Command)]);
+        var failedResult = new SequenceExecutionResult(
+            failedSeq,
+            [new SequenceStepResult(0, Error: "Command timed out")],
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow);
+
+        var fakeConsoleService = new FailingConsoleService(failedResult);
+        var service = new CaptureService(new AdbDeviceService(new FakeAdbService()), fakeConsoleService);
+        var device = new AdbDevice("device-01", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, string.Empty);
+
+        var progressMessages = new List<OperationProgress>();
+        var progress = new Progress<OperationProgress>(msg => progressMessages.Add(msg));
+
+        // Should complete without throwing — post-sequence failure is a warning, not an error.
+        var result = await service.CaptureAsync(new CaptureRequest(configuredProject, device, "Nightly"), progress);
+
+        Assert.NotNull(result);
+        Assert.True(File.Exists(result.ManifestPath));
+        var warning = Assert.Single(progressMessages, p => p.Stage == "PostSequence" && p.Message.Contains("had 1 failed step"));
+        Assert.Contains("MyPostSeq", warning.Message);
+        Assert.Contains("had 1 failed step", warning.Message);
+    }
+
+    private sealed class FailingConsoleService : IConsoleCommandService
+    {
+        private readonly SequenceExecutionResult _resultToReturn;
+
+        public FailingConsoleService(SequenceExecutionResult resultToReturn)
+        {
+            _resultToReturn = resultToReturn;
+        }
+
+        public Task<ConsoleCommandResult> SendAsync(string serialNumber, ConsoleCommand command, string? packageName = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(new ConsoleCommandResult(command, 1, string.Empty, "error", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        public Task<SequenceExecutionResult> RunSequenceAsync(SequenceExecutionRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(_resultToReturn);
+
+        public Task<LogcatConditionResult> RunConditionalAsync(string serialNumber, LogcatConditionStep condition, string? packageName = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(LogcatConditionResult.Timeout(condition));
     }
 
     public void Dispose()

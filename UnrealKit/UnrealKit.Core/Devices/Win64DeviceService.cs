@@ -46,9 +46,10 @@ public sealed class Win64DeviceService : IDeviceService
             var processes = System.Diagnostics.Process.GetProcessesByName(target);
             if (processes.Length == 0)
             {
-                return Task.FromResult(new ProcessExecutionResult(1, string.Empty,
-                    $"No process named '{target}' was found. Ensure the application is running.",
-                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+                throw new DeviceCommandException($"No process named '{target}' was found. Ensure the application is running.",
+                    new ProcessExecutionResult(1, string.Empty,
+                        $"No process named '{target}' was found. Ensure the application is running.",
+                        DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
             }
 
             // Use the one with the most memory as the primary if multiple match
@@ -114,10 +115,15 @@ public sealed class Win64DeviceService : IDeviceService
             return Task.FromResult(new ProcessExecutionResult(0, output, string.Empty,
                 DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
         }
-        catch (Exception ex) when (ex is not InvalidOperationException && ex is not OperationCanceledException)
+        catch (DeviceCommandException)
         {
-            return Task.FromResult(new ProcessExecutionResult(1, string.Empty, ex.Message,
-                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+            throw;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new DeviceCommandException($"Failed to capture memory for process '{target}': {ex.Message}",
+                new ProcessExecutionResult(1, string.Empty, ex.Message,
+                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), ex);
         }
     }
 
@@ -140,7 +146,9 @@ public sealed class Win64DeviceService : IDeviceService
         {
             var source = Path.GetFullPath(remotePath);
             if (!Directory.Exists(source))
-                throw new DirectoryNotFoundException($"Source directory not found: {source}");
+                throw new DeviceCommandException($"Source directory not found: {source}",
+                    new ProcessExecutionResult(1, string.Empty, $"Source directory not found: {source}",
+                        DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
 
             var dest = Path.GetFullPath(localDirectory);
             progress?.Report(new OperationProgress("pull", "Copying", null, null, $"Copying {source} to {dest}."));
@@ -150,10 +158,15 @@ public sealed class Win64DeviceService : IDeviceService
             return Task.FromResult(new ProcessExecutionResult(0, $"Copied {source} to {dest}.", string.Empty,
                 DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
         }
+        catch (DeviceCommandException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            return Task.FromResult(new ProcessExecutionResult(1, string.Empty, ex.Message,
-                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+            throw new DeviceCommandException($"Failed to pull directory '{remotePath}': {ex.Message}",
+                new ProcessExecutionResult(1, string.Empty, ex.Message,
+                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), ex);
         }
     }
 
@@ -167,9 +180,10 @@ public sealed class Win64DeviceService : IDeviceService
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(new ProcessExecutionResult(1, string.Empty,
-            "Console commands are not supported on Win64 devices in this version.",
-            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        throw new DeviceCommandException("Console commands are not supported on Win64 devices in this version.",
+            new ProcessExecutionResult(1, string.Empty,
+                "Console commands are not supported on Win64 devices in this version.",
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
     }
 
     /// <summary>
@@ -198,8 +212,9 @@ public sealed class Win64DeviceService : IDeviceService
         ArgumentException.ThrowIfNullOrWhiteSpace(target);
 
         if (!File.Exists(target))
-            return new ProcessExecutionResult(1, string.Empty, $"Executable not found: {target}",
-                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+            throw new DeviceCommandException($"Executable not found: {target}",
+                new ProcessExecutionResult(1, string.Empty, $"Executable not found: {target}",
+                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
 
         progress?.Report(new OperationProgress("start-app", "Launching", null, null, $"Starting {target}."));
 
@@ -209,8 +224,6 @@ public sealed class Win64DeviceService : IDeviceService
             cancellationToken);
     }
 
-    /// <summary>
-    
     /// <summary>
     /// Win64 上停止应用即终止目标进程。
     /// </summary>
@@ -228,9 +241,10 @@ public sealed class Win64DeviceService : IDeviceService
             var processes = System.Diagnostics.Process.GetProcessesByName(target);
             if (processes.Length == 0)
             {
-                return Task.FromResult(new ProcessExecutionResult(1, string.Empty,
-                    $"No process named '{target}' was found.",
-                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+                throw new DeviceCommandException($"No process named '{target}' was found.",
+                    new ProcessExecutionResult(1, string.Empty,
+                        $"No process named '{target}' was found.",
+                        DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
             }
 
             var killed = 0;
@@ -245,9 +259,11 @@ public sealed class Win64DeviceService : IDeviceService
                 catch (Exception ex)
                 {
                     p.Dispose();
-                    return Task.FromResult(new ProcessExecutionResult(1, string.Empty,
+                    throw new DeviceCommandException(
                         $"Failed to kill process '{target}' (PID {p.Id}): {ex.Message}",
-                        DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+                        new ProcessExecutionResult(1, string.Empty,
+                            $"Failed to kill process '{target}' (PID {p.Id}): {ex.Message}",
+                            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), ex);
                 }
             }
 
@@ -255,13 +271,19 @@ public sealed class Win64DeviceService : IDeviceService
                 $"Stopped {killed} process(es) named '{target}'.",
                 string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
         }
+        catch (DeviceCommandException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            return Task.FromResult(new ProcessExecutionResult(1, string.Empty, ex.Message,
-                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+            throw new DeviceCommandException($"Failed to stop application '{target}': {ex.Message}",
+                new ProcessExecutionResult(1, string.Empty, ex.Message,
+                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), ex);
         }
     }
 
+    /// <summary>
     /// Win64 上 "推送" 文件即复制本地文件。
     /// </summary>
     public Task<ProcessExecutionResult> PushFileAsync(
@@ -280,7 +302,9 @@ public sealed class Win64DeviceService : IDeviceService
         {
             var source = Path.GetFullPath(localPath);
             if (!File.Exists(source))
-                throw new FileNotFoundException($"Source file not found: {source}");
+                throw new DeviceCommandException($"Source file not found: {source}",
+                    new ProcessExecutionResult(1, string.Empty, $"Source file not found: {source}",
+                        DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
 
             var dest = Path.GetFullPath(remotePath);
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
@@ -289,10 +313,15 @@ public sealed class Win64DeviceService : IDeviceService
             return Task.FromResult(new ProcessExecutionResult(0, $"Copied {source} to {dest}.", string.Empty,
                 DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
         }
+        catch (DeviceCommandException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            return Task.FromResult(new ProcessExecutionResult(1, string.Empty, ex.Message,
-                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+            throw new DeviceCommandException($"Failed to push file '{localPath}': {ex.Message}",
+                new ProcessExecutionResult(1, string.Empty, ex.Message,
+                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), ex);
         }
     }
 
@@ -322,10 +351,15 @@ public sealed class Win64DeviceService : IDeviceService
             return Task.FromResult(new ProcessExecutionResult(0, $"File not found (no action taken): {path}.", string.Empty,
                 DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
         }
+        catch (DeviceCommandException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            return Task.FromResult(new ProcessExecutionResult(1, string.Empty, ex.Message,
-                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+            throw new DeviceCommandException($"Failed to delete remote file '{remotePath}': {ex.Message}",
+                new ProcessExecutionResult(1, string.Empty, ex.Message,
+                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), ex);
         }
     }
 

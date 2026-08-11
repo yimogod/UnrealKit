@@ -39,12 +39,16 @@ static async Task<int> RunAsync(string[] arguments)
             _ => FailUnknownCommand()
         };
     }
-    catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or IOException or UnauthorizedAccessException or AdbCommandException or TimeoutException)
+    catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or IOException or UnauthorizedAccessException or AdbCommandException or DeviceCommandException or TimeoutException)
     {
         Console.Error.WriteLine($"Error: {exception.Message}");
         if (exception is AdbCommandException adbException)
         {
             WriteAdbFailure(adbException);
+        }
+        else if (exception is DeviceCommandException deviceException)
+        {
+            WriteDeviceCommandFailure(deviceException);
         }
         else if (exception is AdbPathResolutionException pathException)
         {
@@ -222,14 +226,16 @@ static async Task<int> RunConsoleSequenceAsync(string[] options, string? adbPath
     foreach (var stepResult in result.StepResults)
     {
         var status = stepResult.Succeeded ? "OK" : "FAIL";
-        var desc = stepResult.Step.Type switch
-        {
-            SequenceStepType.Command => $"CMD: {stepResult.Step.Command?.Command}",
-            SequenceStepType.Wait => $"WAIT: {stepResult.Step.WaitDuration?.TotalSeconds ?? 0:F1}s",
-            SequenceStepType.Tag => $"TAG: {stepResult.Step.Marker}",
-            SequenceStepType.Group => $"GROUP: {stepResult.Step.Marker}",
-            _ => stepResult.Step.Type.ToString()
-        };
+        var desc = stepResult.Step is { } step
+            ? step.Type switch
+            {
+                SequenceStepType.Command => $"CMD: {step.Command?.Command}",
+                SequenceStepType.Wait => $"WAIT: {step.WaitDuration?.TotalSeconds ?? 0:F1}s",
+                SequenceStepType.Tag => $"TAG: {step.Marker}",
+                SequenceStepType.Group => $"GROUP: {step.Marker}",
+                _ => step.Type.ToString()
+            }
+            : "(timeout/cancelled)";
 
         Console.WriteLine($"  [{status}] Step {stepResult.StepIndex + 1}: {desc}");
         if (stepResult.CommandResult is { } cmdResult)
@@ -1364,6 +1370,16 @@ static int WriteValidation(ProjectValidationResult validation)
 }
 
 static void WriteAdbFailure(AdbCommandException exception)
+{
+    Console.Error.WriteLine($"Exit code: {exception.Result.ExitCode}");
+    if (!string.IsNullOrWhiteSpace(exception.Result.StandardError))
+    {
+        Console.Error.WriteLine("stderr:");
+        Console.Error.WriteLine(exception.Result.StandardError.TrimEnd());
+    }
+}
+
+static void WriteDeviceCommandFailure(DeviceCommandException exception)
 {
     Console.Error.WriteLine($"Exit code: {exception.Result.ExitCode}");
     if (!string.IsNullOrWhiteSpace(exception.Result.StandardError))

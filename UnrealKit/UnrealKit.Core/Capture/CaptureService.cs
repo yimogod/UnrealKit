@@ -1,3 +1,4 @@
+using System.Linq;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Console;
 using UnrealKit.Core.Operations;
@@ -68,9 +69,16 @@ public sealed class CaptureService : ICaptureService
             {
                 progress?.Report(new OperationProgress("capture", "PreSequence", 0, 4, $"Running pre-capture sequence: {preSequenceName}"));
                 var seqDef = preset.ToSequenceDefinition();
-                await _consoleService.RunSequenceAsync(
+                var preResult = await _consoleService.RunSequenceAsync(
                     new SequenceExecutionRequest(seqDef, request.Device.Id, request.Project.Settings.PackageName),
                     progress, cancellationToken);
+                if (!preResult.Succeeded)
+                {
+                    var failedSteps = preResult.StepResults.Where(r => !r.Succeeded);
+                    var errorDetails = string.Join("; ", failedSteps.Select(s => s.Error ?? $"step {s.StepIndex}"));
+                    throw new InvalidOperationException(
+                        $"Pre-capture sequence '{preSequenceName}' failed: {errorDetails}. Capture aborted to prevent collecting data from an incorrect game state.");
+                }
             }
         }
 
@@ -107,9 +115,14 @@ public sealed class CaptureService : ICaptureService
             {
                 progress?.Report(new OperationProgress("capture", "PostSequence", null, null, $"Running post-capture sequence: {postSequenceName}"));
                 var seqDef = preset.ToSequenceDefinition();
-                await _consoleService.RunSequenceAsync(
+                var postResult = await _consoleService.RunSequenceAsync(
                     new SequenceExecutionRequest(seqDef, request.Device.Id, request.Project.Settings.PackageName),
                     progress, cancellationToken);
+                if (!postResult.Succeeded)
+                {
+                    progress?.Report(new OperationProgress("capture", "PostSequence", null, null,
+                        $"Warning: Post-capture sequence '{postSequenceName}' had {postResult.FailedSteps} failed step(s)."));
+                }
             }
         }
 

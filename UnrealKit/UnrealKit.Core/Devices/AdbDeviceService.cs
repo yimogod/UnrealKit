@@ -5,7 +5,8 @@ using UnrealKit.Core.Processes;
 namespace UnrealKit.Core.Devices;
 
 /// <summary>
-/// IDeviceService 的 Android ADB 实现，适配现有 IAdbService。
+/// IDeviceService implementation that wraps IAdbService and normalizes ADB errors into the common
+/// throw-on-failure protocol via RunRequiredAsync.
 /// </summary>
 public sealed class AdbDeviceService : IDeviceService
 {
@@ -30,7 +31,7 @@ public sealed class AdbDeviceService : IDeviceService
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return _adb.RunDumpsysAsync(device.Id, target, progress, cancellationToken);
+        return RunRequiredAsync(_adb.RunDumpsysAsync(device.Id, target, progress, cancellationToken));
     }
 
     public Task<ProcessExecutionResult> PullDirectoryAsync(
@@ -40,7 +41,7 @@ public sealed class AdbDeviceService : IDeviceService
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return _adb.PullDirectoryAsync(device.Id, remotePath, localDirectory, progress, cancellationToken);
+        return RunRequiredAsync(_adb.PullDirectoryAsync(device.Id, remotePath, localDirectory, progress, cancellationToken));
     }
 
     public Task<ProcessExecutionResult> SendConsoleCommandAsync(
@@ -50,7 +51,7 @@ public sealed class AdbDeviceService : IDeviceService
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return _adb.SendConsoleCommandAsync(device.Id, command, target, progress, cancellationToken);
+        return RunRequiredAsync(_adb.SendConsoleCommandAsync(device.Id, command, target, progress, cancellationToken));
     }
 
     public IAsyncEnumerable<string> StreamLogAsync(
@@ -68,17 +69,16 @@ public sealed class AdbDeviceService : IDeviceService
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return _adb.StartApplicationAsync(device.Id, target, activity ?? string.Empty, progress, cancellationToken);
+        return RunRequiredAsync(_adb.StartApplicationAsync(device.Id, target, activity ?? string.Empty, progress, cancellationToken));
     }
 
-    
     public Task<ProcessExecutionResult> StopApplicationAsync(
         IDevice device,
         string target,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return _adb.ForceStopApplicationAsync(device.Id, target, progress, cancellationToken);
+        return RunRequiredAsync(_adb.ForceStopApplicationAsync(device.Id, target, progress, cancellationToken));
     }
 
     public Task<ProcessExecutionResult> PushFileAsync(
@@ -88,7 +88,7 @@ public sealed class AdbDeviceService : IDeviceService
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return _adb.PushFileAsync(device.Id, localPath, remotePath, progress, cancellationToken);
+        return RunRequiredAsync(_adb.PushFileAsync(device.Id, localPath, remotePath, progress, cancellationToken));
     }
 
     public Task<ProcessExecutionResult> DeleteRemoteFileAsync(
@@ -97,11 +97,11 @@ public sealed class AdbDeviceService : IDeviceService
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return _adb.DeleteRemoteFileAsync(device.Id, remotePath, progress, cancellationToken);
+        return RunRequiredAsync(_adb.DeleteRemoteFileAsync(device.Id, remotePath, progress, cancellationToken));
     }
 
     /// <summary>
-    /// 将 AdbDevice 包装为 IDevice 的公开适配器，供 CLI / Desktop 层使用。
+    /// Adapts an AdbDevice into an IDevice for CLI / Desktop use.
     /// </summary>
     public sealed class AdbDeviceWrapper : IDevice
     {
@@ -116,5 +116,31 @@ public sealed class AdbDeviceService : IDeviceService
         public string Name => _adbDevice.Model ?? _adbDevice.SerialNumber;
         public string Platform => "Android";
         public bool IsAvailable => _adbDevice.IsAvailable;
+    }
+
+    private static async Task<ProcessExecutionResult> RunRequiredAsync(Task<ProcessExecutionResult> task)
+    {
+        ProcessExecutionResult result;
+        try
+        {
+            result = await task;
+        }
+        catch (AdbCommandException adbEx)
+        {
+            throw new DeviceCommandException(adbEx.Message, adbEx.Result, adbEx);
+        }
+        catch (AdbPathResolutionException pathEx)
+        {
+            throw new DeviceCommandException(pathEx.Message,
+                new ProcessExecutionResult(1, string.Empty, pathEx.Message, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+                pathEx);
+        }
+
+        if (!result.Succeeded)
+        {
+            throw new DeviceCommandException($"Device operation failed with exit code {result.ExitCode}: {result.StandardError}", result);
+        }
+
+        return result;
     }
 }

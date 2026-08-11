@@ -1217,14 +1217,16 @@ private IDeviceService CreateDeviceServiceForDevice(IDevice device)
             foreach (var stepResult in result.StepResults)
             {
                 var status = stepResult.Succeeded ? "OK" : "FAIL";
-                var desc = stepResult.Step.Type switch
-                {
-                    SequenceStepType.Command => $"CMD: {stepResult.Step.Command?.Command}",
-                    SequenceStepType.Wait => $"WAIT: {stepResult.Step.WaitDuration?.TotalSeconds ?? 0:F1}s",
-                    SequenceStepType.Tag => $"TAG: {stepResult.Step.Marker}",
-                    SequenceStepType.Group => $"GROUP: {stepResult.Step.Marker}",
-                    _ => stepResult.Step.Type.ToString()
-                };
+                var desc = stepResult.Step is { } step
+                    ? step.Type switch
+                    {
+                        SequenceStepType.Command => $"CMD: {step.Command?.Command}",
+                        SequenceStepType.Wait => $"WAIT: {step.WaitDuration?.TotalSeconds ?? 0:F1}s",
+                        SequenceStepType.Tag => $"TAG: {step.Marker}",
+                        SequenceStepType.Group => $"GROUP: {step.Marker}",
+                        _ => step.Type.ToString()
+                    }
+                    : "(timeout/cancelled)";
                 sb.AppendLine($"[{status}] Step {stepResult.StepIndex + 1}: {desc}");
                 if (stepResult.CommandResult is { } cmdResult)
                     sb.AppendLine($"  Exit: {cmdResult.ExitCode}, Duration: {cmdResult.Duration.TotalMilliseconds:F0}ms");

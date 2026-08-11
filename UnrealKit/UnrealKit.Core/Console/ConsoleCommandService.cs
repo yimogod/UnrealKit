@@ -86,7 +86,11 @@ public sealed class ConsoleCommandService : IConsoleCommandService
         {
             if (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
-                stepResults.Add(new SequenceStepResult(-1, null!, Error: $"Sequence timed out after {timeout.TotalSeconds:F0}s."));
+                stepResults.Add(new SequenceStepResult(-1, Error: $"Sequence timed out after {timeout.TotalSeconds:F0}s."));
+            }
+            else
+            {
+                stepResults.Add(new SequenceStepResult(-1, Error: "Sequence was cancelled."));
             }
         }
 

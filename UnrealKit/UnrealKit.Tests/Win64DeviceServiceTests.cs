@@ -19,14 +19,15 @@ public sealed class Win64DeviceServiceTests
     }
 
     [Fact]
-    public async Task CaptureMemoryAsync_NoProcess_ReturnsError()
+    public async Task CaptureMemoryAsync_NoProcess_ThrowsDeviceCommandException()
     {
         var service = new Win64DeviceService();
         var device = (await service.ListDevicesAsync())[0];
 
-        var result = await service.CaptureMemoryAsync(device, "NonExistentProcess_12345");
+        var ex = await Assert.ThrowsAsync<DeviceCommandException>(
+            () => service.CaptureMemoryAsync(device, "NonExistentProcess_12345"));
 
-        Assert.Equal(1, result.ExitCode);
-        Assert.Contains("No process named", result.StandardError);
+        Assert.Equal(1, ex.Result.ExitCode);
+        Assert.Contains("No process named", ex.Result.StandardError);
     }
 }

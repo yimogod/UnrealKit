@@ -114,7 +114,7 @@ public sealed record CommandSequenceDefinition(
 /// </summary>
 public sealed record SequenceStepResult(
     int StepIndex,
-    SequenceStep Step,
+    SequenceStep? Step = null,
     ConsoleCommandResult? CommandResult = null,
     string? Error = null)
 {
