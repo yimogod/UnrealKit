@@ -132,6 +132,8 @@ public sealed partial class Win64MemInfoParser : IWin64MemInfoParser
     [GeneratedRegex(@"^\*\*\s+WIN64\s+MEMINFO\s+for\s+process\s+(?<name>.+?)\s+\(PID:\s*(?<pid>\d+)\)\s+\*\*\s*$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex ProcessHeaderRegex();
 
-    [GeneratedRegex(@"^\s*(?<key>\w+):\s*(?<value>.+)\s*$", RegexOptions.CultureInvariant)]
+    // value 使用懒惰量词，让尾部的 \s*$ 吸收行尾空白与 CR。
+    // 贪婪的 .+ 会把 CRLF 输入的 \r 一并捕获，导致 int.TryParse 静默失败、计数器归零。
+    [GeneratedRegex(@"^\s*(?<key>\w+):\s*(?<value>.*?)\s*$", RegexOptions.CultureInvariant)]
     private static partial Regex CounterRegex();
 }

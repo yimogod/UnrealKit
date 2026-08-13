@@ -1,4 +1,4 @@
-namespace UnrealKit.Core.Projects;
+﻿namespace UnrealKit.Core.Projects;
 
 public static class AgentTemplates
 {

@@ -38,7 +38,10 @@ public enum BaselineDiffSource
 {
     MemInfo,
     MemReport,
-    StaticCamera
+    StaticCamera,
+
+    /// <summary>Win64 进程内存计数器（Win64DeviceService 采集，Win64MemInfoParser 解析）。</summary>
+    Win64MemInfo
 }
 
 /// <summary>A single named measurement extracted from one report.</summary>

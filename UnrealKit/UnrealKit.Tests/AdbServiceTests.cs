@@ -1,4 +1,4 @@
-using UnrealKit.Core.Adb;
+﻿using UnrealKit.Core.Adb;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 

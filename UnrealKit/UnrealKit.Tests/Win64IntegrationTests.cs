@@ -1,3 +1,4 @@
+﻿using System.Diagnostics;
 using UnrealKit.Core.Capture;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Processes;
@@ -51,33 +52,97 @@ public sealed class Win64IntegrationTests
     }
 
     [Fact]
-    public async Task StartAndStop_CmdExe_Lifecycle()
+    public async Task StartApplicationAsync_RunsExecutableToCompletion()
     {
         var service = new Win64DeviceService();
         var device = (await service.ListDevicesAsync())[0];
-        var cmdPath = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+        using var executable = UniquelyNamedExecutable.CreateFromCommandProcessor();
 
-        if (!File.Exists(cmdPath))
-            return; // Skip if cmd.exe not found (shouldn't happen on Windows)
+        // StartApplicationAsync 会等待进程结束，因此这里只验证「能启动并正常退出」。
+        var startResult = await service.StartApplicationAsync(device, executable.Path);
 
-        // Start cmd.exe — it will run briefly and exit, so start /c exit
-        var startResult = await service.StartApplicationAsync(device, cmdPath);
-        // cmd.exe exits immediately, so this is expected to work or fail fast
         Assert.Equal(0, startResult.ExitCode);
+    }
 
-        // cmd /c exit exits immediately, so we may not be able to kill it.
-        // StopApplicationAsync may throw if the process already exited.
-        // We accept either success or DeviceCommandException indicating no such process.
+    [Fact]
+    public async Task StopApplicationAsync_TerminatesOnlyTheNamedProcess()
+    {
+        var service = new Win64DeviceService();
+        var device = (await service.ListDevicesAsync())[0];
+
+        // 必须用唯一进程名：StopApplicationAsync 按名字杀进程，
+        // 若这里传 "cmd" 就会杀掉本机所有 cmd.exe——包括并行测试启动的子进程
+        // 和开发者自己的终端。曾因此导致 ProcessRunnerTests 超时测试随机失败。
+        using var executable = UniquelyNamedExecutable.CreateFromCommandProcessor();
+        using var running = Process.Start(new ProcessStartInfo(executable.Path, "/d /c ping -n 60 127.0.0.1 > nul")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true
+        }) ?? throw new InvalidOperationException("Failed to start the test process.");
+
         try
         {
-            var stopResult = await service.StopApplicationAsync(device, "cmd");
+            var stopResult = await service.StopApplicationAsync(device, executable.ProcessName);
+
             Assert.Equal(0, stopResult.ExitCode);
             Assert.Contains("Stopped", stopResult.StandardOutput);
+            Assert.True(running.WaitForExit(TimeSpan.FromSeconds(10)), "The target process should have been terminated.");
         }
-        catch (DeviceCommandException ex)
+        finally
         {
-            // Process already exited — that's fine for this test
-            Assert.Contains("No process named", ex.Message);
+            if (!running.HasExited)
+            {
+                running.Kill(entireProcessTree: true);
+                running.WaitForExit(TimeSpan.FromSeconds(10));
+            }
+        }
+    }
+
+    /// <summary>
+    /// cmd.exe 的唯一命名副本。用于按进程名操作的测试，避免影响本机同名进程。
+    /// </summary>
+    private sealed class UniquelyNamedExecutable : IDisposable
+    {
+        private UniquelyNamedExecutable(string path)
+        {
+            Path = path;
+            ProcessName = System.IO.Path.GetFileNameWithoutExtension(path);
+        }
+
+        public string Path { get; }
+
+        /// <summary>Process.GetProcessesByName 使用的名称（不含扩展名）。</summary>
+        public string ProcessName { get; }
+
+        public static UniquelyNamedExecutable CreateFromCommandProcessor()
+        {
+            var source = System.IO.Path.Combine(Environment.SystemDirectory, "cmd.exe");
+            Assert.True(File.Exists(source), $"Command processor not found: {source}");
+
+            var directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"ukit_exe_{Guid.NewGuid():N}");
+            Directory.CreateDirectory(directory);
+            var destination = System.IO.Path.Combine(directory, $"ukit_shell_{Guid.NewGuid():N}.exe");
+            File.Copy(source, destination);
+            return new UniquelyNamedExecutable(destination);
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                var directory = System.IO.Path.GetDirectoryName(Path);
+                if (directory is not null && Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, recursive: true);
+                }
+            }
+            catch (IOException)
+            {
+                // 进程刚退出时文件可能仍被占用，临时目录留给系统清理即可。
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
     }
 
@@ -155,7 +220,7 @@ public sealed class Win64IntegrationTests
     }
 
     [Fact]
-    public void CaptureService_CreatePlan_ForWin64_NoWorkingDir_FallsBack()
+    public void CaptureService_CreatePlan_ForWin64_NoWorkingDir_ThrowsWithActionableMessage()
     {
         var settings = ProjectSettings.CreateDefaults("WinGame") with
         {
@@ -172,10 +237,59 @@ public sealed class Win64IntegrationTests
 
         var device = new Win64Device();
         var service = new CaptureService();
-        var plan = service.CreatePlan(new CaptureRequest(project, device, "test"));
 
-        // Without working directory, falls back to project name
-        Assert.Contains(@"WinGame\Saved", plan.DeviceSavedDirectory);
+        // Falling back to a relative path would resolve against the current process
+        // working directory, so GUI and CLI would archive from different locations.
+        // The Saved directory must be explicitly configured instead.
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.CreatePlan(new CaptureRequest(project, device, "test")));
+
+        Assert.Contains("Win64WorkingDirectory", exception.Message);
+    }
+
+    [Fact]
+    public void CaptureService_CreatePlan_ForWin64_ResolvesSavedDirectoryToAbsolutePath()
+    {
+        var settings = ProjectSettings.CreateDefaults("WinGame") with
+        {
+            Platform = TargetPlatform.Win64,
+            PackageName = "WinGame",
+            Win64WorkingDirectory = @"C:\Builds\WinGame",
+            UnrealProjectName = "WinGame"
+        };
+        var project = new UkitProject(
+            @"C:\Projects\WinGame\WinGame.ukit",
+            @"C:\Projects\WinGame",
+            UkitProjectDescriptor.CreateDefault("WinGame"),
+            settings);
+
+        var plan = new CaptureService().CreatePlan(new CaptureRequest(project, new Win64Device(), "test"));
+
+        Assert.Equal(@"C:\Builds\WinGame\WinGame\Saved", plan.DeviceSavedDirectory);
+        Assert.True(Path.IsPathFullyQualified(plan.DeviceSavedDirectory));
+    }
+
+    [Fact]
+    public void CaptureService_CreatePlan_RejectsDevicePlatformMismatch()
+    {
+        var settings = ProjectSettings.CreateDefaults("AndroidGame") with
+        {
+            Platform = TargetPlatform.Android,
+            PackageName = "com.example.game"
+        };
+        var project = new UkitProject(
+            @"C:\Projects\AndroidGame\AndroidGame.ukit",
+            @"C:\Projects\AndroidGame",
+            UkitProjectDescriptor.CreateDefault("AndroidGame"),
+            settings);
+
+        // A Win64 device against an Android project must fail loudly rather than
+        // capture against the wrong platform's paths.
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => new CaptureService().CreatePlan(new CaptureRequest(project, new Win64Device(), "test")));
+
+        Assert.Contains("Win64", exception.Message);
+        Assert.Contains("Android", exception.Message);
     }
 
     private sealed class UnknownDevice : IDevice

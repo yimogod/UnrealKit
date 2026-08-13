@@ -42,7 +42,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _adbPath = string.Empty;
     private string _memInfoInputPath = string.Empty;
     private string _memInfoProcessDescription = "Select a meminfo text file to begin offline parsing.";
-    private string _platform = "Android";
+    private string _platform = PlatformNames.Android;
     private string _win64Executable = string.Empty;
     private string _win64WorkingDirectory = string.Empty;
     private string _memInfoParsedAt = string.Empty;
@@ -227,8 +227,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string AdbPath { get => _adbPath; set => SetField(ref _adbPath, value); }
 
     public string Platform { get => _platform; set { if (SetField(ref _platform, value)) { OnPropertyChanged(nameof(IsAndroid)); OnPropertyChanged(nameof(IsWin64)); } } }
-    public bool IsAndroid => _platform == "Android";
-    public bool IsWin64 => _platform == "Win64";
+    public bool IsAndroid => _platform == PlatformNames.Android;
+    public bool IsWin64 => _platform == PlatformNames.Win64;
     public string Win64Executable { get => _win64Executable; set => SetField(ref _win64Executable, value); }
     public string Win64WorkingDirectory { get => _win64WorkingDirectory; set => SetField(ref _win64WorkingDirectory, value); }
     public string MemInfoInputPath { get => _memInfoInputPath; set { if (SetField(ref _memInfoInputPath, value)) RaiseCommandStates(); } }
@@ -340,18 +340,23 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private async Task<IReadOnlyList<IDevice>> ListDevicesAsync(IProgress<OperationProgress> progress, CancellationToken cancellationToken)
     {
-        var devices = new List<IDevice> { new Win64Device() };
+        var providers = new List<IDeviceProvider> { new Win64DeviceService() };
         try
         {
-            var adbService = CreateAdbService();
-            var adbDevices = await adbService.ListDevicesAsync(progress, cancellationToken);
-            devices.AddRange(adbDevices.Select(d => (IDevice)new AdbDeviceService.AdbDeviceWrapper(d)));
+            providers.Add(new AdbDeviceService(CreateAdbService()));
         }
-        catch (Exception ex)
+        catch (AdbPathResolutionException exception)
         {
-            AddOperationLog($"ADB device enumeration failed: {ex.Message}");
+            providers.Add(new UnavailableDeviceProvider(TargetPlatform.Android, exception.Message));
         }
-        return devices;
+
+        var result = await new AggregateDeviceProvider(providers).ListDevicesAsync(progress, cancellationToken);
+        foreach (var failure in result.Failures)
+        {
+            AddOperationLog($"{failure.Platform} device enumeration failed: {failure.Message}");
+        }
+
+        return result.Devices;
     }
 
     private IAdbService CreateAdbService()
@@ -360,16 +365,28 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             AddOperationLog($"{output.Timestamp:HH:mm:ss} [{output.Stream}] {output.Text}")));
     }
 
-private IDeviceService CreateDeviceServiceForDevice(IDevice device)
-{
-    return device.Platform switch
-    {
-        "Win64" => new Win64DeviceService(new ProcessRunner()),
-        _ => new AdbDeviceService(CreateAdbService())
-    };
-}
+    private IDeviceService CreateDeviceServiceForDevice(IDevice device) =>
+        new DeviceServiceFactory(
+            adbService: PlatformNames.Parse(device.Platform, nameof(device)) == TargetPlatform.Android ? CreateAdbService() : null,
+            processRunner: new ProcessRunner())
+            .CreateForDevice(device);
 
-        private void UpdateDevices(IReadOnlyList<IDevice> devices)
+    /// <summary>
+    /// 构造带控制台服务的 CaptureService，使配置的采集前后指令序列真正执行。
+    /// 省略控制台服务会让序列被静默跳过，导致 GUI 与 CLI 行为不一致。
+    /// </summary>
+    private CaptureService CreateCaptureService(IDevice device)
+    {
+        var deviceService = CreateDeviceServiceForDevice(device);
+
+        // 按能力而非平台判断：新增平台时无需回到这里改分支。
+        var consoleService = deviceService.Supports(DeviceCapability.SendConsoleCommand)
+            ? new ConsoleCommandService(deviceService)
+            : null;
+        return new CaptureService(deviceService, consoleService);
+    }
+
+    private void UpdateDevices(IReadOnlyList<IDevice> devices)
     {
         Devices.Clear();
         foreach (var device in devices) Devices.Add(device);
@@ -377,12 +394,14 @@ private IDeviceService CreateDeviceServiceForDevice(IDevice device)
         if (available.Length == 1)
         {
             SelectedDevice = available[0];
-            StatusMessage = $"????????????{available[0].Id} ({available[0].Name ?? "unknown"})?";
+            StatusMessage = $"已自动选择唯一可用设备：{available[0].Id}（{available[0].Name}）。";
         }
         else
         {
             SelectedDevice = null;
-            StatusMessage = devices.Count == 0 ? "??? ADB ???" : $"??? {devices.Count} ??????????????";
+            StatusMessage = devices.Count == 0
+                ? "未发现任何设备。请检查 ADB 连接。"
+                : $"发现 {devices.Count} 台设备，请从列表中明确选择目标设备。";
         }
     }
     private void SetCurrentProject(UkitProject project)
@@ -409,6 +428,9 @@ private IDeviceService CreateDeviceServiceForDevice(IDevice device)
         Activity = project.Settings.Activity;
         DeviceSavedRootTemplate = project.Settings.DeviceSavedRootTemplate;
         AdbPath = project.Settings.AdbPath;
+        Platform = PlatformNames.ToName(project.Settings.Platform);
+        Win64Executable = project.Settings.Win64Executable ?? string.Empty;
+        Win64WorkingDirectory = project.Settings.Win64WorkingDirectory ?? string.Empty;
         OnPropertyChanged(nameof(ProjectTitle));
         UpdateLaunchParameterPreview();
         UpdateLaunchOperationSummary();
@@ -418,6 +440,9 @@ private IDeviceService CreateDeviceServiceForDevice(IDevice device)
 
     private Task SaveProjectSettingsAsync() => RunAsync("正在保存项目默认配置…", async progress =>
     {
+        var platform = PlatformNames.Parse(Platform, nameof(Platform));
+        var win64Executable = Win64Executable.Trim();
+        var win64WorkingDirectory = Win64WorkingDirectory.Trim();
         var settings = _project!.Settings with
         {
             PackageName = PackageName.Trim(),
@@ -425,7 +450,10 @@ private IDeviceService CreateDeviceServiceForDevice(IDevice device)
             Activity = Activity.Trim(),
             DeviceSavedRootTemplate = DeviceSavedRootTemplate.Trim(),
             AdbPath = AdbPath.Trim(),
-            DefaultCaptureTag = CaptureTag.Trim()
+            DefaultCaptureTag = CaptureTag.Trim(),
+            Platform = platform,
+            Win64Executable = win64Executable.Length == 0 ? null : win64Executable,
+            Win64WorkingDirectory = win64WorkingDirectory.Length == 0 ? null : win64WorkingDirectory
         };
         SetCurrentProject(await _projectService.UpdateSettingsAsync(_project, settings, progress, OperationCancellationToken));
         StatusMessage = "项目默认配置已保存。";
@@ -496,7 +524,7 @@ private IDeviceService CreateDeviceServiceForDevice(IDevice device)
 
         try
         {
-            var plan = new CaptureService(CreateDeviceServiceForDevice(SelectedDevice!)).CreatePlan(new CaptureRequest(_project, SelectedDevice, CaptureTag));
+            var plan = CreateCaptureService(SelectedDevice!).CreatePlan(new CaptureRequest(_project, SelectedDevice, CaptureTag));
             CaptureArchivePreview = $"归档目录：{plan.CaptureDirectory}{Environment.NewLine}设备 Saved：{plan.DeviceSavedDirectory}";
         }
         catch (Exception exception)
@@ -508,7 +536,7 @@ private IDeviceService CreateDeviceServiceForDevice(IDevice device)
     private Task RunCaptureAsync() => RunAsync("正在采集并归档原始数据…", async progress =>
     {
         var request = new CaptureRequest(_project!, SelectedDevice!, CaptureTag);
-        var result = await new CaptureService(CreateDeviceServiceForDevice(SelectedDevice!)).CaptureAsync(request, progress, OperationCancellationToken);
+        var result = await CreateCaptureService(SelectedDevice!).CaptureAsync(request, progress, OperationCancellationToken);
         CaptureArchivePreview = $"归档目录：{result.Plan.CaptureDirectory}{Environment.NewLine}清单：{result.ManifestPath}";
         StatusMessage = $"采集完成：{result.Plan.CaptureDirectory}";
     });
@@ -1148,30 +1176,23 @@ private IDeviceService CreateDeviceServiceForDevice(IDevice device)
         ConsoleOutput = $"Sending: {_consoleCommandText}...";
         try
         {
-            if (_selectedDevice.Platform == "Win64")
+            // 单一路径：ConsoleCommandService 依赖 IDeviceService，平台差异由能力探测表达。
+            var consoleService = new ConsoleCommandService(CreateDeviceServiceForDevice(_selectedDevice));
+            if (!consoleService.IsSupported)
             {
-                var deviceService = CreateDeviceServiceForDevice(_selectedDevice);
-                var result = await deviceService.SendConsoleCommandAsync(_selectedDevice, _consoleCommandText,
-                    target: _project?.Settings.PackageName,
-                    cancellationToken: OperationCancellationToken);
-
-                ConsoleOutput = result.ExitCode == 0
-                    ? $"[OK] {_consoleCommandText}`n{result.StandardOutput}"
-                    : $"[FAIL] {_consoleCommandText}`nExit: {result.ExitCode}`n{result.StandardError}";
+                ConsoleOutput = $"[SKIP] {_selectedDevice.Platform} 平台暂不支持发送 UE 控制台指令。";
+                return;
             }
-            else
-            {
-                var adbService = _adbServiceFactory.Create(_project?.Settings, output: null);
-                var consoleService = new ConsoleCommandService(adbService);
-                var result = await consoleService.SendAsync(
-                    _selectedDevice.Id,
-                    ConsoleCommand.Create(_consoleCommandText),
-                    _project?.Settings.PackageName);
 
-                ConsoleOutput = result.Succeeded
-                    ? $"[OK] {_consoleCommandText}`nExit: {result.ExitCode}`n{result.StandardOutput}"
-                    : $"[FAIL] {_consoleCommandText}`nExit: {result.ExitCode}`n{result.StandardError}";
-            }
+            var result = await consoleService.SendAsync(
+                _selectedDevice.Id,
+                ConsoleCommand.Create(_consoleCommandText),
+                _project?.Settings.PackageName,
+                cancellationToken: OperationCancellationToken);
+
+            ConsoleOutput = result.Succeeded
+                ? $"[OK] {_consoleCommandText}{Environment.NewLine}Exit: {result.ExitCode}{Environment.NewLine}{result.StandardOutput}"
+                : $"[FAIL] {_consoleCommandText}{Environment.NewLine}Exit: {result.ExitCode}{Environment.NewLine}{result.StandardError}";
         }
         catch (Exception ex)
         {
@@ -1187,8 +1208,13 @@ private IDeviceService CreateDeviceServiceForDevice(IDevice device)
     {
         if (_selectedDevice is null) return;
 
-        var adbService = _adbServiceFactory.Create(_project?.Settings, output: null);
-        var consoleService = new ConsoleCommandService(adbService);
+        var consoleService = new ConsoleCommandService(CreateDeviceServiceForDevice(_selectedDevice));
+        if (!consoleService.IsSupported)
+        {
+            ConsoleSequenceOutput = $"[SKIP] {_selectedDevice.Platform} 平台暂不支持执行 UE 控制台指令序列。";
+            return;
+        }
+
         IsConsoleSequenceRunning = true;
 
         try
@@ -1207,7 +1233,7 @@ private IDeviceService CreateDeviceServiceForDevice(IDevice device)
             }
             else { ConsoleSequenceOutput = "No sequence selected and no inline commands provided."; return; }
 
-            ConsoleSequenceOutput = $"Running sequence: {sequence.Name} ({sequence.Steps.Count} steps)...`n";
+            ConsoleSequenceOutput = $"Running sequence: {sequence.Name} ({sequence.Steps.Count} steps)...{Environment.NewLine}";
             var request = new SequenceExecutionRequest(sequence, _selectedDevice.Id, _project?.Settings.PackageName);
             var result = await consoleService.RunSequenceAsync(request);
 

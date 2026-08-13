@@ -1,4 +1,4 @@
-using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.Diagnostics;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Runtime;
 
@@ -234,7 +234,7 @@ public sealed class ProjectService : IProjectService
             sequences,
             layered.GetValue(SettingsSection, "PreCaptureSequence"),
             layered.GetValue(SettingsSection, "PostCaptureSequence"),
-            ParsePlatform(layered.GetValue(SettingsSection, "Platform")),
+            ParsePlatform(layered.GetValue(SettingsSection, "Platform"), defaults.Platform),
             layered.GetValue(SettingsSection, "Win64Executable"),
             layered.GetValue(SettingsSection, "Win64WorkingDirectory"));
     }
@@ -306,10 +306,20 @@ public sealed class ProjectService : IProjectService
         }
     }
 
-    private static TargetPlatform ParsePlatform(string? value) =>
-        value is not null && Enum.TryParse<TargetPlatform>(value, ignoreCase: true, out var platform)
-            ? platform
-            : TargetPlatform.Android;
+    /// <summary>
+    /// 解析配置中的 Platform。未配置时用默认平台；
+    /// 配置了但无法识别（例如拼错成 Andriod）必须报错——静默回退到 Android
+    /// 会让 Win64 工程采到错误平台的数据却看起来成功。
+    /// </summary>
+    private static TargetPlatform ParsePlatform(string? value, TargetPlatform defaultPlatform)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return defaultPlatform;
+        }
+
+        return PlatformNames.Parse(value, "Platform");
+    }
 
     private static void Report(IProgress<OperationProgress>? progress, string operationId, string stage, string message, int? current = null, int? total = null) => progress?.Report(new OperationProgress(operationId, stage, current, total, message));
 }

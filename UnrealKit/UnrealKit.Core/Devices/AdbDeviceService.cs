@@ -1,6 +1,7 @@
 ﻿using UnrealKit.Core.Adb;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
+using UnrealKit.Core.Projects;
 
 namespace UnrealKit.Core.Devices;
 
@@ -17,12 +18,18 @@ public sealed class AdbDeviceService : IDeviceService
         _adb = adb ?? throw new ArgumentNullException(nameof(adb));
     }
 
+    public TargetPlatform Platform => TargetPlatform.Android;
+
+    /// <summary>Android 经由 ADB 支持全部设备能力。</summary>
+    public bool Supports(DeviceCapability capability) => true;
+
     public async Task<IReadOnlyList<IDevice>> ListDevicesAsync(
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        // AdbDevice 本身实现 IDevice，无需额外包装层。
         var adbDevices = await _adb.ListDevicesAsync(progress, cancellationToken);
-        return adbDevices.Select(d => (IDevice)new AdbDeviceWrapper(d)).ToList();
+        return adbDevices.Cast<IDevice>().ToList();
     }
 
     public Task<ProcessExecutionResult> CaptureMemoryAsync(
@@ -98,24 +105,6 @@ public sealed class AdbDeviceService : IDeviceService
         CancellationToken cancellationToken = default)
     {
         return RunRequiredAsync(_adb.DeleteRemoteFileAsync(device.Id, remotePath, progress, cancellationToken));
-    }
-
-    /// <summary>
-    /// Adapts an AdbDevice into an IDevice for CLI / Desktop use.
-    /// </summary>
-    public sealed class AdbDeviceWrapper : IDevice
-    {
-        private readonly AdbDevice _adbDevice;
-
-        public AdbDeviceWrapper(AdbDevice adbDevice)
-        {
-            _adbDevice = adbDevice;
-        }
-
-        public string Id => _adbDevice.SerialNumber;
-        public string Name => _adbDevice.Model ?? _adbDevice.SerialNumber;
-        public string Platform => "Android";
-        public bool IsAvailable => _adbDevice.IsAvailable;
     }
 
     private static async Task<ProcessExecutionResult> RunRequiredAsync(Task<ProcessExecutionResult> task)

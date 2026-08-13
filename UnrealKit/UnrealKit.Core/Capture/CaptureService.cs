@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Console;
 using UnrealKit.Core.Operations;
@@ -29,7 +29,7 @@ public sealed class CaptureService : ICaptureService
         var captureId = string.IsNullOrWhiteSpace(request.CaptureId)
             ? CreateCaptureId(capturedLocalTime, request.Device.Id)
             : ValidateCaptureId(request.CaptureId);
-        var platform = MapPlatform(request.Project.Settings.Platform);
+        var platform = PlatformNames.ToName(request.Project.Settings.Platform);
         var contentRoot = request.Project.ContentDir;
         var captureDirectory = Path.Combine(contentRoot, platform, NormalizeTag(request.Tag), capturedLocalTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), captureId);
         return new CapturePlan(captureId, captureDirectory, ResolveDeviceSavedDirectory(request.Project.Settings));
@@ -59,79 +59,75 @@ public sealed class CaptureService : ICaptureService
 
     private async Task<CaptureResult> CaptureToStagingAsync(CaptureRequest request, CapturePlan plan, DateTimeOffset startedAt, string stagingDirectory, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
-        // Pre-capture console sequence
+        // Pre-capture console sequence. A configured sequence that cannot run must abort the
+        // capture rather than be skipped: silently collecting from an unprepared game state
+        // produces data that looks valid but answers a different question.
         var preSequenceName = request.Project.Settings.PreCaptureSequence;
-        if (!string.IsNullOrWhiteSpace(preSequenceName) && _consoleService is not null)
+        if (!string.IsNullOrWhiteSpace(preSequenceName))
         {
-            var preset = request.Project.Settings.ConsoleSequences
-                .FirstOrDefault(s => string.Equals(s.Name, preSequenceName, StringComparison.OrdinalIgnoreCase));
-            if (preset is not null)
+            var preset = ResolveRequiredSequence(request.Project.Settings, preSequenceName, "Pre-capture");
+            progress?.Report(new OperationProgress("capture", "PreSequence", 0, 4, $"Running pre-capture sequence: {preSequenceName}"));
+            var seqDef = preset.ToSequenceDefinition();
+            var preResult = await _consoleService!.RunSequenceAsync(
+                new SequenceExecutionRequest(seqDef, request.Device.Id, request.Project.Settings.PackageName),
+                progress, cancellationToken);
+            if (!preResult.Succeeded)
             {
-                progress?.Report(new OperationProgress("capture", "PreSequence", 0, 4, $"Running pre-capture sequence: {preSequenceName}"));
-                var seqDef = preset.ToSequenceDefinition();
-                var preResult = await _consoleService.RunSequenceAsync(
-                    new SequenceExecutionRequest(seqDef, request.Device.Id, request.Project.Settings.PackageName),
-                    progress, cancellationToken);
-                if (!preResult.Succeeded)
-                {
-                    var failedSteps = preResult.StepResults.Where(r => !r.Succeeded);
-                    var errorDetails = string.Join("; ", failedSteps.Select(s => s.Error ?? $"step {s.StepIndex}"));
-                    throw new InvalidOperationException(
-                        $"Pre-capture sequence '{preSequenceName}' failed: {errorDetails}. Capture aborted to prevent collecting data from an incorrect game state.");
-                }
+                var failedSteps = preResult.StepResults.Where(r => !r.Succeeded);
+                var errorDetails = string.Join("; ", failedSteps.Select(s => s.Error ?? $"step {s.StepIndex}"));
+                throw new InvalidOperationException(
+                    $"Pre-capture sequence '{preSequenceName}' failed: {errorDetails}. Capture aborted to prevent collecting data from an incorrect game state.");
             }
         }
 
-        var totalSteps = 3;
+        var totalSteps = request.SkipSaved ? 2 : 3;
         var currentStep = 0;
 
         var memInfoDirectory = Path.Combine(stagingDirectory, "MemInfo");
         Directory.CreateDirectory(memInfoDirectory);
-        currentStep++;
-        progress?.Report(new OperationProgress("capture", "MemInfo", currentStep, totalSteps, $"Collecting memory info for {request.Project.Settings.PackageName}."));
-        var memInfo = await _deviceService!.CaptureMemoryAsync(request.Device, request.Project.Settings.PackageName, progress, cancellationToken);
+        var captureTarget = ResolveCaptureTarget(request.Project.Settings);
+        progress?.Report(new OperationProgress("capture", "MemInfo", ++currentStep, totalSteps, $"Collecting memory info for {captureTarget}."));
+        var memInfo = await _deviceService!.CaptureMemoryAsync(request.Device, captureTarget, progress, cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(memInfoDirectory, $"meminfo_{startedAt:yyyyMMdd-HHmmss}.txt"), memInfo.StandardOutput, cancellationToken);
 
         if (!request.SkipSaved)
         {
-            progress?.Report(new OperationProgress("capture", "Saved", currentStep + 1, totalSteps, $"Pulling UE Saved data from {plan.DeviceSavedDirectory}."));
+            progress?.Report(new OperationProgress("capture", "Saved", ++currentStep, totalSteps, $"Pulling UE Saved data from {plan.DeviceSavedDirectory}."));
             await _deviceService!.PullDirectoryAsync(request.Device, plan.DeviceSavedDirectory, Path.Combine(stagingDirectory, "Saved"), progress, cancellationToken);
         }
 
         var manifest = await CreateManifestAsync(request, plan, startedAt, stagingDirectory, cancellationToken);
-        progress?.Report(new OperationProgress("capture", "Manifest", currentStep + 2, totalSteps, "Writing capture manifest and archiving original data."));
+        progress?.Report(new OperationProgress("capture", "Manifest", ++currentStep, totalSteps, "Writing capture manifest and archiving original data."));
         await WriteManifestAsync(stagingDirectory, manifest, cancellationToken);
 
         Directory.CreateDirectory(Path.GetDirectoryName(plan.CaptureDirectory)!);
         Directory.Move(stagingDirectory, plan.CaptureDirectory);
 
-        // Post-capture console sequence
+        // Post-capture console sequence. The archive is already committed at this point, so a
+        // failing step is reported as a warning rather than aborting. Configuration problems
+        // (missing service or unknown preset name) were already rejected before capture began.
         var postSequenceName = request.Project.Settings.PostCaptureSequence;
-        if (!string.IsNullOrWhiteSpace(postSequenceName) && _consoleService is not null)
+        if (!string.IsNullOrWhiteSpace(postSequenceName))
         {
-            var preset = request.Project.Settings.ConsoleSequences
-                .FirstOrDefault(s => string.Equals(s.Name, postSequenceName, StringComparison.OrdinalIgnoreCase));
-            if (preset is not null)
+            var preset = ResolveRequiredSequence(request.Project.Settings, postSequenceName, "Post-capture");
+            progress?.Report(new OperationProgress("capture", "PostSequence", null, null, $"Running post-capture sequence: {postSequenceName}"));
+            var seqDef = preset.ToSequenceDefinition();
+            var postResult = await _consoleService!.RunSequenceAsync(
+                new SequenceExecutionRequest(seqDef, request.Device.Id, request.Project.Settings.PackageName),
+                progress, cancellationToken);
+            if (!postResult.Succeeded)
             {
-                progress?.Report(new OperationProgress("capture", "PostSequence", null, null, $"Running post-capture sequence: {postSequenceName}"));
-                var seqDef = preset.ToSequenceDefinition();
-                var postResult = await _consoleService.RunSequenceAsync(
-                    new SequenceExecutionRequest(seqDef, request.Device.Id, request.Project.Settings.PackageName),
-                    progress, cancellationToken);
-                if (!postResult.Succeeded)
-                {
-                    progress?.Report(new OperationProgress("capture", "PostSequence", null, null,
-                        $"Warning: Post-capture sequence '{postSequenceName}' had {postResult.FailedSteps} failed step(s)."));
-                }
+                progress?.Report(new OperationProgress("capture", "PostSequence", null, null,
+                    $"Warning: Post-capture sequence '{postSequenceName}' had {postResult.FailedSteps} failed step(s)."));
             }
         }
 
         return new CaptureResult(plan, Path.Combine(plan.CaptureDirectory, "CaptureManifest.json"), manifest);
     }
 
-    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾
+    // ---------------------------------------------------------------------
     //  Import (no device required)
-    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾
+    // ---------------------------------------------------------------------
 
     public async Task<CaptureResult> ImportAsync(CaptureImportRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
@@ -167,20 +163,13 @@ public sealed class CaptureService : ICaptureService
         }
     }
 
-    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾
+    // ---------------------------------------------------------------------
     //  Helpers
-    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾
-
-    private static string MapPlatform(TargetPlatform platform) => platform switch
-    {
-        TargetPlatform.Android => "Android",
-        TargetPlatform.Win64 => "Win64",
-        _ => throw new ArgumentOutOfRangeException(nameof(platform), platform, "Unsupported platform.")
-    };
+    // ---------------------------------------------------------------------
 
     private async Task<CaptureManifest> CreateManifestAsync(CaptureRequest request, CapturePlan plan, DateTimeOffset startedAt, string stagingDirectory, CancellationToken cancellationToken)
     {
-        return await CreateManifestFromDirectoryAsync(stagingDirectory, plan.CaptureId, MapPlatform(request.Project.Settings.Platform), request.Tag, startedAt, request.Project, request.Device.Id, request.Device.Name, request.Device.IsAvailable ? "available" : "unavailable", request.Project.Settings.PackageName, plan.DeviceSavedDirectory, cancellationToken);
+        return await CreateManifestFromDirectoryAsync(stagingDirectory, plan.CaptureId, PlatformNames.ToName(request.Project.Settings.Platform), request.Tag, startedAt, request.Project, request.Device.Id, request.Device.Name, request.Device.IsAvailable ? "available" : "unavailable", request.Project.Settings.PackageName, plan.DeviceSavedDirectory, cancellationToken);
     }
 
     private static async Task WriteManifestAsync(string stagingDirectory, CaptureManifest manifest, CancellationToken cancellationToken)
@@ -226,16 +215,26 @@ public sealed class CaptureService : ICaptureService
     {
         if (settings.Platform == TargetPlatform.Win64)
         {
-            // Win64: Saved directory is on local filesystem.
-            if (!string.IsNullOrWhiteSpace(settings.Win64WorkingDirectory))
+            // Win64: Saved 目录在本机文件系统上。必须解析为绝对路径——返回相对路径会让后续
+            // 拉取步骤按当前进程工作目录解析，GUI 与 CLI 下指向不同位置。
+            if (string.IsNullOrWhiteSpace(settings.Win64WorkingDirectory))
             {
-                return Path.Combine(settings.Win64WorkingDirectory!, settings.UnrealProjectName, "Saved");
+                throw new InvalidOperationException(
+                    "Win64 采集需要在工程配置中设置 Win64WorkingDirectory，用于定位 UE 的 Saved 目录。" +
+                    "请在「工程」页面填写 Win64 工作目录，或在 .ukit 中设置 Win64WorkingDirectory。");
             }
 
-            return Path.Combine(settings.UnrealProjectName, "Saved");
+            var savedDirectory = Path.Combine(settings.Win64WorkingDirectory, settings.UnrealProjectName, "Saved");
+            if (!Path.IsPathFullyQualified(savedDirectory))
+            {
+                throw new InvalidOperationException(
+                    $"Win64WorkingDirectory 必须是绝对路径，当前解析结果为相对路径: {savedDirectory}");
+            }
+
+            return Path.GetFullPath(savedDirectory);
         }
 
-        // Android: 閻犱緤绱曢悾鑽ゆ媼閹屾У濞戞挸锕﹀▓?Unix 閻犱警鍨扮欢?
+        // Android: 模板展开后必须是 Unix 风格的绝对路径。
         var path = settings.DeviceSavedRootTemplate.Replace("{PackageName}", settings.PackageName, StringComparison.Ordinal).Replace("{UnrealProjectName}", settings.UnrealProjectName, StringComparison.Ordinal);
         if (!path.StartsWith("/", StringComparison.Ordinal) || path.Contains('\\') || path.Contains('\0'))
         {
@@ -245,13 +244,102 @@ public sealed class CaptureService : ICaptureService
         return path;
     }
 
-    private static void ValidateRequest(CaptureRequest request)
+    /// <summary>
+    /// 在采集开始前校验已配置的前后指令序列，让配置错误在任何设备操作之前暴露，
+    /// 而不是等到归档已写入才失败。
+    /// </summary>
+    private void ValidateConfiguredSequences(ProjectSettings settings)
+    {
+        if (!string.IsNullOrWhiteSpace(settings.PreCaptureSequence))
+        {
+            ResolveRequiredSequence(settings, settings.PreCaptureSequence, "Pre-capture");
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.PostCaptureSequence))
+        {
+            ResolveRequiredSequence(settings, settings.PostCaptureSequence, "Post-capture");
+        }
+    }
+
+    /// <summary>
+    /// 查找已配置的采集前后指令序列。找不到预设或缺少 IConsoleCommandService 时抛出，
+    /// 不静默跳过——配置了序列却不执行会让采集数据对应错误的游戏状态。
+    /// </summary>
+    private ConsoleSequencePreset ResolveRequiredSequence(ProjectSettings settings, string sequenceName, string role)
+    {
+        if (_consoleService is null)
+        {
+            throw new InvalidOperationException(
+                $"{role} sequence '{sequenceName}' is configured, but this CaptureService was constructed without an IConsoleCommandService. " +
+                "Pass a console command service, or clear the sequence in project settings.");
+        }
+
+        var preset = settings.ConsoleSequences
+            .FirstOrDefault(s => string.Equals(s.Name, sequenceName, StringComparison.OrdinalIgnoreCase));
+        if (preset is null)
+        {
+            var available = settings.ConsoleSequences.Count == 0
+                ? "(none defined)"
+                : string.Join(", ", settings.ConsoleSequences.Select(s => s.Name));
+            throw new InvalidOperationException(
+                $"{role} sequence '{sequenceName}' is configured but no matching preset exists. Available sequences: {available}.");
+        }
+
+        return preset;
+    }
+
+    /// <summary>
+    /// 解析内存采集的目标进程标识。Android 上是包名；Win64 上是进程名
+    /// （取 Win64Executable 的文件名，回退到 UnrealProjectName）。
+    /// </summary>
+    private static string ResolveCaptureTarget(ProjectSettings settings)
+    {
+        if (settings.Platform != TargetPlatform.Win64)
+        {
+            return settings.PackageName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.Win64Executable))
+        {
+            return Path.GetFileNameWithoutExtension(settings.Win64Executable);
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.UnrealProjectName))
+        {
+            return settings.UnrealProjectName;
+        }
+
+        throw new InvalidOperationException(
+            "Win64 采集需要目标进程名。请在工程配置中设置 Win64Executable 或 UnrealProjectName。");
+    }
+
+    private void ValidateRequest(CaptureRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Project);
         ArgumentNullException.ThrowIfNull(request.Device);
         if (!request.Device.IsAvailable) throw new InvalidOperationException($"Capture requires a device with status 'available'. Device '{request.Device.Id}' is not available.");
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.Project.Settings.PackageName);
+
+        var settings = request.Project.Settings;
+        var devicePlatform = PlatformNames.Parse(request.Device.Platform, nameof(request));
+        ValidateConfiguredSequences(settings);
+        if (devicePlatform != settings.Platform)
+        {
+            throw new InvalidOperationException(
+                $"设备平台 ({devicePlatform}) 与工程配置的目标平台 ({settings.Platform}) 不一致。" +
+                "请选择匹配的设备，或在工程配置中修改目标平台。");
+        }
+
+        // PackageName 只对 Android 有意义；Win64 的目标进程名由 ResolveCaptureTarget 推导。
+        if (settings.Platform == TargetPlatform.Android)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(settings.PackageName);
+        }
+        else
+        {
+            ResolveCaptureTarget(settings);
+        }
+
         NormalizeTag(request.Tag);
     }
 

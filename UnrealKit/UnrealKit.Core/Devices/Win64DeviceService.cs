@@ -1,5 +1,6 @@
 ﻿using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
+using UnrealKit.Core.Projects;
 
 namespace UnrealKit.Core.Devices;
 
@@ -15,6 +16,18 @@ public sealed class Win64DeviceService : IDeviceService
     {
         _processRunner = processRunner ?? new ProcessRunner();
     }
+
+    public TargetPlatform Platform => TargetPlatform.Win64;
+
+    /// <summary>
+    /// Win64 通过本机进程操作实现大部分能力；控制台指令与日志流依赖 UE 端通道，尚未实现。
+    /// </summary>
+    public bool Supports(DeviceCapability capability) => capability switch
+    {
+        DeviceCapability.SendConsoleCommand => false,
+        DeviceCapability.StreamLog => false,
+        _ => true
+    };
 
     /// <summary>
     /// 列出当前可用设备。Win64 永远返回本地主机。
@@ -171,32 +184,31 @@ public sealed class Win64DeviceService : IDeviceService
     }
 
     /// <summary>
-    /// Win64 上发送 UE 控制台指令暂不支持。
+    /// Win64 上发送 UE 控制台指令暂不支持（依赖 UE 端通道，Android 走 am broadcast）。
     /// </summary>
     public Task<ProcessExecutionResult> SendConsoleCommandAsync(
         IDevice device,
         string command,
         string? target = null,
         IProgress<OperationProgress>? progress = null,
-        CancellationToken cancellationToken = default)
-    {
-        throw new DeviceCommandException("Console commands are not supported on Win64 devices in this version.",
-            new ProcessExecutionResult(1, string.Empty,
-                "Console commands are not supported on Win64 devices in this version.",
-                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
-    }
+        CancellationToken cancellationToken = default) =>
+        throw new DeviceCapabilityNotSupportedException(
+            DeviceCapability.SendConsoleCommand,
+            PlatformNames.Win64,
+            "请先用 Supports(DeviceCapability.SendConsoleCommand) 探测能力再调用。");
 
     /// <summary>
-    /// Win64 上流式读取日志暂不支持。
+    /// Win64 上流式读取日志暂不支持。抛出而不是返回空流：
+    /// 空流会被调用方误读为「已连接但暂无日志」。
     /// </summary>
-    public async IAsyncEnumerable<string> StreamLogAsync(
+    public IAsyncEnumerable<string> StreamLogAsync(
         IDevice device,
         string? filter = null,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        await Task.CompletedTask;
-        yield break;
-    }
+        CancellationToken cancellationToken = default) =>
+        throw new DeviceCapabilityNotSupportedException(
+            DeviceCapability.StreamLog,
+            PlatformNames.Win64,
+            "请先用 Supports(DeviceCapability.StreamLog) 探测能力再调用。");
 
     /// <summary>
     /// 在本机启动 Win64 可执行文件。
@@ -218,8 +230,12 @@ public sealed class Win64DeviceService : IDeviceService
 
         progress?.Report(new OperationProgress("start-app", "Launching", null, null, $"Starting {target}."));
 
+        // 工作目录固定为可执行文件所在目录：UE 会按 cwd 定位相对资源路径，
+        // 继承调用方进程的 cwd 会让 GUI 与 CLI 启动出不同行为。
+        var workingDirectory = Path.GetDirectoryName(Path.GetFullPath(target));
+
         return await _processRunner.RunAsync(
-            new ProcessExecutionRequest(target, [], null, null, null, null),
+            new ProcessExecutionRequest(target, [], workingDirectory, null, null, null),
             progress,
             cancellationToken);
     }
@@ -248,23 +264,29 @@ public sealed class Win64DeviceService : IDeviceService
             }
 
             var killed = 0;
-            foreach (var p in processes)
+            try
             {
-                try
+                foreach (var p in processes)
                 {
-                    p.Kill();
-                    p.Dispose();
-                    killed++;
+                    // Read the PID before Kill/Dispose: Process.Id throws once the object is disposed.
+                    var processId = p.Id;
+                    try
+                    {
+                        p.Kill();
+                        killed++;
+                    }
+                    catch (Exception ex)
+                    {
+                        var message = $"Failed to kill process '{target}' (PID {processId}): {ex.Message}";
+                        throw new DeviceCommandException(message,
+                            new ProcessExecutionResult(1, string.Empty, message,
+                                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), ex);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    p.Dispose();
-                    throw new DeviceCommandException(
-                        $"Failed to kill process '{target}' (PID {p.Id}): {ex.Message}",
-                        new ProcessExecutionResult(1, string.Empty,
-                            $"Failed to kill process '{target}' (PID {p.Id}): {ex.Message}",
-                            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), ex);
-                }
+            }
+            finally
+            {
+                foreach (var p in processes) p.Dispose();
             }
 
             return Task.FromResult(new ProcessExecutionResult(0,
@@ -406,6 +428,6 @@ public sealed class Win64Device : IDevice
 {
     public string Id => "localhost";
     public string Name => Environment.MachineName;
-    public string Platform => "Win64";
+    public string Platform => PlatformNames.Win64;
     public bool IsAvailable => true;
 }

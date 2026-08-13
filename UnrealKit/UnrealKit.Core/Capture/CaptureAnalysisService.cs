@@ -8,7 +8,7 @@ namespace UnrealKit.Core.Capture;
 public sealed class CaptureAnalysisService : ICaptureAnalysisService
 {
     private const string MemInfoCategory = "MemInfo";
-    private const string DefaultPlatform = "Android";
+    private static readonly string DefaultPlatform = Projects.PlatformNames.Android;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

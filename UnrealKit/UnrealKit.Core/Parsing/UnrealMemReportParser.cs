@@ -1,4 +1,4 @@
-using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace UnrealKit.Core.Parsing;

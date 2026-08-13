@@ -82,8 +82,6 @@ public sealed class AdbService : IAdbService
         return RunDeviceCommandAsync(serialNumber, ["shell", "rm", "-f", "--", remotePath], progress, cancellationToken);
     }
 
-    
-    
     public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         ValidateSerialNumber(serialNumber);
@@ -104,7 +102,8 @@ public sealed class AdbService : IAdbService
 
         return RunDeviceCommandAsync(serialNumber, arguments, progress, cancellationToken);
     }
-public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+
+    public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         ValidateSerialNumber(serialNumber);
         ValidatePackageName(packageName);
@@ -167,9 +166,6 @@ public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string 
             }
         }
     }
-
-    // Expose _adbPath for logcat streaming
-    private string AdbPath => _adbPath;
 
     private Task<ProcessExecutionResult> RunDeviceCommandAsync(string serialNumber, IReadOnlyList<string> arguments, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) =>
         RunRequiredAsync(["-s", serialNumber, .. arguments], progress, cancellationToken);

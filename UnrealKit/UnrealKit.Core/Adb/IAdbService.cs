@@ -41,18 +41,18 @@ public interface IAdbService
     Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 流式读取设备 logcat 输出，返回可取消的异步行流。
-    /// </summary>
-
-    /// <summary>
-    /// 強制停止設備上的應用。
+    /// 强制停止设备上的应用。
     /// </summary>
     Task<ProcessExecutionResult> ForceStopApplicationAsync(
         string serialNumber,
         string packageName,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
-        IAsyncEnumerable<string> StreamLogcatAsync(
+
+    /// <summary>
+    /// 流式读取设备 logcat 输出，返回可取消的异步行流。
+    /// </summary>
+    IAsyncEnumerable<string> StreamLogcatAsync(
         string serialNumber,
         string? filter = null,
         CancellationToken cancellationToken = default);

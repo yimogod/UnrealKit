@@ -114,10 +114,8 @@ static async Task<int> RunAppAsync(string[] arguments)
 static async Task<int> RunAppStartAsync(string[] options, string? adbPath)
 {
     var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(options, "--project"));
-    var adbService = CreateAdbService(adbPath, project.Settings.AdbPath);
-    var serialNumber = await ResolveDeviceSerialAsync(adbService, options);
-    var service = new LaunchParameterService(new AdbDeviceService(adbService));
-    await service.StartApplicationAsync(project, serialNumber);
+    var (deviceService, deviceId) = await ResolveDeviceTargetAsync(project, options, adbPath);
+    await new LaunchParameterService(deviceService).StartApplicationAsync(project, deviceId);
     return 0;
 }
 
@@ -283,9 +281,8 @@ static async Task<int> RunCommandLineAsync(string[] arguments)
 
     var options = commandArguments[1..];
     var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(options, "--project"));
-    var adbService = CreateAdbService(adbPath, project.Settings.AdbPath);
-    var serialNumber = await ResolveDeviceSerialAsync(adbService, options);
-    var service = new LaunchParameterService(new AdbDeviceService(adbService));
+    var (deviceService, serialNumber) = await ResolveDeviceTargetAsync(project, options, adbPath);
+    var service = new LaunchParameterService(deviceService);
     var remotePath = GetOptionalOption(options, "--remote-path");
     switch (commandArguments[0].ToLowerInvariant())
     {
@@ -330,13 +327,20 @@ static async Task<int> RunCaptureRunAsync(string[] arguments, string? adbPath)
     EnsureOnlyOptions(arguments, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--device", "--tag", "--format" }, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--skip-saved" });
     var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(arguments, "--project"));
     var json = IsJsonFormat(arguments);
-    var adbService = CreateAdbService(adbPath, project.Settings.AdbPath, streamOutput: !json);
-    var serialNumber = await ResolveDeviceSerialAsync(adbService, arguments);
     var tag = GetOptionalOption(arguments, "--tag") ?? project.Settings.DefaultCaptureTag;
-    var device = await GetSelectedAvailableDeviceAsync(adbService, serialNumber);
     var skipSaved = arguments.Any(option => string.Equals(option, "--skip-saved", StringComparison.OrdinalIgnoreCase));
-    var consoleService = new ConsoleCommandService(adbService);
-    var result = await new CaptureService(new AdbDeviceService(adbService), consoleService).CaptureAsync(new CaptureRequest(project, new AdbDeviceService.AdbDeviceWrapper(device), tag, SkipSaved: skipSaved));
+    var (deviceService, deviceId) = await ResolveDeviceTargetAsync(project, arguments, adbPath, streamOutput: !json);
+
+    var device = await GetSelectedAvailableDeviceAsync(deviceService, deviceId);
+
+    // 能力探测替代类型判断：不支持控制台指令的平台传 null，
+    // CaptureService 会在配置了采集序列时明确报错而不是静默跳过。
+    var consoleService = deviceService.Supports(DeviceCapability.SendConsoleCommand)
+        ? new ConsoleCommandService(deviceService)
+        : null;
+
+    var result = await new CaptureService(deviceService, consoleService)
+        .CaptureAsync(new CaptureRequest(project, device, tag, SkipSaved: skipSaved));
     WriteCaptureResult(result, json);
     return 0;
 }
@@ -346,7 +350,10 @@ static async Task<int> RunCaptureImportAsync(string[] arguments)
     EnsureOnlyOptions(arguments, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--project", "--source", "--platform", "--tag", "--capture-id", "--format" });
     var project = await new ProjectService().OpenProjectAsync(GetRequiredOption(arguments, "--project"));
     var source = GetRequiredOption(arguments, "--source");
-    var platform = GetOptionalOption(arguments, "--platform") ?? "Android";
+    // 未指定 --platform 时沿用工程配置的目标平台，而不是无条件当作 Android。
+    var platform = GetOptionalOption(arguments, "--platform") is { } requested
+        ? PlatformNames.ToName(PlatformNames.Parse(requested, "--platform"))
+        : PlatformNames.ToName(project.Settings.Platform);
     var tag = GetOptionalOption(arguments, "--tag") ?? project.Settings.DefaultCaptureTag;
     var captureId = GetOptionalOption(arguments, "--capture-id");
     var json = IsJsonFormat(arguments);
@@ -401,6 +408,7 @@ static async Task<int> RunParseAsync(string[] arguments)
     return arguments[0].ToLowerInvariant() switch
     {
         "meminfo" => await ParseMemInfoAsync(arguments[1..]),
+        "win64-meminfo" => await ParseWin64MemInfoAsync(arguments[1..]),
         "capture-list" => await ListCapturesAsync(arguments[1..]),
         "capture-files" => await ListCaptureFilesAsync(arguments[1..]),
         "capture-meminfo" => await ParseCaptureMemInfoAsync(arguments[1..]),
@@ -754,7 +762,8 @@ static BaselineDiffSource ParseDiffSource(string? value) => (value ?? "meminfo")
     "meminfo" => BaselineDiffSource.MemInfo,
     "memreport" => BaselineDiffSource.MemReport,
     "static-camera" => BaselineDiffSource.StaticCamera,
-    _ => throw new ArgumentException("--source must be one of meminfo, memreport, or static-camera.")
+    "win64-meminfo" => BaselineDiffSource.Win64MemInfo,
+    _ => throw new ArgumentException("--source must be one of meminfo, win64-meminfo, memreport, or static-camera.")
 };
 
 static string ResolveCaptureDirectory(IReadOnlyList<CaptureDirectoryInfo> captures, string captureIdOrPath)
@@ -801,6 +810,7 @@ static async Task<string> ResolveCaptureFileAsync(
     var category = source switch
     {
         BaselineDiffSource.MemInfo => "MemInfo",
+        BaselineDiffSource.Win64MemInfo => "MemInfo",
         BaselineDiffSource.MemReport => "Saved",
         BaselineDiffSource.StaticCamera => "Saved",
         _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unsupported baseline diff source.")
@@ -1045,12 +1055,12 @@ static int FailRenderDocUsage()
 static int FailAnalyzeUsage()
 {
     Console.Error.WriteLine("Usage:");
-    Console.Error.WriteLine("  unrealkit analyze diff --baseline <file> --current <file> [--source meminfo|memreport|static-camera]");
+    Console.Error.WriteLine("  unrealkit analyze diff --baseline <file> --current <file> [--source meminfo|win64-meminfo|memreport|static-camera]");
     Console.Error.WriteLine("                         [--metrics <name[,name...]>] [--only-changed] [--format text|json]");
     Console.Error.WriteLine("  unrealkit analyze diff --project <project.ukit> --baseline <capture-id> --current <capture-id>");
     Console.Error.WriteLine("                         [--baseline-file <filename>] [--current-file <filename>] [--source <source>]");
     Console.Error.WriteLine("                         [--metrics <name[,name...]>] [--only-changed] [--format text|json]");
-    Console.Error.WriteLine("  unrealkit analyze trend --project <project.ukit> [--source meminfo|memreport|static-camera]");
+    Console.Error.WriteLine("  unrealkit analyze trend --project <project.ukit> [--source meminfo|win64-meminfo|memreport|static-camera]");
     Console.Error.WriteLine("                          [--platform <platform>] [--tag <tag>] [--device <serial>]");
     Console.Error.WriteLine("                          [--from <yyyy-MM-dd>] [--to <yyyy-MM-dd>] [--metrics <name[,name...]>]");
     Console.Error.WriteLine("                          [--file <filename>] [--output <file.csv|file.tsv|file.xlsx>]");
@@ -1150,17 +1160,27 @@ static async Task<int> DisconnectAdbAsync(IAdbService service, string endpoint)
     return 0;
 }
 
-static async Task<AdbDevice> GetSelectedAvailableDeviceAsync(IAdbService service, string serialNumber)
+/// <summary>
+/// 从设备枚举结果中取出指定设备，并要求其处于可用状态。
+/// 「找不到设备」与「设备状态不对」是不同的失败，分别给出具体原因。
+/// </summary>
+static async Task<IDevice> GetSelectedAvailableDeviceAsync(IDeviceService service, string deviceId)
 {
-    var device = (await service.ListDevicesAsync()).SingleOrDefault(candidate => string.Equals(candidate.SerialNumber, serialNumber, StringComparison.Ordinal));
+    var devices = await service.ListDevicesAsync();
+    var device = devices.SingleOrDefault(candidate => string.Equals(candidate.Id, deviceId, StringComparison.Ordinal));
     if (device is null)
     {
-        throw new AdbDeviceSelectionException($"ADB device was not found: {serialNumber}");
+        var attached = devices.Count == 0
+            ? "(none attached)"
+            : string.Join(", ", devices.Select(candidate => candidate.Id));
+        throw new AdbDeviceSelectionException(
+            $"{service.Platform} device was not found: {deviceId}. Attached devices: {attached}.");
     }
 
     if (!device.IsAvailable)
     {
-        throw new AdbDeviceSelectionException($"ADB device '{serialNumber}' is in state '{device.Status}', not 'device'.");
+        throw new AdbDeviceSelectionException(
+            $"{service.Platform} device '{deviceId}' is not available. Ensure it is connected and authorized.");
     }
 
     return device;
@@ -1244,7 +1264,42 @@ static void WriteMemInfoParseResult(AndroidMemInfoParseResult result, bool json)
         Console.WriteLine($"App Summary TOTAL: {result.Report.Summary.TotalPssKb} KB");
     }
 
-    foreach (var diagnostic in result.Diagnostics)
+    WriteDiagnosticLines(result.Diagnostics);
+}
+static void WriteWin64MemInfoParseResult(Win64MemInfoParseResult result, bool json)
+{
+    if (json)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+        return;
+    }
+
+    if (result.Report is not null)
+    {
+        var counters = result.Report.Counters;
+        Console.WriteLine($"Input: {result.InputPath}");
+        Console.WriteLine($"Process: {result.Report.ProcessName} (pid {result.Report.ProcessId})");
+        Console.WriteLine($"Working set: {FormatBytes(counters.WorkingSetBytes)}");
+        Console.WriteLine($"Private memory: {FormatBytes(counters.PrivateMemoryBytes)}");
+        Console.WriteLine($"Virtual memory: {FormatBytes(counters.VirtualMemoryBytes)}");
+        Console.WriteLine($"Peak working set: {FormatBytes(counters.PeakWorkingSetBytes)}");
+        Console.WriteLine($"Threads: {counters.ThreadCount}, Handles: {counters.HandleCount}");
+        if (!string.IsNullOrWhiteSpace(counters.TotalProcessorTime))
+        {
+            Console.WriteLine($"Total processor time: {counters.TotalProcessorTime}");
+        }
+    }
+
+    WriteDiagnosticLines(result.Diagnostics);
+}
+
+static string FormatBytes(long? bytes) => bytes is null
+    ? "n/a"
+    : $"{bytes.Value / 1024.0 / 1024.0:F2} MB";
+
+static void WriteDiagnosticLines(IReadOnlyList<UnrealKit.Core.Diagnostics.Diagnostic> diagnostics)
+{
+    foreach (var diagnostic in diagnostics)
     {
         var line = diagnostic.LineNumber is null ? string.Empty : $" line {diagnostic.LineNumber}";
         Console.Error.WriteLine($"[{diagnostic.Severity}] {diagnostic.Code}{line}: {diagnostic.Message}");
@@ -1254,6 +1309,7 @@ static void WriteMemInfoParseResult(AndroidMemInfoParseResult result, bool json)
         }
     }
 }
+
 static (string[] CommandArguments, string? AdbPath) ParseAdbPath(string[] arguments)
 {
     var pathIndex = Array.FindIndex(arguments, argument => string.Equals(argument, "--adb-path", StringComparison.OrdinalIgnoreCase));
@@ -1274,6 +1330,34 @@ static AdbService CreateAdbService(string? explicitPath, string? projectAdbPath 
 {
     var resolvedPath = new AdbPathResolver().ResolveRequired(explicitPath, projectAdbPath);
     return new AdbService(new ProcessRunner(), resolvedPath, streamOutput ? new Progress<ProcessOutput>(WriteProcessOutput) : null);
+}
+
+/// <summary>
+/// 按工程配置的目标平台解析设备服务与设备标识。
+/// Android 需要 ADB 并要求显式选择设备；Win64 只有本机一台，不需要 ADB。
+/// </summary>
+static async Task<(IDeviceService DeviceService, string DeviceId)> ResolveDeviceTargetAsync(
+    UkitProject project,
+    string[] options,
+    string? adbPath,
+    bool streamOutput = true)
+{
+    if (project.Settings.Platform == TargetPlatform.Win64)
+    {
+        var requestedDevice = GetOptionalOption(options, "--device");
+        var localDevice = new Win64Device();
+        if (requestedDevice is not null && !string.Equals(requestedDevice, localDevice.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"Win64 工程只支持本机设备 '{localDevice.Id}'，无法使用 --device {requestedDevice}。");
+        }
+
+        return (new Win64DeviceService(new ProcessRunner()), localDevice.Id);
+    }
+
+    var adbService = CreateAdbService(adbPath, project.Settings.AdbPath, streamOutput);
+    var serialNumber = await ResolveDeviceSerialAsync(adbService, options);
+    return (new AdbDeviceService(adbService), serialNumber);
 }
 
 static void WriteProcessOutput(ProcessOutput output)
@@ -1430,6 +1514,14 @@ static async Task<int> ParseMemInfoAsync(string[] options)
     var result = await new AndroidMemInfoParser().ParseFileAsync(GetRequiredOption(options, "--input"));
     var json = IsJsonFormat(options);
     WriteMemInfoParseResult(result, json);
+    return result.IsSuccess ? 0 : 1;
+}
+
+static async Task<int> ParseWin64MemInfoAsync(string[] options)
+{
+    EnsureOnlyOptions(options, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--input", "--format" });
+    var result = await new Win64MemInfoParser().ParseFileAsync(GetRequiredOption(options, "--input"));
+    WriteWin64MemInfoParseResult(result, IsJsonFormat(options));
     return result.IsSuccess ? 0 : 1;
 }
 
@@ -1678,6 +1770,7 @@ static int FailParseUsage()
 {
     Console.Error.WriteLine("Usage:");
     Console.Error.WriteLine("  unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
+    Console.Error.WriteLine("  unrealkit parse win64-meminfo --input <meminfo.txt> [--format text|json]");
     Console.Error.WriteLine("  unrealkit parse memreport --input <memreport.txt> [--format text|json]");
     Console.Error.WriteLine("  unrealkit parse capture-list --project <project.ukit> [--platform <platform>] [--tag <tag>]");
     Console.Error.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
@@ -1696,38 +1789,39 @@ static async Task<int> RunDevicesAsync(string[] arguments)
         return 2;
     }
 
-    var deviceServices = new List<IDeviceService> { new Win64DeviceService() };
+    var result = await CreateDeviceProvider(GetOptionalOption(arguments, "--adb-path")).ListDevicesAsync();
 
-    // Try ADB for Android devices
-    try
+    foreach (var device in result.Devices)
     {
-        var adbPath = GetOptionalOption(arguments, "--adb-path");
-        var adbService = CreateAdbService(adbPath);
-        deviceServices.Add(new AdbDeviceService(adbService));
-    }
-    catch
-    {
-        // ADB not available, only Win64 will be shown
+        var status = device.IsAvailable ? "available" : "unavailable";
+        Console.WriteLine($"{device.Id,-20} {device.Name,-30} {device.Platform,-10} {status}");
     }
 
-    foreach (var service in deviceServices)
+    // 平台枚举失败不静默：报告原因，让「没有设备」与「无法枚举」可区分。
+    foreach (var failure in result.Failures)
     {
-        try
-        {
-            var devices = await service.ListDevicesAsync();
-            foreach (var device in devices)
-            {
-                var status = device.IsAvailable ? "available" : "unavailable";
-                Console.WriteLine($"{device.Id,-20} {device.Name,-30} {device.Platform,-10} {status}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Failed to list devices from {service.GetType().Name}: {ex.Message}");
-        }
+        Console.Error.WriteLine($"Failed to list {failure.Platform} devices: {failure.Message}");
     }
 
     return 0;
+}
+
+/// <summary>
+/// 构造跨平台设备枚举器。ADB 不可用时该平台记为枚举失败，Win64 仍照常列出。
+/// </summary>
+static AggregateDeviceProvider CreateDeviceProvider(string? adbPath)
+{
+    var providers = new List<IDeviceProvider> { new Win64DeviceService() };
+    try
+    {
+        providers.Add(new AdbDeviceService(CreateAdbService(adbPath)));
+    }
+    catch (AdbPathResolutionException exception)
+    {
+        providers.Add(new UnavailableDeviceProvider(TargetPlatform.Android, exception.Message));
+    }
+
+    return new AggregateDeviceProvider(providers);
 }
 
 static string? GetPositionalArgument(string[] arguments, int index)
@@ -1756,6 +1850,7 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial>|auto [--tag <tag>] [--format text|json] [--skip-saved] [--adb-path <path>]");
     Console.WriteLine("  unrealkit capture import --project <project.ukit> --source <directory> [--platform <platform>] [--tag <tag>] [--capture-id <id>]");
     Console.WriteLine("  unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");
+    Console.WriteLine("  unrealkit parse win64-meminfo --input <meminfo.txt> [--format text|json]");
     Console.WriteLine("  unrealkit parse memreport --input <memreport.txt> [--format text|json]");
     Console.WriteLine("  unrealkit parse capture-list --project <project.ukit> [--platform <platform>] [--tag <tag>]");
     Console.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
@@ -1763,7 +1858,7 @@ static void PrintUsage()
     Console.WriteLine("  unrealkit parse static-camera --input <log> [--screenshots <dir>] [--format json] [--html-output <path>]");
     Console.WriteLine("  unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
   Console.WriteLine("  unrealkit export memreport --input <memreport.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
-    Console.WriteLine("  unrealkit analyze diff --baseline <file> --current <file> [--source meminfo|memreport|static-camera] [--metrics <list>] [--only-changed] [--format text|json]");
+    Console.WriteLine("  unrealkit analyze diff --baseline <file> --current <file> [--source meminfo|win64-meminfo|memreport|static-camera] [--metrics <list>] [--only-changed] [--format text|json]");
     Console.WriteLine("  unrealkit analyze diff --project <project.ukit> --baseline <capture-id> --current <capture-id> [--baseline-file <filename>] [--current-file <filename>] [--source <source>] [--metrics <list>] [--only-changed] [--format text|json]");
     Console.WriteLine("  unrealkit analyze trend --project <project.ukit> [--source <source>] [--platform <platform>] [--tag <tag>] [--device <serial>] [--from <yyyy-MM-dd>] [--to <yyyy-MM-dd>] [--metrics <list>] [--file <filename>] [--output <file.csv|file.tsv|file.xlsx>] [--include-points] [--format text|json]");
     Console.WriteLine("  unrealkit renderdoc run --python <python.exe> --script <script.py> [--args <space-separated args>] [--output <dir>] [--workdir <dir>] [--format text|json]");

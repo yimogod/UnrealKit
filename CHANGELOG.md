@@ -4,7 +4,18 @@ All notable changes to UnrealKit.
 
 ## [Unreleased]
 
+### Platform Abstraction (behavior changes)
+- `PlatformNames` is now the single mapping between `TargetPlatform` and the `"Android"` / `"Win64"` contract strings used by archive directories and `.ukit`
+- `IDeviceService.Supports(DeviceCapability)` replaces platform type checks. Unsupported operations throw `DeviceCapabilityNotSupportedException` instead of returning empty results — notably `StreamLogAsync` on Win64, which previously returned an empty stream indistinguishable from "connected, no logs yet"
+- `AggregateDeviceProvider` reports per-platform enumeration failures instead of silently omitting a platform, so a missing `adb` surfaces as a stated reason in both CLI and GUI
+- **Breaking:** an unrecognized `Platform` value in `Config/DefaultGame.ini` now fails with `Unsupported platform: '<value>'` instead of silently falling back to Android. A misspelling such as `Platform=Andriod` previously made a Win64 project capture as Android and report success. An absent value still uses the default
+- **Breaking:** `capture import --platform` now defaults to the project's configured platform rather than always Android. Pass `--platform` explicitly to override
+- `LaunchParameterService` and `ConsoleCommandService` now delegate to `IDeviceService`, so `commandline push/delete` and `app start` work on Win64 through the same code path as Android
+- Win64 applications now launch with the working directory set to the executable's own directory, so UE resolves relative content paths identically under CLI and GUI
 
+### Fixed
+- `Win64IntegrationTests` killed processes by the name `cmd`, terminating every `cmd.exe` on the machine — including child processes of tests running in parallel and the developer's own terminals. It now operates on a uniquely named copy. This was the cause of the intermittent `ProcessRunnerTests` timeout failure and of full-suite runs taking two minutes instead of two seconds
+- `CaptureServiceTests` asserted against progress messages collected through `Progress<T>`, which dispatches callbacks to the thread pool; assertions could run before the callback and `List<T>` was written from pool threads. Now uses a synchronous `IProgress<T>` and a concurrent collection
 
 ### Static Camera HTML Report (Phase 2 P1)
 - `StaticCameraHtmlReportService`: self-contained HTML report with device info, threshold-colored summary, collapsible per-camera detail cards, screenshot references, and diagnostics

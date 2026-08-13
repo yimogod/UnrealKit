@@ -120,7 +120,39 @@ public sealed class ProjectServiceTests : IDisposable
         Assert.Equal(@"C:\Game\MyGame.exe", reopened.Settings.Win64Executable);
         Assert.Equal(@"C:\Game", reopened.Settings.Win64WorkingDirectory);
         Assert.Equal("MyGame-Win64-Shipping", reopened.Settings.PackageName);
-    }    public void Dispose()
+    }
+
+    [Fact]
+    public async Task OpenProjectAsync_MisspelledPlatform_FailsInsteadOfDefaultingToAndroid()
+    {
+        // 静默回退会让 Win64 工程按 Android 采集，产出空数据却报告成功。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "TypoProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "TypoProject"));
+        var iniPath = created.Project.ConfigFilePath;
+        var ini = await File.ReadAllTextAsync(iniPath);
+        await File.WriteAllTextAsync(iniPath, ini.Replace("Platform=Android", "Platform=Andriod", StringComparison.Ordinal));
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(
+            () => service.OpenProjectAsync(created.Project.ProjectFilePath));
+
+        Assert.Contains("Andriod", exception.Message);
+        Assert.Contains("Win64", exception.Message);
+    }
+
+    [Fact]
+    public async Task OpenProjectAsync_AbsentPlatform_UsesDefault()
+    {
+        var projectDirectory = Path.Combine(_temporaryDirectory, "DefaultPlatformProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "DefaultPlatformProject"));
+
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal(TargetPlatform.Android, reopened.Settings.Platform);
+    }
+
+    public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))
         {

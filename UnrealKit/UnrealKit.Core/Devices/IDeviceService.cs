@@ -4,16 +4,33 @@ using UnrealKit.Core.Processes;
 namespace UnrealKit.Core.Devices;
 
 /// <summary>
-/// 设备服务抽象。封装设备发现、内存采集、文件拉取、控制台指令等平台相关操作。
+/// 设备发现抽象。与 IDeviceService 分开：枚举设备不需要先持有某台设备，
+/// 而针对设备的操作需要。合在一个接口里会迫使调用方「先有设备才能找设备」。
 /// </summary>
-public interface IDeviceService
+public interface IDeviceProvider
 {
+    /// <summary>该提供者负责的平台。</summary>
+    Projects.TargetPlatform Platform { get; }
+
     /// <summary>
-    /// 列出当前可用设备。
+    /// 列出该平台当前可用设备。
     /// </summary>
     Task<IReadOnlyList<IDevice>> ListDevicesAsync(
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// 设备服务抽象。封装内存采集、文件拉取、控制台指令等针对单台设备的平台相关操作。
+/// 平台之间的能力差异由 <see cref="Supports"/> 显式声明。
+/// </summary>
+public interface IDeviceService : IDeviceProvider
+{
+    /// <summary>
+    /// 该平台是否支持指定能力。返回 false 时对应方法会抛出
+    /// <see cref="DeviceCapabilityNotSupportedException"/>。
+    /// </summary>
+    bool Supports(DeviceCapability capability);
 
     /// <summary>
     /// 采集目标进程的内存信息，返回平台原生输出文本。
@@ -46,7 +63,8 @@ public interface IDeviceService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 流式读取 UE 日志输出。
+    /// 流式读取 UE 日志输出。平台不支持时抛出 <see cref="DeviceCapabilityNotSupportedException"/>，
+    /// 不返回空流——空流无法与「有日志能力但暂时无输出」区分。
     /// </summary>
     IAsyncEnumerable<string> StreamLogAsync(
         IDevice device,
@@ -64,9 +82,7 @@ public interface IDeviceService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-
-    /// <summary>
-    /// 停止應用。
+    /// 停止应用。
     /// </summary>
     Task<ProcessExecutionResult> StopApplicationAsync(
         IDevice device,
@@ -74,7 +90,8 @@ public interface IDeviceService
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
 
-        /// 推送文件到设备。
+    /// <summary>
+    /// 推送文件到设备。
     /// </summary>
     Task<ProcessExecutionResult> PushFileAsync(
         IDevice device,

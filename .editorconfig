@@ -1,0 +1,23 @@
+root = true
+
+[*]
+charset = utf-8-bom
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{md,json,yml,yaml}]
+indent_size = 2
+
+[*.{sh}]
+end_of_line = lf
+
+[*.cs]
+# 中文注释与诊断消息要求文件以 UTF-8 (BOM) 保存；
+# 缺少 BOM 时部分编辑器会按系统 ANSI 代码页读取并写回乱码。
+charset = utf-8-bom
+indent_size = 4
+csharp_new_line_before_open_brace = all
+dotnet_sort_system_directives_first = true

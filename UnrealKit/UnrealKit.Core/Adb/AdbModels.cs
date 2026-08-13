@@ -32,7 +32,7 @@ public sealed record AdbDevice(
 
     string IDevice.Id => SerialNumber;
     string IDevice.Name => Model ?? DeviceName ?? SerialNumber;
-    string IDevice.Platform => "Android";
+    string IDevice.Platform => Projects.PlatformNames.Android;
     bool IDevice.IsAvailable => IsAvailable;
 }
 

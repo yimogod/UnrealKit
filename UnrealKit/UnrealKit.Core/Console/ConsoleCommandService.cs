@@ -1,21 +1,38 @@
 ﻿using UnrealKit.Core.Adb;
+using UnrealKit.Core.Devices;
 using UnrealKit.Core.Operations;
 
 namespace UnrealKit.Core.Console;
 
 /// <summary>
-/// 控制台指令服务实现。将指令序列的执行委托给 CommandSequenceRunner。
+/// 控制台指令服务实现。
+///
+/// 依赖 IDeviceService 而不是 IAdbService：绑定 ADB 会让指令序列在结构上永远无法支持
+/// 非 Android 平台。平台能力差异由 IDeviceService.Supports 声明，
+/// 不支持的平台在此显式拒绝，而不是让调用方各自分支。
 /// </summary>
 public sealed class ConsoleCommandService : IConsoleCommandService
 {
-    private readonly IAdbService _adbService;
+    private readonly IDeviceService _deviceService;
     private readonly TimeProvider? _timeProvider;
 
-    public ConsoleCommandService(IAdbService adbService, TimeProvider? timeProvider = null)
+    public ConsoleCommandService(IDeviceService deviceService, TimeProvider? timeProvider = null)
     {
-        _adbService = adbService;
+        _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
         _timeProvider = timeProvider;
     }
+
+    /// <summary>兼容既有调用方：由 IAdbService 构造 Android 设备服务。</summary>
+    public ConsoleCommandService(IAdbService adbService, TimeProvider? timeProvider = null)
+        : this(new AdbDeviceService(adbService), timeProvider)
+    {
+    }
+
+    /// <summary>该设备平台是否支持控制台指令。</summary>
+    public bool IsSupported => _deviceService.Supports(DeviceCapability.SendConsoleCommand);
+
+    private IDevice ResolveDevice(string deviceId) =>
+        DeviceReference.Create(deviceId, _deviceService.Platform);
 
     public async Task<ConsoleCommandResult> SendAsync(
         string serialNumber,
@@ -31,7 +48,7 @@ public sealed class ConsoleCommandService : IConsoleCommandService
 
         var timeProvider = _timeProvider ?? TimeProvider.System;
         var startedAt = timeProvider.GetLocalNow();
-        var result = await _adbService.SendConsoleCommandAsync(serialNumber, command.Command, packageName, progress, cancellationToken);
+        var result = await _deviceService.SendConsoleCommandAsync(ResolveDevice(serialNumber), command.Command, packageName, progress, cancellationToken);
         var completedAt = timeProvider.GetLocalNow();
 
         return new ConsoleCommandResult(
@@ -172,7 +189,7 @@ public sealed class ConsoleCommandService : IConsoleCommandService
 
         try
         {
-            await foreach (var line in _adbService.StreamLogcatAsync(serialNumber, filter: null, linkedCts.Token))
+            await foreach (var line in _deviceService.StreamLogAsync(ResolveDevice(serialNumber), filter: null, linkedCts.Token))
             {
                 if (line.Contains(condition.Pattern, StringComparison.Ordinal))
                 {

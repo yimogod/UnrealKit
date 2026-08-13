@@ -1,4 +1,4 @@
-namespace UnrealKit.Core.Processes;
+﻿namespace UnrealKit.Core.Processes;
 
 public enum ProcessOutputStream
 {

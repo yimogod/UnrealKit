@@ -5,16 +5,23 @@ using UnrealKit.Core.Projects;
 
 namespace UnrealKit.Core.Launch;
 
+/// <summary>
+/// 启动参数（uecommandline.txt）的构建与投放。
+///
+/// 平台差异只体现在「路径长什么样」上（Android 是 Unix 绝对路径，Win64 是本机路径）；
+/// 写文件、删文件、启动应用一律委托 IDeviceService，不在此处按平台分支重复实现——
+/// 那会让 Win64DeviceService 已有的实现被绕过，同一逻辑存在两份。
+/// </summary>
 public sealed class LaunchParameterService : ILaunchParameterService
 {
+    private const string FileName = "uecommandline.txt";
+
     private readonly IDeviceService _deviceService;
 
     public LaunchParameterService(IDeviceService deviceService)
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
     }
-
-    private const string FileName = "uecommandline.txt";
 
     public string BuildContent(ProjectSettings settings, IReadOnlyList<string> presetNames, string? customArguments = null)
     {
@@ -42,13 +49,16 @@ public sealed class LaunchParameterService : ILaunchParameterService
 
         if (settings.Platform == TargetPlatform.Win64)
         {
-            var workingDir = !string.IsNullOrWhiteSpace(settings.Win64WorkingDirectory)
-                ? settings.Win64WorkingDirectory
-                : ".";
-            return ValidatePath(settings, Path.Combine(workingDir, settings.UnrealProjectName, FileName));
+            if (string.IsNullOrWhiteSpace(settings.Win64WorkingDirectory))
+            {
+                throw new InvalidOperationException(
+                    "Win64 启动参数需要在工程配置中设置 Win64WorkingDirectory 以定位 uecommandline.txt。" +
+                    "回退到当前工作目录会让 GUI 与 CLI 写到不同位置。");
+            }
+
+            return ValidatePath(settings, Path.Combine(settings.Win64WorkingDirectory, settings.UnrealProjectName, FileName));
         }
 
-        // Android
         var root = settings.DeviceGameRootTemplate
             .Replace("{PackageName}", settings.PackageName, StringComparison.Ordinal)
             .Replace("{UnrealProjectName}", settings.UnrealProjectName, StringComparison.Ordinal);
@@ -62,28 +72,19 @@ public sealed class LaunchParameterService : ILaunchParameterService
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SerialNumber);
         var content = BuildContent(project.Settings, request.PresetNames, request.CustomArguments);
         var remotePath = GetRemotePath(project.Settings, request.RemotePathOverride);
+        var device = ResolveDevice(project.Settings, request.SerialNumber);
 
-        if (project.Settings.Platform == TargetPlatform.Win64)
-        {
-            // Win64: 直接写入本地文件
-            progress?.Report(new OperationProgress("commandline-push", "Writing", 1, 1, $"Writing {FileName} to {remotePath}."));
-            var dir = Path.GetDirectoryName(remotePath);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            await File.WriteAllTextAsync(remotePath, content, new System.Text.UTF8Encoding(false), cancellationToken);
-            return new LaunchParameterPushResult(content, remotePath, new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
-        }
-
-        // Android: ADB push
+        // 内容先落到本地临时文件，再交给设备服务投放。Win64 的「推送」就是复制，
+        // Android 是 adb push——两者都由 IDeviceService.PushFileAsync 负责。
         var directory = Path.Combine(Path.GetTempPath(), "UnrealKit", "LaunchParameters");
         Directory.CreateDirectory(directory);
         var temporaryPath = Path.Combine(directory, $"{Guid.NewGuid():N}-{FileName}");
         try
         {
-            progress?.Report(new OperationProgress("commandline-push", "Writing", 1, 2, "Writing temporary uecommandline.txt."));
+            progress?.Report(new OperationProgress("commandline-push", "Writing", 1, 2, $"Writing temporary {FileName}."));
             await File.WriteAllTextAsync(temporaryPath, content, new System.Text.UTF8Encoding(false), cancellationToken);
             progress?.Report(new OperationProgress("commandline-push", "Pushing", 2, 2, $"Pushing to {remotePath}."));
-            var adbDevice = new AdbDeviceWrapper(request.SerialNumber);
-            var result = await _deviceService.PushFileAsync(adbDevice, temporaryPath, remotePath, progress, cancellationToken);
+            var result = await _deviceService.PushFileAsync(device, temporaryPath, remotePath, progress, cancellationToken);
             return new LaunchParameterPushResult(content, remotePath, result);
         }
         finally
@@ -100,14 +101,7 @@ public sealed class LaunchParameterService : ILaunchParameterService
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(serialNumber);
         var path = GetRemotePath(project.Settings, remotePathOverride);
-
-        if (project.Settings.Platform == TargetPlatform.Win64)
-        {
-            if (File.Exists(path)) File.Delete(path);
-            return Task.FromResult(new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
-        }
-
-        return _deviceService.DeleteRemoteFileAsync(new AdbDeviceWrapper(serialNumber), path, progress, cancellationToken);
+        return _deviceService.DeleteRemoteFileAsync(ResolveDevice(project.Settings, serialNumber), path, progress, cancellationToken);
     }
 
     public Task<ProcessExecutionResult> StartApplicationAsync(UkitProject project, string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
@@ -115,31 +109,40 @@ public sealed class LaunchParameterService : ILaunchParameterService
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(serialNumber);
 
-        if (project.Settings.Platform == TargetPlatform.Win64)
-        {
-            var exePath = !string.IsNullOrWhiteSpace(project.Settings.Win64Executable)
-                ? project.Settings.Win64Executable
-                : throw new InvalidOperationException("Win64Executable is not configured in project settings.");
-            var workingDir = !string.IsNullOrWhiteSpace(project.Settings.Win64WorkingDirectory)
-                ? project.Settings.Win64WorkingDirectory
-                : Path.GetDirectoryName(exePath) ?? ".";
-            var runner = new ProcessRunner();
-            return runner.RunAsync(new ProcessExecutionRequest(exePath, Array.Empty<string>(), workingDir), progress, cancellationToken);
-        }
+        var settings = project.Settings;
+        var device = ResolveDevice(settings, serialNumber);
 
-        return _deviceService.StartApplicationAsync(new AdbDeviceWrapper(serialNumber), project.Settings.PackageName, project.Settings.Activity, progress, cancellationToken);
+        // 启动目标在 Android 上是包名 + Activity，在 Win64 上是可执行文件路径。
+        var (target, activity) = settings.Platform == TargetPlatform.Win64
+            ? (!string.IsNullOrWhiteSpace(settings.Win64Executable)
+                ? settings.Win64Executable
+                : throw new InvalidOperationException("Win64Executable is not configured in project settings."), null)
+            : (settings.PackageName, settings.Activity);
+
+        return _deviceService.StartApplicationAsync(device, target, activity, progress, cancellationToken);
     }
 
+    /// <summary>
+    /// 校验启动参数路径。Android 要求 Unix 绝对路径；Win64 要求绝对本机路径——
+    /// 相对路径会按当前进程工作目录解析，GUI 与 CLI 下指向不同位置。
+    /// </summary>
     private static string ValidatePath(ProjectSettings settings, string path)
     {
         if (settings.Platform == TargetPlatform.Win64)
         {
             if (string.IsNullOrWhiteSpace(path))
+            {
                 throw new ArgumentException("Launch parameter path must not be empty.", nameof(path));
-            return path;
+            }
+
+            if (!Path.IsPathFullyQualified(path))
+            {
+                throw new ArgumentException($"Win64 launch parameter path must be absolute: {path}", nameof(path));
+            }
+
+            return Path.GetFullPath(path);
         }
 
-        // Android
         if (!path.StartsWith("/", StringComparison.Ordinal) || path.Contains('\\') || path.Contains('\0'))
         {
             throw new ArgumentException("Launch parameter remote path must be an absolute Unix path.", nameof(path));
@@ -148,15 +151,6 @@ public sealed class LaunchParameterService : ILaunchParameterService
         return path;
     }
 
-    /// <summary>
-    /// 从 serial number 构造最小 IDevice 实现，仅用于 ADB 调用。
-    /// </summary>
-    private sealed class AdbDeviceWrapper : IDevice
-    {
-        public AdbDeviceWrapper(string id) { Id = id; Name = id; }
-        public string Id { get; }
-        public string Name { get; }
-        public string Platform => "Android";
-        public bool IsAvailable => true;
-    }
+    private static IDevice ResolveDevice(ProjectSettings settings, string serialNumber) =>
+        DeviceReference.Create(serialNumber, settings.Platform);
 }

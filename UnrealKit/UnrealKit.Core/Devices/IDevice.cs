@@ -1,4 +1,4 @@
-namespace UnrealKit.Core.Devices;
+﻿namespace UnrealKit.Core.Devices;
 
 /// <summary>
 /// 设备抽象。Android 设备 / Win64 本机均实现此接口，供 Capture、Console、Launch 层使用。
@@ -16,7 +16,9 @@ public interface IDevice
     string Name { get; }
 
     /// <summary>
-    /// 平台标识，与 TargetPlatform 枚举值一致 ("Android" / "Win64")。
+    /// 平台标识。取值必须来自 <see cref="Projects.PlatformNames"/>，
+    /// 不要写字面量——那会让平台名散落各处、改一处漏三处。
+    /// 需要枚举时用 <c>PlatformNames.Parse</c> 转换。
     /// </summary>
     string Platform { get; }
 

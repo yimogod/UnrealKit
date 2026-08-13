@@ -1,4 +1,4 @@
-using UnrealKit.Core.Devices;
+﻿using UnrealKit.Core.Devices;
 
 namespace UnrealKit.Core.Capture;
 

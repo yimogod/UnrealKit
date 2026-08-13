@@ -46,6 +46,8 @@ public sealed class BaselineService : IBaselineService
                 await new UnrealMemReportParser().ParseFileAsync(fullPath, cancellationToken), label),
             BaselineDiffSource.StaticCamera => CreateStaticCameraSnapshot(
                 await new StaticCameraPerfParser().ParseFileAsync(fullPath, cancellationToken), label),
+            BaselineDiffSource.Win64MemInfo => CreateWin64MemInfoSnapshot(
+                await new Win64MemInfoParser().ParseFileAsync(fullPath, cancellationToken), label),
             _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unsupported baseline diff source.")
         };
     }
@@ -335,6 +337,39 @@ public sealed class BaselineService : IBaselineService
 
         return new MetricSnapshot(
             BaselineDiffSource.MemInfo,
+            result.InputPath,
+            label,
+            samples,
+            result.Diagnostics,
+            result.IsSuccess);
+    }
+
+    private static MetricSnapshot CreateWin64MemInfoSnapshot(Win64MemInfoParseResult result, string? label)
+    {
+        var samples = new List<MetricSample>();
+        if (result.Report is { } report)
+        {
+            var counters = report.Counters;
+            foreach (var (name, value) in new (string, long?)[]
+            {
+                ("WorkingSetBytes", counters.WorkingSetBytes),
+                ("PrivateMemoryBytes", counters.PrivateMemoryBytes),
+                ("VirtualMemoryBytes", counters.VirtualMemoryBytes),
+                ("PagedMemoryBytes", counters.PagedMemoryBytes),
+                ("NonPagedMemoryBytes", counters.NonPagedMemoryBytes),
+                ("PeakWorkingSetBytes", counters.PeakWorkingSetBytes),
+                ("PeakVirtualMemoryBytes", counters.PeakVirtualMemoryBytes)
+            })
+            {
+                samples.Add(new MetricSample("ProcessMemory", name, ByteUnit, MetricDirection.LowerIsBetter, value, null));
+            }
+
+            samples.Add(new MetricSample("ProcessMemory", "ThreadCount", CountUnit, MetricDirection.Neutral, counters.ThreadCount, null));
+            samples.Add(new MetricSample("ProcessMemory", "HandleCount", CountUnit, MetricDirection.Neutral, counters.HandleCount, null));
+        }
+
+        return new MetricSnapshot(
+            BaselineDiffSource.Win64MemInfo,
             result.InputPath,
             label,
             samples,

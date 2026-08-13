@@ -1,0 +1,26 @@
+* text=auto
+
+# Source and project files: keep as UTF-8 with CRLF in the working tree.
+# UTF-8 BOM lets MSBuild/Visual Studio detect the encoding on Windows and
+# prevents Chinese comments and diagnostic messages from being rewritten as
+# mojibake by editors that fall back to the system ANSI codepage.
+*.cs      text eol=crlf
+*.xaml    text eol=crlf
+*.csproj  text eol=crlf
+*.sln     text eol=crlf
+*.props   text eol=crlf
+*.targets text eol=crlf
+*.md      text eol=crlf
+*.json    text eol=crlf
+*.ini     text eol=crlf
+
+# Batch scripts must stay CRLF; native bat parsing breaks on LF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.sh text eol=lf
+
+*.xlsx binary
+*.png  binary
+*.jpg  binary
+*.ico  binary

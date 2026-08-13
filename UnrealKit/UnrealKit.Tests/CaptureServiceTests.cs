@@ -89,8 +89,10 @@ public sealed class CaptureServiceTests : IDisposable
         var service = new CaptureService(new AdbDeviceService(new FakeAdbService()), fakeConsoleService);
         var device = new AdbDevice("device-01", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, string.Empty);
 
-        var progressMessages = new List<OperationProgress>();
-        var progress = new Progress<OperationProgress>(msg => progressMessages.Add(msg));
+        // 不能用 Progress<T>：它把回调 post 到线程池异步执行，断言可能早于回调到达，
+        // 且从池线程写 List<T> 并不安全。满负载跑整个测试集时会随机漏掉消息。
+        var progressMessages = new System.Collections.Concurrent.ConcurrentQueue<OperationProgress>();
+        var progress = new SynchronousProgress<OperationProgress>(progressMessages.Enqueue);
 
         // Should complete without throwing — post-sequence failure is a warning, not an error.
         var result = await service.CaptureAsync(new CaptureRequest(configuredProject, device, "Nightly"), progress);
@@ -100,6 +102,14 @@ public sealed class CaptureServiceTests : IDisposable
         var warning = Assert.Single(progressMessages, p => p.Stage == "PostSequence" && p.Message.Contains("had 1 failed step"));
         Assert.Contains("MyPostSeq", warning.Message);
         Assert.Contains("had 1 failed step", warning.Message);
+    }
+
+    /// <summary>
+    /// 同步转发的 IProgress，回调在报告线程上立即执行，断言不会与回调竞争。
+    /// </summary>
+    private sealed class SynchronousProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 
     private sealed class FailingConsoleService : IConsoleCommandService

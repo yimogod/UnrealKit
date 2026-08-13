@@ -52,15 +52,15 @@ unrealkit export memreport --input <file> --output <file.csv|file.tsv|file.xlsx>
                            [--include-details] [--capture-id <id>]
 
 unrealkit analyze diff --baseline <file> --current <file>
-                       [--source meminfo|memreport|static-camera]
+                       [--source meminfo|win64-meminfo|memreport|static-camera]
                        [--metrics <name[,name...]>] [--only-changed] [--format text|json]
 unrealkit analyze diff --project <project.ukit> --baseline <capture-id> --current <capture-id>
                        [--baseline-file <filename>] [--current-file <filename>]
-                       [--source meminfo|memreport|static-camera]
+                       [--source meminfo|win64-meminfo|memreport|static-camera]
                        [--metrics <name[,name...]>] [--only-changed] [--format text|json]
 
 unrealkit analyze trend --project <project.ukit>
-                        [--source meminfo|memreport|static-camera]
+                        [--source meminfo|win64-meminfo|memreport|static-camera]
                         [--platform <platform>] [--tag <tag>] [--device <serial>]
                         [--from <yyyy-MM-dd>] [--to <yyyy-MM-dd>]
                         [--metrics <name[,name...]>] [--file <filename>]
@@ -72,7 +72,8 @@ unrealkit analyze trend --project <project.ukit>
 ## 参数约定
 
 - `--project` 接受 `.ukit` 文件路径，不接受工程目录。
-- `--device` 接受 ADB 序列号；`capture run` 额外接受 `auto`，且仅在恰好一台设备在线时成立，否则报错而非任选。
+- `--device` 接受 ADB 序列号；`capture run` 额外接受 `auto`，且仅在恰好一台设备在线时成立，否则报错而非任选。Win64 工程只有本机一台设备（`localhost`），传入其它值报错而不是忽略。
+- `--platform` 接受 `Android` / `Win64`（大小写不敏感）。不传时取工程配置的目标平台，不无条件按 `Android` 处理；传入无法识别的值报错并列出合法取值。
 - `--adb-path` 为最高优先级的 adb 来源，解析顺序见 `Doc/设备操作与文件安全.md`。
 - `--format` 默认为 `text`；`json` 输出必须是单个可解析的 JSON 文档，不与人类可读日志混排。
 - 输出文件的扩展名决定格式，规则见 `Doc/解析导出与诊断.md`。

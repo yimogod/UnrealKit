@@ -1,4 +1,4 @@
-namespace UnrealKit.Core.Adb;
+﻿namespace UnrealKit.Core.Adb;
 
 public enum AdbPathSource
 {

@@ -71,6 +71,30 @@ public sealed class Win64MemInfoParserTests
     }
 
     [Fact]
+    public void Parse_CrlfInput_ParsesCountersIdenticallyToLf()
+    {
+        // Capture output arrives with the platform's line endings. A greedy value group
+        // captures the trailing CR and makes every numeric counter silently fall back
+        // to zero/null, so CRLF must parse exactly like LF.
+        const string body = "** WIN64 MEMINFO for process MyGame (PID: 12345) **\n"
+            + "WorkingSetMB:           512.00\n"
+            + "Threads:                42\n"
+            + "Handles:                1234\n"
+            + "TotalProcessorTime:     00:15:30.1234567\n";
+
+        var parser = new Win64MemInfoParser();
+        var lf = parser.Parse("lf.txt", body.Split('\n').ToList());
+        var crlf = parser.Parse("crlf.txt", body.Replace("\n", "\r\n").Split('\n').ToList());
+
+        Assert.True(crlf.IsSuccess);
+        Assert.Equal("MyGame", crlf.Report!.ProcessName);
+        Assert.Equal(42, crlf.Report.Counters.ThreadCount);
+        Assert.Equal(1234, crlf.Report.Counters.HandleCount);
+        Assert.Equal("00:15:30.1234567", crlf.Report.Counters.TotalProcessorTime);
+        Assert.Equal(lf.Report!.Counters, crlf.Report.Counters);
+    }
+
+    [Fact]
     public void Parse_NaValues_ReturnsNull()
     {
         var input = """ 

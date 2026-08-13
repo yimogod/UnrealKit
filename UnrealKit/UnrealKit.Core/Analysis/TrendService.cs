@@ -278,6 +278,7 @@ public sealed class TrendService : ITrendService
     private static string ResolveCategory(BaselineDiffSource source) => source switch
     {
         BaselineDiffSource.MemInfo => "MemInfo",
+        BaselineDiffSource.Win64MemInfo => "MemInfo",
         BaselineDiffSource.MemReport => "Saved",
         BaselineDiffSource.StaticCamera => "Saved",
         _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unsupported trend source.")

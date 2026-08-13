@@ -69,7 +69,7 @@ unrealkit parse capture-files --capture-dir <path>
 unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]
 unrealkit export meminfo --input <file> --output <file.csv|file.tsv|file.xlsx> [--include-details] [--capture-id <id>]
 unrealkit export memreport --input <file> --output <file.csv|file.tsv|file.xlsx> [--include-details] [--capture-id <id>]
-unrealkit analyze diff --baseline <file> --current <file> [--source meminfo|memreport|static-camera] [--metrics <list>] [--only-changed] [--format text|json]
+unrealkit analyze diff --baseline <file> --current <file> [--source meminfo|win64-meminfo|memreport|static-camera] [--metrics <list>] [--only-changed] [--format text|json]
 unrealkit analyze diff --project <project.ukit> --baseline <capture-id> --current <capture-id> [--baseline-file <filename>] [--current-file <filename>] [--source <source>] [--metrics <list>] [--only-changed] [--format text|json]
 unrealkit analyze trend --project <project.ukit> [--source <source>] [--platform <platform>] [--tag <tag>] [--device <serial>] [--from <yyyy-MM-dd>] [--to <yyyy-MM-dd>] [--metrics <list>] [--file <filename>] [--output <file.csv|file.tsv|file.xlsx>] [--include-points] [--format text|json]
 ```
