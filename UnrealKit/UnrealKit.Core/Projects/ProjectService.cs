@@ -242,9 +242,9 @@ public sealed class ProjectService : IProjectService
             layered.GetValue(SettingsSection, "Win64Executable"),
             layered.GetValue(SettingsSection, "Win64WorkingDirectory"),
             ParseRemoteControlPort(layered.GetValue(SettingsSection, "RemoteControlHttpPort"), defaults.RemoteControlHttpPort),
-            layered.GetValue(SettingsSection, "RemoteControlObjectPath") ?? defaults.RemoteControlObjectPath,
-            layered.GetValue(SettingsSection, "RemoteControlFunctionName") ?? defaults.RemoteControlFunctionName,
-            layered.GetValue(SettingsSection, "RemoteControlCommandParameter") ?? defaults.RemoteControlCommandParameter);
+            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlObjectPath"), defaults.RemoteControlObjectPath),
+            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlFunctionName"), defaults.RemoteControlFunctionName),
+            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlCommandParameter"), defaults.RemoteControlCommandParameter));
     }
 
     private static string RequireValue(IniDocument document, string key) => document.GetValue(DescriptorSection, key) is { Length: > 0 } value ? value : throw new InvalidDataException($".ukit 缺少必需字段 {DescriptorSection}/{key}。");
@@ -321,6 +321,14 @@ public sealed class ProjectService : IProjectService
             diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, "UKIT007", $"缺少必需工程目录: {rootName}", directoryPath, "创建该目录或修正 .ukit 中的根目录配置。"));
         }
     }
+
+    /// <summary>
+    /// 解析 Remote Control 的字符串配置。`Key=` 在 INI 里存为空串而不是 null，
+    /// 直接 `?? 默认值` 会让空值绕过默认值，最后在发送指令时才以参数名报错。
+    /// 空值与未配置同义，一律回退到默认值。
+    /// </summary>
+    private static string RequireRemoteControlValue(string? value, string defaultValue) =>
+        string.IsNullOrWhiteSpace(value) ? defaultValue : value;
 
     /// <summary>
     /// 解析 RemoteControlHttpPort。未配置时用默认值；配置了但非法必须报错，

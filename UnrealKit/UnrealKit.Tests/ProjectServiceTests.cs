@@ -176,6 +176,29 @@ public sealed class ProjectServiceTests : IDisposable
         Assert.Equal("CommandText", reopened.Settings.RemoteControlCommandParameter);
     }
 
+    [Fact]
+    public async Task OpenProjectAsync_EmptyRemoteControlValues_FallBackToDefaults()
+    {
+        var projectDirectory = Path.Combine(_temporaryDirectory, "EmptyRemoteControlProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "EmptyRemoteControlProject"));
+        var configPath = Path.Combine(projectDirectory, "Config", "DefaultGame.ini");
+
+        // 手工编辑出的空值：INI 把 `Key=` 存为空串而不是 null。
+        await File.AppendAllTextAsync(configPath,
+            Environment.NewLine
+            + "RemoteControlObjectPath=" + Environment.NewLine
+            + "RemoteControlFunctionName=" + Environment.NewLine
+            + "RemoteControlCommandParameter=" + Environment.NewLine);
+
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal(created.Project.Settings.RemoteControlObjectPath, reopened.Settings.RemoteControlObjectPath);
+        Assert.Equal(created.Project.Settings.RemoteControlFunctionName, reopened.Settings.RemoteControlFunctionName);
+        Assert.Equal(created.Project.Settings.RemoteControlCommandParameter, reopened.Settings.RemoteControlCommandParameter);
+        Assert.NotEmpty(reopened.Settings.RemoteControlObjectPath);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))

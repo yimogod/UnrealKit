@@ -123,6 +123,94 @@ public sealed class DeviceCapabilityTests
     }
 }
 
+public sealed class AdbDeviceServicePortForwardTests
+{
+    [Fact]
+    public async Task SendConsoleCommand_ForwardsPortOncePerDevice()
+    {
+        // 指令序列每步都 forward 会多起一个 adb 进程，并把 adb 输出混进序列报告。
+        var adb = new ForwardCountingAdbService();
+        var service = new AdbDeviceService(adb, remoteControlService: new AlwaysOkRemoteControlService());
+        var device = DeviceReference.Create("ABC123", TargetPlatform.Android);
+
+        await service.SendConsoleCommandAsync(device, "stat fps");
+        await service.SendConsoleCommandAsync(device, "stat unit");
+        await service.SendConsoleCommandAsync(device, "stat rhi");
+
+        Assert.Equal(1, adb.ForwardCallCount);
+    }
+
+    [Fact]
+    public async Task SendConsoleCommand_ForwardsOncePerDistinctDevice()
+    {
+        var adb = new ForwardCountingAdbService();
+        var service = new AdbDeviceService(adb, remoteControlService: new AlwaysOkRemoteControlService());
+
+        await service.SendConsoleCommandAsync(DeviceReference.Create("ABC123", TargetPlatform.Android), "stat fps");
+        await service.SendConsoleCommandAsync(DeviceReference.Create("XYZ789", TargetPlatform.Android), "stat fps");
+        await service.SendConsoleCommandAsync(DeviceReference.Create("ABC123", TargetPlatform.Android), "stat unit");
+
+        Assert.Equal(2, adb.ForwardCallCount);
+    }
+
+    [Fact]
+    public async Task SendConsoleCommand_FailedForward_IsRetriedOnNextCall()
+    {
+        // 失败的转发不记录，否则设备重连后永远不会重试。
+        var adb = new ForwardCountingAdbService { FailForward = true };
+        var service = new AdbDeviceService(adb, remoteControlService: new AlwaysOkRemoteControlService());
+        var device = DeviceReference.Create("ABC123", TargetPlatform.Android);
+
+        await Assert.ThrowsAsync<DeviceCommandException>(() => service.SendConsoleCommandAsync(device, "stat fps"));
+
+        adb.FailForward = false;
+        await service.SendConsoleCommandAsync(device, "stat fps");
+
+        Assert.Equal(2, adb.ForwardCallCount);
+    }
+
+    private sealed class AlwaysOkRemoteControlService : IRemoteControlService
+    {
+        public Task<ProcessExecutionResult> SendConsoleCommandAsync(
+            RemoteControlCommandRequest request,
+            IProgress<OperationProgress>? progress = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ProcessExecutionResult(0, "ok", string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+    }
+
+    private sealed class ForwardCountingAdbService : IAdbService
+    {
+        private static ProcessExecutionResult Success => new(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+
+        public int ForwardCallCount { get; private set; }
+
+        public bool FailForward { get; set; }
+
+        public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            ForwardCallCount++;
+            return Task.FromResult(FailForward
+                ? new ProcessExecutionResult(1, string.Empty, "device offline", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+                : Success);
+        }
+
+        public Task<ProcessExecutionResult> GetVersionAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<AdbDevice>>([]);
+        public Task<ProcessExecutionResult> StartServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> KillServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> ConnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> DisconnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> TcpIpAsync(string serialNumber, int port, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> StartApplicationAsync(string serialNumber, string packageName, string activityName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> PushFileAsync(string serialNumber, string localPath, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> PullDirectoryAsync(string serialNumber, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> DeleteRemoteFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public async IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await Task.CompletedTask; yield break; }
+    }
+}
+
 public sealed class DeviceReferenceTests
 {
     [Fact]

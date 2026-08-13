@@ -11,12 +11,20 @@ namespace UnrealKit.Core.RemoteControl;
 /// </summary>
 public sealed class RemoteControlService : IRemoteControlService
 {
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// 共享默认客户端：调用方每次操作都可能新建设备服务（GUI 每次发送指令都会），
+    /// 每个实例各自持有 HttpClient 会泄漏连接池并耗尽端口。
+    /// </summary>
+    private static readonly HttpClient SharedHttpClient = new() { Timeout = DefaultTimeout };
+
     private readonly HttpClient _httpClient;
     private readonly TimeProvider _timeProvider;
 
     public RemoteControlService(HttpClient? httpClient = null, TimeProvider? timeProvider = null)
     {
-        _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        _httpClient = httpClient ?? SharedHttpClient;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -47,19 +55,24 @@ public sealed class RemoteControlService : IRemoteControlService
         {
             response = await _httpClient.PutAsync(uri, content, cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            // 调用方主动取消：保持取消语义上抛。
             throw;
+        }
+        catch (OperationCanceledException exception)
+        {
+            // HttpClient 超时抛的是 TaskCanceledException（派生自 OperationCanceledException）而非
+            // TimeoutException，若原样上抛会绕过 CLI 的可预期失败处理，变成裸堆栈。
+            throw BuildFailure(
+                $"Remote Control request timed out after {_httpClient.Timeout.TotalSeconds:F0}s: {uri}. "
+                    + "请确认 UE 已启动且 Web Remote Control 插件已启用。",
+                exception,
+                startedAt);
         }
         catch (HttpRequestException exception)
         {
-            var failureResult = new ProcessExecutionResult(
-                -1,
-                string.Empty,
-                exception.Message,
-                startedAt,
-                _timeProvider.GetUtcNow());
-            throw new RemoteControlException($"Remote Control request failed: {exception.Message}", failureResult, exception);
+            throw BuildFailure($"Remote Control request failed: {exception.Message}", exception, startedAt);
         }
 
         using (response)
@@ -85,6 +98,12 @@ public sealed class RemoteControlService : IRemoteControlService
             return result;
         }
     }
+
+    private RemoteControlException BuildFailure(string message, Exception exception, DateTimeOffset startedAt) =>
+        new(
+            message,
+            new ProcessExecutionResult(-1, string.Empty, exception.Message, startedAt, _timeProvider.GetUtcNow()),
+            exception);
 
     private static object BuildPayload(RemoteControlCommandRequest request) => new
     {

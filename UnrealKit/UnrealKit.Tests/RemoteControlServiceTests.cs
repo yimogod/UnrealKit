@@ -77,6 +77,58 @@ public sealed class RemoteControlServiceTests
         Assert.Null(handler.CapturedRequest);
     }
 
+    [Fact]
+    public async Task SendConsoleCommandAsync_Timeout_ThrowsRemoteControlExceptionNotTaskCanceled()
+    {
+        // HttpClient 超时表现为 TaskCanceledException，必须被包成 RemoteControlException，
+        // 否则会绕过 CLI 的可预期失败处理直接打印堆栈。
+        var handler = new HangingHttpMessageHandler();
+        var service = new RemoteControlService(new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(50) });
+
+        var exception = await Assert.ThrowsAsync<RemoteControlException>(() =>
+            service.SendConsoleCommandAsync(new RemoteControlCommandRequest(
+                30010,
+                "/Script/Engine.Default__KismetSystemLibrary",
+                "ExecuteConsoleCommand",
+                "Command",
+                "stat fps")));
+
+        Assert.Contains("timed out", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(-1, exception.Result.ExitCode);
+    }
+
+    [Fact]
+    public async Task SendConsoleCommandAsync_CallerCancellation_StaysOperationCanceled()
+    {
+        // 调用方主动取消与超时必须区分：取消保持取消语义，不伪装成 Remote Control 失败。
+        var handler = new HangingHttpMessageHandler();
+        var service = new RemoteControlService(new HttpClient(handler));
+        using var cts = new CancellationTokenSource();
+
+        var task = service.SendConsoleCommandAsync(
+            new RemoteControlCommandRequest(
+                30010,
+                "/Script/Engine.Default__KismetSystemLibrary",
+                "ExecuteConsoleCommand",
+                "Command",
+                "stat fps"),
+            progress: null,
+            cancellationToken: cts.Token);
+
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+    }
+
+    private sealed class HangingHttpMessageHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
+    }
+
     private sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
     {
         public HttpRequestMessage? CapturedRequest { get; private set; }

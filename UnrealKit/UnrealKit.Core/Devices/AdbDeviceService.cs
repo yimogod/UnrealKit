@@ -16,6 +16,13 @@ public sealed class AdbDeviceService : IDeviceService
     private readonly RemoteControlOptions _remoteControlOptions;
     private readonly IRemoteControlService _remoteControl;
 
+    /// <summary>
+    /// 已完成端口转发的设备。指令序列每步都重新 forward 会多起一个 adb 进程，
+    /// 并把 adb 输出混进序列报告，因此按设备记住一次。
+    /// </summary>
+    private readonly HashSet<string> _forwardedDevices = new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim _forwardLock = new(1, 1);
+
     public AdbDeviceService(
         IAdbService adb,
         RemoteControlOptions? remoteControlOptions = null,
@@ -69,19 +76,7 @@ public sealed class AdbDeviceService : IDeviceService
         ArgumentNullException.ThrowIfNull(device);
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
 
-        progress?.Report(new OperationProgress(
-            "console-send",
-            "Forwarding",
-            null,
-            null,
-            $"Forwarding TCP port {_remoteControlOptions.HttpPort} for {device.Id}."));
-
-        await RunRequiredAsync(_adb.ForwardTcpAsync(
-            device.Id,
-            _remoteControlOptions.HttpPort,
-            _remoteControlOptions.HttpPort,
-            progress,
-            cancellationToken));
+        await EnsurePortForwardedAsync(device, progress, cancellationToken);
 
         try
         {
@@ -145,6 +140,50 @@ public sealed class AdbDeviceService : IDeviceService
         CancellationToken cancellationToken = default)
     {
         return RunRequiredAsync(_adb.DeleteRemoteFileAsync(device.Id, remotePath, progress, cancellationToken));
+    }
+
+    /// <summary>
+    /// 为设备建立 Remote Control 端口转发，同一设备只执行一次。
+    /// 失败不记录，下次调用重试。
+    /// </summary>
+    private async Task EnsurePortForwardedAsync(
+        IDevice device,
+        IProgress<OperationProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        if (_forwardedDevices.Contains(device.Id))
+        {
+            return;
+        }
+
+        await _forwardLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_forwardedDevices.Contains(device.Id))
+            {
+                return;
+            }
+
+            progress?.Report(new OperationProgress(
+                "console-send",
+                "Forwarding",
+                null,
+                null,
+                $"Forwarding TCP port {_remoteControlOptions.HttpPort} for {device.Id}."));
+
+            await RunRequiredAsync(_adb.ForwardTcpAsync(
+                device.Id,
+                _remoteControlOptions.HttpPort,
+                _remoteControlOptions.HttpPort,
+                progress,
+                cancellationToken));
+
+            _forwardedDevices.Add(device.Id);
+        }
+        finally
+        {
+            _forwardLock.Release();
+        }
     }
 
     private static async Task<ProcessExecutionResult> RunRequiredAsync(Task<ProcessExecutionResult> task)
