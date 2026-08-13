@@ -1,10 +1,10 @@
-﻿<Application x:Class="UnrealKit.Desktop.App"
+<Application x:Class="UnrealKit.Desktop.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:UnrealKit.Desktop"
+             xmlns:converters="clr-namespace:UnrealKit.Desktop.Converters"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <local:PointsToPointCollectionConverter x:Key="PointsConverter" />
+        <converters:PointsToPointCollectionConverter x:Key="PointsConverter" />
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
     </Application.Resources>
 </Application>

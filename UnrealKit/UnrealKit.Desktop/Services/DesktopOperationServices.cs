@@ -1,10 +1,11 @@
-﻿using System.Windows;
+using System.Windows;
 using UnrealKit.Core.Adb;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Projects;
+using UnrealKit.Desktop.Models;
 
-namespace UnrealKit.Desktop;
+namespace UnrealKit.Desktop.Services;
 
 public interface IDesktopAdbServiceFactory
 {
@@ -26,8 +27,6 @@ public sealed class DesktopAdbServiceFactory(AdbPathResolver? adbPathResolver = 
 
     public AdbPathResolution Resolve(ProjectSettings? settings) => _adbPathResolver.Resolve(null, settings?.AdbPath);
 }
-
-public sealed record LaunchOperationTarget(string SerialNumber, string PackageName, string Activity, string RemoteCommandLinePath);
 
 public interface IUserConfirmationService
 {

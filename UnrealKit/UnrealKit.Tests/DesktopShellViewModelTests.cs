@@ -2,7 +2,9 @@ using UnrealKit.Core.Adb;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
-using UnrealKit.Desktop;
+using UnrealKit.Desktop.Models;
+using UnrealKit.Desktop.Services;
+using UnrealKit.Desktop.ViewModels;
 
 namespace UnrealKit.Tests;
 

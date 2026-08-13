@@ -1,5 +1,7 @@
 using System.Windows;
 using UnrealKit.Core.Projects;
+using UnrealKit.Desktop.Services;
+using UnrealKit.Desktop.ViewModels;
 
 namespace UnrealKit.Desktop;
 
