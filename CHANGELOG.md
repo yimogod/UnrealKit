@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to UnrealKit.
 
@@ -11,6 +11,9 @@ All notable changes to UnrealKit.
 - **Breaking:** an unrecognized `Platform` value in `Config/DefaultGame.ini` now fails with `Unsupported platform: '<value>'` instead of silently falling back to Android. A misspelling such as `Platform=Andriod` previously made a Win64 project capture as Android and report success. An absent value still uses the default
 - **Breaking:** `capture import --platform` now defaults to the project's configured platform rather than always Android. Pass `--platform` explicitly to override
 - `LaunchParameterService` and `ConsoleCommandService` now delegate to `IDeviceService`, so `commandline push/delete` and `app start` work on Win64 through the same code path as Android
+- Console commands are now sent exclusively through UE Web Remote Control (`PUT /remote/object/call`) for both Android and Win64. Android no longer uses `am broadcast`; `IAdbService` now exposes `ForwardTcpAsync` for port forwarding
+- New `Config/DefaultGame.ini` settings: `RemoteControlHttpPort` (default `30010`), `RemoteControlObjectPath`, `RemoteControlFunctionName`, and `RemoteControlCommandParameter`
+- **Breaking:** `app console send` now requires `--project` because Remote Control endpoint/function configuration lives in the project config
 - Win64 applications now launch with the working directory set to the executable's own directory, so UE resolves relative content paths identically under CLI and GUI
 
 ### Fixed

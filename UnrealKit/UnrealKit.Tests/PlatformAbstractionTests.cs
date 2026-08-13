@@ -1,8 +1,9 @@
-﻿using UnrealKit.Core.Adb;
+using UnrealKit.Core.Adb;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.RemoteControl;
 
 namespace UnrealKit.Tests;
 
@@ -62,11 +63,11 @@ public sealed class PlatformNamesTests
 public sealed class DeviceCapabilityTests
 {
     [Fact]
-    public void Win64_DoesNotSupportConsoleCommandsOrLogStreaming()
+    public void Win64_SupportsConsoleCommandsButNotLogStreaming()
     {
         var service = new Win64DeviceService();
 
-        Assert.False(service.Supports(DeviceCapability.SendConsoleCommand));
+        Assert.True(service.Supports(DeviceCapability.SendConsoleCommand));
         Assert.False(service.Supports(DeviceCapability.StreamLog));
         Assert.True(service.Supports(DeviceCapability.CaptureMemory));
         Assert.True(service.Supports(DeviceCapability.StartApplication));
@@ -87,16 +88,38 @@ public sealed class DeviceCapabilityTests
         Assert.Equal("Win64", exception.Platform);
     }
 
-    [Fact]
-    public void Win64_SendConsoleCommand_ThrowsCapabilityException()
+    private sealed class RecordingRemoteControlService : IRemoteControlService
     {
-        var service = new Win64DeviceService();
+        public List<RemoteControlCommandRequest> Requests { get; } = [];
 
-        // 同步抛出（而非返回 faulted task），调用方无需 await 即可发现不支持。
-        var exception = Assert.Throws<DeviceCapabilityNotSupportedException>(
-            () => { _ = service.SendConsoleCommandAsync(new Win64Device(), "stat unit"); });
+        public Task<ProcessExecutionResult> SendConsoleCommandAsync(
+            RemoteControlCommandRequest request,
+            IProgress<OperationProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return Task.FromResult(new ProcessExecutionResult(
+                0,
+                "ok",
+                string.Empty,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow));
+        }
+    }
 
-        Assert.Equal(DeviceCapability.SendConsoleCommand, exception.Capability);
+    [Fact]
+    public async Task Win64_SendConsoleCommand_UsesRemoteControlService()
+    {
+        var remoteControl = new RecordingRemoteControlService();
+        var service = new Win64DeviceService(remoteControlService: remoteControl);
+        var device = new Win64Device();
+
+        var result = await service.SendConsoleCommandAsync(device, "stat unit");
+
+        Assert.True(result.Succeeded);
+        var request = Assert.Single(remoteControl.Requests);
+        Assert.Equal(30010, request.HttpPort);
+        Assert.Equal("stat unit", request.Command);
     }
 }
 

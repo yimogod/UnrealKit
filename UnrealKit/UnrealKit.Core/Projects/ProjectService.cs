@@ -1,4 +1,4 @@
-﻿using UnrealKit.Core.Diagnostics;
+using UnrealKit.Core.Diagnostics;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Runtime;
 
@@ -172,6 +172,10 @@ public sealed class ProjectService : IProjectService
         document.SetValue(SettingsSection, "DeviceSavedRootTemplate", settings.DeviceSavedRootTemplate);
         document.SetValue(SettingsSection, "LocalWorkingDirectory", settings.LocalWorkingDirectory);
         document.SetValue(SettingsSection, "AdbPath", settings.AdbPath);
+        document.SetValue(SettingsSection, "RemoteControlHttpPort", settings.RemoteControlHttpPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        document.SetValue(SettingsSection, "RemoteControlObjectPath", settings.RemoteControlObjectPath);
+        document.SetValue(SettingsSection, "RemoteControlFunctionName", settings.RemoteControlFunctionName);
+        document.SetValue(SettingsSection, "RemoteControlCommandParameter", settings.RemoteControlCommandParameter);
         document.SetValue(SettingsSection, "DefaultCaptureTag", settings.DefaultCaptureTag);
         document.SetValue(SettingsSection, "DefaultExportDirectory", settings.DefaultExportDirectory);
         document.SetValue(SettingsSection, "Platform", settings.Platform.ToString());
@@ -236,7 +240,11 @@ public sealed class ProjectService : IProjectService
             layered.GetValue(SettingsSection, "PostCaptureSequence"),
             ParsePlatform(layered.GetValue(SettingsSection, "Platform"), defaults.Platform),
             layered.GetValue(SettingsSection, "Win64Executable"),
-            layered.GetValue(SettingsSection, "Win64WorkingDirectory"));
+            layered.GetValue(SettingsSection, "Win64WorkingDirectory"),
+            ParseRemoteControlPort(layered.GetValue(SettingsSection, "RemoteControlHttpPort"), defaults.RemoteControlHttpPort),
+            layered.GetValue(SettingsSection, "RemoteControlObjectPath") ?? defaults.RemoteControlObjectPath,
+            layered.GetValue(SettingsSection, "RemoteControlFunctionName") ?? defaults.RemoteControlFunctionName,
+            layered.GetValue(SettingsSection, "RemoteControlCommandParameter") ?? defaults.RemoteControlCommandParameter);
     }
 
     private static string RequireValue(IniDocument document, string key) => document.GetValue(DescriptorSection, key) is { Length: > 0 } value ? value : throw new InvalidDataException($".ukit 缺少必需字段 {DescriptorSection}/{key}。");
@@ -265,6 +273,14 @@ public sealed class ProjectService : IProjectService
         ValidateCaptureTag(settings.DefaultCaptureTag);
         ValidateUnixTemplate(settings.DeviceGameRootTemplate, nameof(settings.DeviceGameRootTemplate));
         ValidateUnixTemplate(settings.DeviceSavedRootTemplate, nameof(settings.DeviceSavedRootTemplate));
+        if (settings.RemoteControlHttpPort is < 1 or > 65535)
+        {
+            throw new ArgumentException("RemoteControlHttpPort must be between 1 and 65535.", nameof(settings));
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(settings.RemoteControlObjectPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(settings.RemoteControlFunctionName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(settings.RemoteControlCommandParameter);
     }
 
     private static void ValidateCaptureTag(string tag)
@@ -304,6 +320,26 @@ public sealed class ProjectService : IProjectService
         {
             diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, "UKIT007", $"缺少必需工程目录: {rootName}", directoryPath, "创建该目录或修正 .ukit 中的根目录配置。"));
         }
+    }
+
+    /// <summary>
+    /// 解析 RemoteControlHttpPort。未配置时用默认值；配置了但非法必须报错，
+    /// 不让「HTTP 30010」悄悄回退到默认端口，否则用户会误以为已切到目标端口。
+    /// </summary>
+    private static int ParseRemoteControlPort(string? value, int defaultPort)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return defaultPort;
+        }
+
+        if (!int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var port)
+            || port is < 1 or > 65535)
+        {
+            throw new InvalidDataException($"RemoteControlHttpPort 配置无效: {value}。必须是 1 到 65535 之间的整数。");
+        }
+
+        return port;
     }
 
     /// <summary>

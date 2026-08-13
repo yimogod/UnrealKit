@@ -1,6 +1,7 @@
-﻿using UnrealKit.Core.Adb;
+using UnrealKit.Core.Adb;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.RemoteControl;
 
 namespace UnrealKit.Core.Devices;
 
@@ -10,9 +11,9 @@ namespace UnrealKit.Core.Devices;
 public interface IDeviceServiceFactory
 {
     /// <summary>
-    /// 根据设备平台创建对应的设备服务实例。
+    /// 根据设备平台创建对应的设备服务实例。工程配置用于构造 Remote Control 参数。
     /// </summary>
-    IDeviceService CreateForDevice(IDevice device);
+    IDeviceService CreateForDevice(IDevice device, ProjectSettings? settings = null);
 }
 
 /// <summary>
@@ -30,14 +31,15 @@ public sealed class DeviceServiceFactory : IDeviceServiceFactory
         _processRunner = processRunner;
     }
 
-    public IDeviceService CreateForDevice(IDevice device)
+    public IDeviceService CreateForDevice(IDevice device, ProjectSettings? settings = null)
     {
         ArgumentNullException.ThrowIfNull(device);
+        var remoteControlOptions = RemoteControlOptions.FromProjectSettings(settings);
         return PlatformNames.Parse(device.Platform, nameof(device)) switch
         {
-            TargetPlatform.Win64 => new Win64DeviceService(_processRunner),
+            TargetPlatform.Win64 => new Win64DeviceService(_processRunner, remoteControlOptions),
             TargetPlatform.Android => _adbService is not null
-                ? new AdbDeviceService(_adbService)
+                ? new AdbDeviceService(_adbService, remoteControlOptions)
                 : throw new InvalidOperationException(
                     $"Android device '{device.Id}' requires an ADB service, but this factory was constructed without one."),
             var platform => throw new ArgumentException($"Unsupported platform: {platform}", nameof(device))

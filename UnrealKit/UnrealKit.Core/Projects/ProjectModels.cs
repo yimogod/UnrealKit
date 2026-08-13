@@ -1,4 +1,4 @@
-﻿using UnrealKit.Core.Diagnostics;
+using UnrealKit.Core.Diagnostics;
 
 namespace UnrealKit.Core.Projects;
 
@@ -80,7 +80,11 @@ public sealed record ProjectSettings(
     string? PostCaptureSequence,
     TargetPlatform Platform = TargetPlatform.Android,
     string? Win64Executable = null,
-    string? Win64WorkingDirectory = null)
+    string? Win64WorkingDirectory = null,
+    int RemoteControlHttpPort = 30010,
+    string RemoteControlObjectPath = "/Script/Engine.Default__KismetSystemLibrary",
+    string RemoteControlFunctionName = "ExecuteConsoleCommand",
+    string RemoteControlCommandParameter = "Command")
 {
     public static ProjectSettings CreateDefaults(string projectName) => new(
         string.Empty,
@@ -98,7 +102,11 @@ public sealed record ProjectSettings(
         null,
         TargetPlatform.Android,
         null,
-        null);
+        null,
+        30010,
+        "/Script/Engine.Default__KismetSystemLibrary",
+        "ExecuteConsoleCommand",
+        "Command");
 }
 
 public static class LaunchParameterPresetDefaults

@@ -1,4 +1,4 @@
-﻿# UnrealKit
+# UnrealKit
 
 UnrealKit is a desktop tool for Unreal Engine Android performance data capture and analysis. It provides both a graphical interface and a command-line interface, sharing the same core business logic.
 
@@ -57,6 +57,8 @@ unrealkit adb devices [--adb-path <path>]
 unrealkit adb connect <host:port> [--adb-path <path>]
 unrealkit adb disconnect <host:port> [--adb-path <path>]
 unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]
+unrealkit app console send --project <project.ukit> --device <serial> --cmd <command> [--adb-path <path>]
+unrealkit app console run --project <project.ukit> --device <serial> [--sequence <name>] [--cmds <inline>] [--adb-path <path>]
 unrealkit commandline push --project <project.ukit> --device <serial> [--preset <name>] [--custom <args>] [--remote-path <path>] [--adb-path <path>]
 unrealkit commandline delete --project <project.ukit> --device <serial> [--remote-path <path>] [--adb-path <path>]
 unrealkit capture run --project <project.ukit> --device <serial|auto> [--tag <tag>] [--format text|json] [--skip-saved] [--adb-path <path>]

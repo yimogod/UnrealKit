@@ -1,7 +1,8 @@
-﻿using UnrealKit.Core.Adb;
+using UnrealKit.Core.Adb;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.RemoteControl;
 
 namespace UnrealKit.Cli;
 
@@ -39,12 +40,12 @@ internal static class DeviceResolver
                     $"Win64 工程只支持本机设备 '{localDevice.Id}'，无法使用 --device {requestedDevice}。");
             }
 
-            return (new Win64DeviceService(new ProcessRunner()), localDevice.Id);
+            return (new Win64DeviceService(new ProcessRunner(), RemoteControlOptions.FromProjectSettings(project.Settings)), localDevice.Id);
         }
 
         var adbService = CreateAdbService(adbPath, project.Settings.AdbPath, streamOutput);
         var serialNumber = await ResolveDeviceSerialAsync(adbService, options);
-        return (new AdbDeviceService(adbService), serialNumber);
+        return (new AdbDeviceService(adbService, RemoteControlOptions.FromProjectSettings(project.Settings)), serialNumber);
     }
 
     /// <summary>

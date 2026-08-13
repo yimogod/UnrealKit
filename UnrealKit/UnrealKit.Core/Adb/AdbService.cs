@@ -1,4 +1,4 @@
-﻿using UnrealKit.Core.Operations;
+using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 
 namespace UnrealKit.Core.Adb;
@@ -89,18 +89,18 @@ public sealed class AdbService : IAdbService
         return RunDeviceCommandAsync(serialNumber, ["shell", "am", "force-stop", packageName], progress, cancellationToken);
     }
 
-    public Task<ProcessExecutionResult> SendConsoleCommandAsync(string serialNumber, string command, string? packageName = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         ValidateSerialNumber(serialNumber);
-        ArgumentException.ThrowIfNullOrWhiteSpace(command);
-        var arguments = new List<string> { "shell", "am", "broadcast", "-a", "android.intent.action.RUN", "-e", "cmd", command };
-        if (!string.IsNullOrWhiteSpace(packageName))
-        {
-            ValidatePackageName(packageName);
-            arguments.Add(packageName);
-        }
-
-        return RunDeviceCommandAsync(serialNumber, arguments, progress, cancellationToken);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(hostPort);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(hostPort, 65535);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(devicePort);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(devicePort, 65535);
+        return RunDeviceCommandAsync(
+            serialNumber,
+            ["forward", $"tcp:{hostPort}", $"tcp:{devicePort}"],
+            progress,
+            cancellationToken);
     }
 
     public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)

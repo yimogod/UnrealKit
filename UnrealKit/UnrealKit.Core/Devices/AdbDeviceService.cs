@@ -1,7 +1,8 @@
-﻿using UnrealKit.Core.Adb;
+using UnrealKit.Core.Adb;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.RemoteControl;
 
 namespace UnrealKit.Core.Devices;
 
@@ -12,10 +13,17 @@ namespace UnrealKit.Core.Devices;
 public sealed class AdbDeviceService : IDeviceService
 {
     private readonly IAdbService _adb;
+    private readonly RemoteControlOptions _remoteControlOptions;
+    private readonly IRemoteControlService _remoteControl;
 
-    public AdbDeviceService(IAdbService adb)
+    public AdbDeviceService(
+        IAdbService adb,
+        RemoteControlOptions? remoteControlOptions = null,
+        IRemoteControlService? remoteControlService = null)
     {
         _adb = adb ?? throw new ArgumentNullException(nameof(adb));
+        _remoteControlOptions = remoteControlOptions ?? RemoteControlOptions.Default;
+        _remoteControl = remoteControlService ?? new RemoteControlService();
     }
 
     public TargetPlatform Platform => TargetPlatform.Android;
@@ -51,14 +59,46 @@ public sealed class AdbDeviceService : IDeviceService
         return RunRequiredAsync(_adb.PullDirectoryAsync(device.Id, remotePath, localDirectory, progress, cancellationToken));
     }
 
-    public Task<ProcessExecutionResult> SendConsoleCommandAsync(
+    public async Task<ProcessExecutionResult> SendConsoleCommandAsync(
         IDevice device,
         string command,
         string? target = null,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        return RunRequiredAsync(_adb.SendConsoleCommandAsync(device.Id, command, target, progress, cancellationToken));
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+
+        progress?.Report(new OperationProgress(
+            "console-send",
+            "Forwarding",
+            null,
+            null,
+            $"Forwarding TCP port {_remoteControlOptions.HttpPort} for {device.Id}."));
+
+        await RunRequiredAsync(_adb.ForwardTcpAsync(
+            device.Id,
+            _remoteControlOptions.HttpPort,
+            _remoteControlOptions.HttpPort,
+            progress,
+            cancellationToken));
+
+        try
+        {
+            return await _remoteControl.SendConsoleCommandAsync(
+                new RemoteControlCommandRequest(
+                    _remoteControlOptions.HttpPort,
+                    _remoteControlOptions.ObjectPath,
+                    _remoteControlOptions.FunctionName,
+                    _remoteControlOptions.CommandParameterName,
+                    command),
+                progress,
+                cancellationToken);
+        }
+        catch (RemoteControlException exception)
+        {
+            throw new DeviceCommandException(exception.Message, exception.Result, exception);
+        }
     }
 
     public IAsyncEnumerable<string> StreamLogAsync(

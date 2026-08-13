@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -369,7 +369,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         new DeviceServiceFactory(
             adbService: PlatformNames.Parse(device.Platform, nameof(device)) == TargetPlatform.Android ? CreateAdbService() : null,
             processRunner: new ProcessRunner())
-            .CreateForDevice(device);
+            .CreateForDevice(device, _project?.Settings);
 
     /// <summary>
     /// 构造带控制台服务的 CaptureService，使配置的采集前后指令序列真正执行。

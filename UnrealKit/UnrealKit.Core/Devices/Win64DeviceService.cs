@@ -1,6 +1,7 @@
-﻿using UnrealKit.Core.Operations;
+using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.RemoteControl;
 
 namespace UnrealKit.Core.Devices;
 
@@ -11,20 +12,27 @@ namespace UnrealKit.Core.Devices;
 public sealed class Win64DeviceService : IDeviceService
 {
     private readonly IProcessRunner _processRunner;
+    private readonly RemoteControlOptions _remoteControlOptions;
+    private readonly IRemoteControlService _remoteControl;
 
-    public Win64DeviceService(IProcessRunner? processRunner = null)
+    public Win64DeviceService(
+        IProcessRunner? processRunner = null,
+        RemoteControlOptions? remoteControlOptions = null,
+        IRemoteControlService? remoteControlService = null)
     {
         _processRunner = processRunner ?? new ProcessRunner();
+        _remoteControlOptions = remoteControlOptions ?? RemoteControlOptions.Default;
+        _remoteControl = remoteControlService ?? new RemoteControlService();
     }
 
     public TargetPlatform Platform => TargetPlatform.Win64;
 
     /// <summary>
-    /// Win64 通过本机进程操作实现大部分能力；控制台指令与日志流依赖 UE 端通道，尚未实现。
+    /// Win64 通过本机进程操作实现大部分能力；日志流依赖 UE 端通道，尚未实现。
     /// </summary>
     public bool Supports(DeviceCapability capability) => capability switch
     {
-        DeviceCapability.SendConsoleCommand => false,
+        DeviceCapability.SendConsoleCommand => true,
         DeviceCapability.StreamLog => false,
         _ => true
     };
@@ -184,18 +192,35 @@ public sealed class Win64DeviceService : IDeviceService
     }
 
     /// <summary>
-    /// Win64 上发送 UE 控制台指令暂不支持（依赖 UE 端通道，Android 走 am broadcast）。
+    /// Win64 上发送 UE 控制台指令通过本机 Remote Control HTTP API。
     /// </summary>
-    public Task<ProcessExecutionResult> SendConsoleCommandAsync(
+    public async Task<ProcessExecutionResult> SendConsoleCommandAsync(
         IDevice device,
         string command,
         string? target = null,
         IProgress<OperationProgress>? progress = null,
-        CancellationToken cancellationToken = default) =>
-        throw new DeviceCapabilityNotSupportedException(
-            DeviceCapability.SendConsoleCommand,
-            PlatformNames.Win64,
-            "请先用 Supports(DeviceCapability.SendConsoleCommand) 探测能力再调用。");
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+
+        try
+        {
+            return await _remoteControl.SendConsoleCommandAsync(
+                new RemoteControlCommandRequest(
+                    _remoteControlOptions.HttpPort,
+                    _remoteControlOptions.ObjectPath,
+                    _remoteControlOptions.FunctionName,
+                    _remoteControlOptions.CommandParameterName,
+                    command),
+                progress,
+                cancellationToken);
+        }
+        catch (RemoteControlException exception)
+        {
+            throw new DeviceCommandException(exception.Message, exception.Result, exception);
+        }
+    }
 
     /// <summary>
     /// Win64 上流式读取日志暂不支持。抛出而不是返回空流：

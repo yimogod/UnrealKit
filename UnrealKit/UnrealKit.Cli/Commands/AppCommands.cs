@@ -1,4 +1,4 @@
-﻿using UnrealKit.Core.Console;
+using UnrealKit.Core.Console;
 using UnrealKit.Core.Launch;
 using UnrealKit.Core.Projects;
 
@@ -53,22 +53,16 @@ internal static class AppCommands
     {
         CliOptions.EnsureOnly(options, CliOptions.Allowed("--device", "--cmd", "--project", "--adb-path"));
         var command = CliOptions.GetRequired(options, "--cmd");
+        var project = await new ProjectService().OpenProjectAsync(CliOptions.GetRequired(options, "--project"));
+        var (deviceService, deviceId) = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
 
-        // --project 是可选的：给出时补上工程的 adb 路径与包名，不给出时按裸 adb 发送。
-        string? projectAdbPath = null;
-        string? packageName = null;
-        if (CliOptions.GetOptional(options, "--project") is { } projectPath)
-        {
-            var project = await new ProjectService().OpenProjectAsync(projectPath);
-            projectAdbPath = project.Settings.AdbPath;
-            packageName = project.Settings.PackageName;
-        }
+        var consoleService = new ConsoleCommandService(deviceService);
+        var result = await consoleService.SendAsync(
+            deviceId,
+            ConsoleCommand.Create(command),
+            project.Settings.PackageName);
 
-        var adbService = DeviceResolver.CreateAdbService(adbPath, projectAdbPath);
-        var deviceSerial = await DeviceResolver.ResolveDeviceSerialAsync(adbService, options);
-        var result = await adbService.SendConsoleCommandAsync(deviceSerial, command, packageName);
-
-        Console.WriteLine($"Sent console command to {deviceSerial}: {command}");
+        Console.WriteLine($"Sent console command to {deviceId}: {command}");
         if (!result.Succeeded)
         {
             Console.Error.WriteLine($"Failed with exit code {result.ExitCode}.");
@@ -103,8 +97,7 @@ internal static class AppCommands
         }
 
         var project = await new ProjectService().OpenProjectAsync(projectPath);
-        var adbService = DeviceResolver.CreateAdbService(adbPath, project.Settings.AdbPath);
-        var deviceSerial = await DeviceResolver.ResolveDeviceSerialAsync(adbService, options);
+        var (deviceService, deviceSerial) = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
 
         CommandSequenceDefinition sequence;
         if (sequenceName is not null)
@@ -125,7 +118,7 @@ internal static class AppCommands
             sequence = new ConsoleSequencePreset("inline", inlineCmds!, string.Empty).ToSequenceDefinition();
         }
 
-        var consoleService = new ConsoleCommandService(adbService);
+        var consoleService = new ConsoleCommandService(deviceService);
         var request = new SequenceExecutionRequest(sequence, deviceSerial, project.Settings.PackageName);
 
         Console.WriteLine($"Running sequence: {sequence.Name}");
@@ -197,7 +190,7 @@ internal static class AppCommands
 
     private static void WriteConsoleUsageLines()
     {
-        Console.Error.WriteLine("  unrealkit app console send --device <serial> --cmd <command> [--project <project.ukit>] [--adb-path <path>]");
+        Console.Error.WriteLine("  unrealkit app console send --project <project.ukit> --device <serial> --cmd <command> [--adb-path <path>]");
         Console.Error.WriteLine("  unrealkit app console run --project <project.ukit> --device <serial> [--sequence <name>] [--cmds <inline>] [--adb-path <path>]");
     }
 }

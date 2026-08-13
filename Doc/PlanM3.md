@@ -1,4 +1,6 @@
-﻿# UnrealKit 第三阶段 TODO
+# UnrealKit 第三阶段 TODO
+
+> 已更新：Android 控制台指令通道现已统一使用 UE Remote Control，`am broadcast` 方案由历史记录保留，不再作为运行时通道。
 
 基于 UE `-message` 机制讨论，为 UE Android 应用增加控制台指令下发、序列编排与 Capture 集成能力。
 

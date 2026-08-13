@@ -1,4 +1,4 @@
-﻿# UnrealKit 第四阶段 TODO：Win64 全流程重构
+# UnrealKit 第四阶段 TODO：Win64 全流程重构
 
 基于第二阶段 P6（Win64 设备基础支持）的延续，将 Win64 支持从 Core 层扩展到全链路（WPF Desktop GUI + Capture + 启动闭环），使 Windows 版 UE 游戏与 Android 获得同等的工具链体验。
 
@@ -58,8 +58,8 @@
 
 ### P5：Win64 控制台指令 ✅
 
-- [x] Win64 上 `SendConsoleCommandAsync`：通过 UE Web Remote Control HTTP API（`PUT localhost:30010/remote/object/call`）
-- [x] Desktop GUI 控制台页适配：`SendConsoleCommandAsync` 按平台分发（Android `am broadcast` / Win64 HTTP）
+- [x] Android/Win64 上 `SendConsoleCommandAsync`：通过 UE Web Remote Control HTTP API（`PUT localhost:30010/remote/object/call`）
+- [x] Desktop GUI 控制台页适配：`SendConsoleCommandAsync` 统一走 Remote Control（Android 先 `adb forward`，Win64 本机 HTTP）
 
 ### P6：测试与构建验证 ✅
 

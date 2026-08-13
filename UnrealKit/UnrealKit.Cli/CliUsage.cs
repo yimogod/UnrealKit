@@ -1,4 +1,4 @@
-﻿namespace UnrealKit.Cli;
+namespace UnrealKit.Cli;
 
 /// <summary>顶层用法总览。各子命令的详细用法由对应命令类在参数错误时输出。</summary>
 internal static class CliUsage
@@ -15,7 +15,7 @@ internal static class CliUsage
         Console.WriteLine("  unrealkit adb connect <host:port> [--adb-path <path>]");
         Console.WriteLine("  unrealkit adb disconnect <host:port> [--adb-path <path>]");
         Console.WriteLine("  unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]");
-        Console.WriteLine("  unrealkit app console send --device <serial> --cmd <command> [--project <project.ukit>] [--adb-path <path>]");
+        Console.WriteLine("  unrealkit app console send --project <project.ukit> --device <serial> --cmd <command> [--adb-path <path>]");
         Console.WriteLine("  unrealkit app console run --project <project.ukit> --device <serial> [--sequence <name>] [--cmds <inline>] [--adb-path <path>]");
         Console.WriteLine("  unrealkit commandline push --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--remote-path <path>] [--adb-path <path>]");
         Console.WriteLine("  unrealkit commandline delete --project <project.ukit> --device <serial> [--remote-path <path>] [--adb-path <path>]");

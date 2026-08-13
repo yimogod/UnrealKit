@@ -1,4 +1,4 @@
-﻿using UnrealKit.Core.Operations;
+using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 
 namespace UnrealKit.Core.Adb;
@@ -6,13 +6,12 @@ namespace UnrealKit.Core.Adb;
 public interface IAdbService
 {
     /// <summary>
-    /// 向运行中的 UE Android 应用发送控制台指令。使用 am broadcast 广播机制，零 UE 端配置。
-    /// 如果提供了 packageName，将使用 -n 参数限定目标包名。
+    /// 将本机 TCP 端口转发到设备的 Remote Control HTTP 端口。
     /// </summary>
-    Task<ProcessExecutionResult> SendConsoleCommandAsync(
+    Task<ProcessExecutionResult> ForwardTcpAsync(
         string serialNumber,
-        string command,
-        string? packageName = null,
+        int hostPort,
+        int devicePort,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
 

@@ -1,4 +1,4 @@
-﻿using UnrealKit.Core.Projects;
+using UnrealKit.Core.Projects;
 using UnrealKit.Core.Runtime;
 
 namespace UnrealKit.Tests;
@@ -150,6 +150,30 @@ public sealed class ProjectServiceTests : IDisposable
         var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
 
         Assert.Equal(TargetPlatform.Android, reopened.Settings.Platform);
+    }
+
+
+    [Fact]
+    public async Task UpdateSettingsAsync_PersistsRemoteControlConfiguration()
+    {
+        var projectDirectory = Path.Combine(_temporaryDirectory, "RemoteControlProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "RemoteControlProject"));
+        var settings = created.Project.Settings with
+        {
+            RemoteControlHttpPort = 31010,
+            RemoteControlObjectPath = "/Game/RC/RC_Preset.RC_Preset:PersistentLevel.BP_Console",
+            RemoteControlFunctionName = "RunConsoleCommand",
+            RemoteControlCommandParameter = "CommandText"
+        };
+
+        await service.UpdateSettingsAsync(created.Project, settings);
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal(31010, reopened.Settings.RemoteControlHttpPort);
+        Assert.Equal("/Game/RC/RC_Preset.RC_Preset:PersistentLevel.BP_Console", reopened.Settings.RemoteControlObjectPath);
+        Assert.Equal("RunConsoleCommand", reopened.Settings.RemoteControlFunctionName);
+        Assert.Equal("CommandText", reopened.Settings.RemoteControlCommandParameter);
     }
 
     public void Dispose()
