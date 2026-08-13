@@ -14,6 +14,7 @@ All notable changes to UnrealKit.
 - Win64 applications now launch with the working directory set to the executable's own directory, so UE resolves relative content paths identically under CLI and GUI
 
 ### Fixed
+- `capture run --skip-saved` was rejected as `Unsupported option: --skip-saved`. The flag was declared in the flag-options set but omitted from the allowed-options set, and option validation checks the allowlist first, so the documented flag could never be passed
 - `Win64IntegrationTests` killed processes by the name `cmd`, terminating every `cmd.exe` on the machine — including child processes of tests running in parallel and the developer's own terminals. It now operates on a uniquely named copy. This was the cause of the intermittent `ProcessRunnerTests` timeout failure and of full-suite runs taking two minutes instead of two seconds
 - `CaptureServiceTests` asserted against progress messages collected through `Progress<T>`, which dispatches callbacks to the thread pool; assertions could run before the callback and `List<T>` was written from pool threads. Now uses a synchronous `IProgress<T>` and a concurrent collection
 
