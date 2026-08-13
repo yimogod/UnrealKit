@@ -1,0 +1,63 @@
+<UserControl x:Class="UnrealKit.Desktop.Views.ConsoleView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Style>
+        <Style TargetType="UserControl">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedNavigationItem}" Value="控制台">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Style>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="快速指令" FontSize="18" FontWeight="SemiBold" />
+        <StackPanel Grid.Row="1" Margin="0,8,0,12">
+            <TextBlock Text="向已选设备的 UE 应用发送单条控制台指令。" Foreground="#FF52616B" TextWrapping="Wrap" />
+            <DockPanel Margin="0,10,0,0" LastChildFill="True">
+                <Button Content="发送" Command="{Binding SendConsoleCommandCommand}" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                <TextBox Text="{Binding ConsoleCommandText, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" ToolTip="例如: stat fps" />
+            </DockPanel>
+        </StackPanel>
+        <ScrollViewer Grid.Row="2" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" MaxHeight="120">
+            <TextBox Text="{Binding ConsoleOutput}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" BorderThickness="0" Background="#FFF5F5F5" Padding="8" />
+        </ScrollViewer>
+        <TextBlock Grid.Row="3" Text="指令序列" FontSize="18" FontWeight="SemiBold" Margin="0,16,0,0" />
+        <Grid Grid.Row="4" Margin="0,8,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="从工程预设中选择序列或直接输入内联指令（格式: cmd1; wait 2000; cmd2）。" Foreground="#FF52616B" TextWrapping="Wrap" />
+            <Grid Grid.Row="1" Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="工程预设序列" FontWeight="SemiBold" Margin="0,0,0,6" />
+                    <ComboBox ItemsSource="{Binding ConsoleSequencePresets}" SelectedValue="{Binding ConsoleSequenceName}" DisplayMemberPath="Name" SelectedValuePath="Name" Padding="8,6" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="内联指令 (cmds)" FontWeight="SemiBold" Margin="0,0,0,6" />
+                    <TextBox Text="{Binding ConsoleSequenceInlineCmds, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" ToolTip="例如: stat fps; wait 2000; stat unit" />
+                </StackPanel>
+            </Grid>
+            <Button Grid.Row="2" Content="运行序列" Command="{Binding RunConsoleSequenceCommand}" Padding="18,8" HorizontalAlignment="Left" Margin="0,12,0,0" />
+            <ScrollViewer Grid.Row="3" Margin="0,12,0,0" VerticalScrollBarVisibility="Auto" MinHeight="120">
+                <TextBox Text="{Binding ConsoleSequenceOutput}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" BorderThickness="0" Background="#FFF5F5F5" Padding="8" />
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

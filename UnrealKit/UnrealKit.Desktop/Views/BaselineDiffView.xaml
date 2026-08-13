@@ -1,0 +1,73 @@
+<UserControl x:Class="UnrealKit.Desktop.Views.BaselineDiffView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Style>
+        <Style TargetType="UserControl">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedNavigationItem}" Value="基线差分">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Style>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock Text="基线差分比较" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="比较两份同类型报告，逐指标计算差值，标注改善/回归方向。" Margin="0,10,0,16" TextWrapping="Wrap" />
+            <TextBlock Text="数据源" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <ComboBox ItemsSource="{Binding DiffSourceOptions}" SelectedItem="{Binding DiffSource}" Padding="8,6" />
+            <TextBlock Text="基线文件" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <DockPanel LastChildFill="True">
+                <Button Content="浏览…" Click="BrowseDiffBaseline_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                <TextBox Text="{Binding DiffBaselinePath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+            </DockPanel>
+            <TextBlock Text="当前文件" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <DockPanel LastChildFill="True">
+                <Button Content="浏览…" Click="BrowseDiffCurrent_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                <TextBox Text="{Binding DiffCurrentPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+            </DockPanel>
+            <TextBlock Text="指标过滤 (逗号分隔, 可选)" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <TextBox Text="{Binding DiffMetricFilter, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+            <Button Content="执行差分" Command="{Binding RunDiffCommand}" HorizontalAlignment="Left" Padding="18,8" Margin="0,16,0,0" />
+        </StackPanel>
+        <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="{Binding DiffSummary}" FontWeight="SemiBold" FontSize="16" />
+                <TabControl MinHeight="350" Margin="0,12,0,0">
+                    <TabItem Header="Diff Results">
+                        <DataGrid ItemsSource="{Binding DiffResults}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Group" Binding="{Binding Group}" Width="100" />
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="140" />
+                                <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" Width="70" />
+                                <DataGridTextColumn Header="Direction" Binding="{Binding Direction}" Width="100" />
+                                <DataGridTextColumn Header="Baseline" Binding="{Binding BaselineValue}" Width="90" />
+                                <DataGridTextColumn Header="Current" Binding="{Binding CurrentValue}" Width="90" />
+                                <DataGridTextColumn Header="Delta" Binding="{Binding Delta}" Width="90" />
+                                <DataGridTextColumn Header="Delta %" Binding="{Binding DeltaPercent}" Width="80" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="110" />
+                                <DataGridTextColumn Header="Assessment" Binding="{Binding Assessment}" Width="100" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </TabItem>
+                    <TabItem Header="Diagnostics">
+                        <DataGrid ItemsSource="{Binding DiffDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="90" />
+                                <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="90" />
+                                <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="70" />
+                                <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </TabItem>
+                </TabControl>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

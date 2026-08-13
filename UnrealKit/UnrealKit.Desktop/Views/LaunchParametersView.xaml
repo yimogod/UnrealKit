@@ -1,0 +1,74 @@
+<UserControl x:Class="UnrealKit.Desktop.Views.LaunchParametersView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Style>
+        <Style TargetType="UserControl">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedNavigationItem}" Value="启动参数">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Style>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="启动参数预设" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Grid.Column="1" Text="uecommandline.txt 预览" FontSize="18" FontWeight="SemiBold" Margin="20,0,0,0" />
+        <StackPanel Grid.Row="1" Margin="0,12,12,0">
+            <TextBlock Text="选择预设。不可组合的预设只能单独使用；无效组合会在预览中显示原因。" Foreground="#FF52616B" TextWrapping="Wrap" Margin="0,0,0,10" />
+            <ListBox ItemsSource="{Binding LaunchParameterPresets}" BorderBrush="#FFE2E6EA" BorderThickness="1" MinHeight="170">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" Margin="0,3,8,0" />
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Description}" Foreground="#FF52616B" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Arguments}" FontFamily="Consolas" Foreground="#FF52616B" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock Text="自定义参数" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <TextBox Text="{Binding CustomLaunchArguments, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="64" Padding="8,6" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" />
+            <TextBlock Text="远端 uecommandline.txt 路径" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <TextBox Text="{Binding RemoteCommandLinePath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+        </StackPanel>
+        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding LaunchParameterPreview, Mode=OneWay}" IsReadOnly="True" Margin="8,12,0,0" Padding="8" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
+        <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,18,0,0">
+            <Button Content="推送到已选设备" Command="{Binding PushLaunchParametersCommand}" Padding="14,7" Margin="0,0,10,0" />
+            <Button Content="删除设备参数" Command="{Binding DeleteLaunchParametersCommand}" Padding="14,7" Margin="0,0,10,0" />
+            <Button Content="启动应用" Command="{Binding StartApplicationCommand}" Padding="14,7" />
+        </StackPanel>
+        <Grid Grid.Row="3" Grid.ColumnSpan="2" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="操作目标（推送、启动、删除前请核对）" FontWeight="SemiBold" />
+                <TextBox Text="{Binding LaunchOperationSummary, Mode=OneWay}" IsReadOnly="True" Margin="0,6,8,0" Padding="8" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" />
+            </StackPanel>
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="后台进度与 ADB 日志" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding OperationStage}" Foreground="#FF52616B" Margin="0,4,0,4" />
+                <ListBox ItemsSource="{Binding OperationLogs}" Margin="8,0,0,0" Height="128" FontFamily="Consolas" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>
