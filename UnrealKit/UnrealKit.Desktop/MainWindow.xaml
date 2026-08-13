@@ -141,7 +141,7 @@
                                     <RowDefinition Height="*" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <TextBox Text="{Binding CaptureArchivePreview}" IsReadOnly="True" Padding="8" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
+                                <TextBox Text="{Binding CaptureArchivePreview, Mode=OneWay}" IsReadOnly="True" Padding="8" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
                                 <Button Grid.Row="1" Content="采集并归档" Command="{Binding RunCaptureCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,16,0,0" />
                             </Grid>
                         </Grid>
@@ -250,7 +250,7 @@
                                 <TextBlock Text="远端 uecommandline.txt 路径" FontWeight="SemiBold" Margin="0,12,0,6" />
                                 <TextBox Text="{Binding RemoteCommandLinePath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
                             </StackPanel>
-                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding LaunchParameterPreview}" IsReadOnly="True" Margin="8,12,0,0" Padding="8" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding LaunchParameterPreview, Mode=OneWay}" IsReadOnly="True" Margin="8,12,0,0" Padding="8" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
                             <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,18,0,0">
                                 <Button Content="推送到已选设备" Command="{Binding PushLaunchParametersCommand}" Padding="14,7" Margin="0,0,10,0" />
                                 <Button Content="删除设备参数" Command="{Binding DeleteLaunchParametersCommand}" Padding="14,7" Margin="0,0,10,0" />
@@ -263,7 +263,7 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
                                     <TextBlock Text="操作目标（推送、启动、删除前请核对）" FontWeight="SemiBold" />
-                                    <TextBox Text="{Binding LaunchOperationSummary}" IsReadOnly="True" Margin="0,6,8,0" Padding="8" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" />
+                                    <TextBox Text="{Binding LaunchOperationSummary, Mode=OneWay}" IsReadOnly="True" Margin="0,6,8,0" Padding="8" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="后台进度与 ADB 日志" FontWeight="SemiBold" />
@@ -639,8 +639,8 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
                                 <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
                         <StackPanel>
                             <TextBlock Text="RenderDoc 集成" FontSize="18" FontWeight="SemiBold" />
                             <TextBlock Text="运行 RenderDoc Python 脚本，捕获 GPU 帧分析数据。输出结果保存到指定目录。" Margin="0,10,0,16" TextWrapping="Wrap" />
@@ -692,10 +692,10 @@
                                 <TextBlock Text="{Binding RenderDocSummary}" FontWeight="SemiBold" FontSize="16" TextWrapping="Wrap" />
                                 <TabControl MinHeight="350" Margin="0,12,0,0">
                                     <TabItem Header="Standard Output">
-                                        <TextBox Text="{Binding RenderDocStandardOutput}" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" AcceptsReturn="True" />
+                                        <TextBox Text="{Binding RenderDocStandardOutput, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" AcceptsReturn="True" />
                                     </TabItem>
                                     <TabItem Header="Standard Error">
-                                        <TextBox Text="{Binding RenderDocStandardError}" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" AcceptsReturn="True" Foreground="#FFB02020" />
+                                        <TextBox Text="{Binding RenderDocStandardError, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" AcceptsReturn="True" Foreground="#FFB02020" />
                                     </TabItem>
                                     <TabItem Header="Diagnostics">
                                         <DataGrid ItemsSource="{Binding RenderDocDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
