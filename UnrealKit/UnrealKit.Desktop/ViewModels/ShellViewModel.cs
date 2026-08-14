@@ -27,7 +27,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly IProjectService _projectService;
     private readonly IDesktopAdbServiceFactory _adbServiceFactory;
     private readonly IUserConfirmationService _confirmationService;
-    private string _selectedNavigationItem;
+    private string _selectedNavigationItem = "工程";
     private string _statusMessage = "未打开工程。";
     private string _projectFilePath = string.Empty;
     private string _newProjectDirectory = string.Empty;
@@ -111,8 +111,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
-        NavigationItems = ["工程", "设备", "启动参数", "采集", "控制台", "解析", "结果", "导出", "静态相机", "基线差分", "历史趋势", "RenderDoc", "日志与设置"];
-        _selectedNavigationItem = NavigationItems[0];
         CreateProjectCommand = new AsyncDelegateCommand(CreateProjectAsync, CanCreateProject);
         OpenProjectCommand = new AsyncDelegateCommand(OpenProjectAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ProjectFilePath));
         RefreshDevicesCommand = new AsyncDelegateCommand(RefreshDevicesAsync, () => !IsBusy);
@@ -140,7 +138,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
-    public IReadOnlyList<string> NavigationItems { get; }
     public ObservableCollection<IDevice> Devices { get; } = [];
     public ObservableCollection<ConsoleSequencePreset> ConsoleSequencePresets { get; } = [];
     public ObservableCollection<LaunchParameterPresetOption> LaunchParameterPresets { get; } = [];
@@ -208,8 +205,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "采集" => "将采集数据归档到新的 Content Capture，避免覆盖历史数据。",
         "控制台" => "向运行中的 UE Android 应用发送控制台指令，支持序列编排和 logcat 条件执行。",
         "解析" => "明确选择输入文件，查看格式诊断和解析结果。",
-        "结果" => "查看摘要、筛选表格并将派生结果导出到 Saved。",
-        "导出" => "选择解析结果，指定输出格式和路径，导出 CSV/TSV/XLSX。",
+        "静态相机" => "解析静态相机性能日志，查看逐相机指标并生成 HTML 报告。",
+        "基线差分" => "明确选择基线与当前两份输入，比较指标回退与改善。",
+        "历史趋势" => "按标签和时间范围汇总工程内的历史 Capture，查看指标走势。",
+        "RenderDoc" => "调用独立的 RenderDoc Python 脚本，查看退出码与输出目录。",
         _ => "查看可复制日志与应用设置。"
     };
 

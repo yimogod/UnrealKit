@@ -1,17 +1,7 @@
-<UserControl x:Class="UnrealKit.Desktop.Views.ProjectView"
+﻿<UserControl x:Class="UnrealKit.Desktop.Views.ProjectView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <UserControl.Style>
-        <Style TargetType="UserControl">
-            <Setter Property="Visibility" Value="Collapsed" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding SelectedNavigationItem}" Value="工程">
-                    <Setter Property="Visibility" Value="Visible" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-    </UserControl.Style>
-    <StackPanel Margin="0,0,0,28">
+    <StackPanel Margin="0,0,0,10">
         <TextBlock Text="创建工程" FontSize="18" FontWeight="SemiBold" />
         <TextBlock Text="创建工程只会生成必要的 .ukit、默认配置和空目录；目标目录非空时会拒绝覆盖。" Margin="0,10,0,16" TextWrapping="Wrap" />
         <TextBlock Text="工程名称" FontWeight="SemiBold" Margin="0,0,0,6" />
