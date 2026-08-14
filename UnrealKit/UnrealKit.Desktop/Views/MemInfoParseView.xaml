@@ -7,9 +7,9 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <TextBlock Text="离线 Android meminfo 解析" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Text="离线 Android meminfo 解析" Style="{StaticResource SectionTitleTextStyle}" />
         <StackPanel Grid.Row="1" Margin="0,14,0,0">
-            <TextBlock Text="选择一个 .txt 文件。解析只读取原始文件；如需归档分析，请从对应 Capture 的 MemInfo 目录明确选择输入。" TextWrapping="Wrap" Foreground="#FF52616B" />
+            <TextBlock Text="选择一个 .txt 文件。解析只读取原始文件；如需归档分析，请从对应 Capture 的 MemInfo 目录明确选择输入。" Style="{StaticResource HintTextStyle}" />
             <DockPanel Margin="0,12,0,0" LastChildFill="True">
                 <Button Content="浏览..." Click="BrowseMemInfoFile_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
                 <TextBox Text="{Binding MemInfoInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
@@ -18,8 +18,8 @@
         </StackPanel>
         <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Text="{Binding MemInfoProcessDescription}" FontWeight="SemiBold" FontSize="16" />
-                <TextBlock Text="{Binding MemInfoParsedAt}" Foreground="#FF52616B" Margin="0,5,0,12" />
+                <TextBlock Text="{Binding MemInfoProcessDescription}" Style="{StaticResource ResultSummaryTextStyle}" />
+                <TextBlock Text="{Binding MemInfoParsedAt}" Style="{StaticResource HintTextStyle}" Margin="0,5,0,12" />
                 <TabControl MinHeight="350">
                     <TabItem Header="App Summary">
                         <DataGrid ItemsSource="{Binding MemInfoMetrics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">

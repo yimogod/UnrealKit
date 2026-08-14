@@ -8,27 +8,27 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <StackPanel>
-            <TextBlock Text="基线差分比较" FontSize="18" FontWeight="SemiBold" />
-            <TextBlock Text="比较两份同类型报告，逐指标计算差值，标注改善/回归方向。" Margin="0,10,0,16" TextWrapping="Wrap" />
-            <TextBlock Text="数据源" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <TextBlock Text="基线差分比较" Style="{StaticResource SectionTitleTextStyle}" />
+            <TextBlock Text="比较两份同类型报告，逐指标计算差值，标注改善/回归方向。" Style="{StaticResource SectionDescriptionTextStyle}" />
+            <TextBlock Text="数据源" Style="{StaticResource FieldLabelTextStyle}" />
             <ComboBox ItemsSource="{Binding DiffSourceOptions}" SelectedItem="{Binding DiffSource}" Padding="8,6" />
-            <TextBlock Text="基线文件" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <TextBlock Text="基线文件" Style="{StaticResource StackedFieldLabelTextStyle}" />
             <DockPanel LastChildFill="True">
                 <Button Content="浏览…" Click="BrowseDiffBaseline_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
                 <TextBox Text="{Binding DiffBaselinePath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
             </DockPanel>
-            <TextBlock Text="当前文件" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <TextBlock Text="当前文件" Style="{StaticResource StackedFieldLabelTextStyle}" />
             <DockPanel LastChildFill="True">
                 <Button Content="浏览…" Click="BrowseDiffCurrent_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
                 <TextBox Text="{Binding DiffCurrentPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
             </DockPanel>
-            <TextBlock Text="指标过滤 (逗号分隔, 可选)" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <TextBlock Text="指标过滤 (逗号分隔, 可选)" Style="{StaticResource StackedFieldLabelTextStyle}" />
             <TextBox Text="{Binding DiffMetricFilter, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
             <Button Content="执行差分" Command="{Binding RunDiffCommand}" HorizontalAlignment="Left" Padding="18,8" Margin="0,16,0,0" />
         </StackPanel>
         <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Text="{Binding DiffSummary}" FontWeight="SemiBold" FontSize="16" />
+                <TextBlock Text="{Binding DiffSummary}" Style="{StaticResource ResultSummaryTextStyle}" />
                 <TabControl MinHeight="350" Margin="0,12,0,0">
                     <TabItem Header="Diff Results">
                         <DataGrid ItemsSource="{Binding DiffResults}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">

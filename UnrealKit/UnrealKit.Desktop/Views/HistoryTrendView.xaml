@@ -8,33 +8,33 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <StackPanel>
-            <TextBlock Text="历史趋势分析" FontSize="18" FontWeight="SemiBold" />
-            <TextBlock Text="基于工程中已归档的采集数据，按时间序列聚合指标变化趋势。需先打开工程。" Margin="0,10,0,16" TextWrapping="Wrap" />
+            <TextBlock Text="历史趋势分析" Style="{StaticResource SectionTitleTextStyle}" />
+            <TextBlock Text="基于工程中已归档的采集数据，按时间序列聚合指标变化趋势。需先打开工程。" Style="{StaticResource SectionDescriptionTextStyle}" />
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                    <TextBlock Text="数据源" FontWeight="SemiBold" Margin="0,0,0,6" />
+                    <TextBlock Text="数据源" Style="{StaticResource FieldLabelTextStyle}" />
                     <ComboBox ItemsSource="{Binding TrendSourceOptions}" SelectedItem="{Binding TrendSource}" Padding="8,6" />
-                    <TextBlock Text="Tag 过滤" FontWeight="SemiBold" Margin="0,12,0,6" />
+                    <TextBlock Text="Tag 过滤" Style="{StaticResource StackedFieldLabelTextStyle}" />
                     <TextBox Text="{Binding TrendTag, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                    <TextBlock Text="起始日期" FontWeight="SemiBold" Margin="0,0,0,6" />
+                    <TextBlock Text="起始日期" Style="{StaticResource FieldLabelTextStyle}" />
                     <TextBox Text="{Binding TrendFrom, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-                    <TextBlock Text="结束日期" FontWeight="SemiBold" Margin="0,12,0,6" />
+                    <TextBlock Text="结束日期" Style="{StaticResource StackedFieldLabelTextStyle}" />
                     <TextBox Text="{Binding TrendTo, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
                 </StackPanel>
             </Grid>
-            <TextBlock Text="指标过滤 (逗号分隔, 可选)" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <TextBlock Text="指标过滤 (逗号分隔, 可选)" Style="{StaticResource StackedFieldLabelTextStyle}" />
             <TextBox Text="{Binding TrendMetricFilter, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
             <Button Content="构建趋势" Command="{Binding RunTrendCommand}" HorizontalAlignment="Left" Padding="18,8" Margin="0,16,0,0" />
         </StackPanel>
         <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Text="{Binding TrendSummary}" FontWeight="SemiBold" FontSize="16" />
+                <TextBlock Text="{Binding TrendSummary}" Style="{StaticResource ResultSummaryTextStyle}" />
                 <TabControl MinHeight="350" Margin="0,12,0,0">
                     <TabItem Header="Captures">
                         <DataGrid ItemsSource="{Binding TrendCaptures}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">

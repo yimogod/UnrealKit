@@ -6,31 +6,31 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <TextBlock Text="项目默认配置" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Text="项目默认配置" Style="{StaticResource SectionTitleTextStyle}" />
         <ScrollViewer Grid.Row="1" Margin="0,14,0,0" VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Text="目标平台" FontWeight="SemiBold" Margin="0,0,0,6" />
+                <TextBlock Text="目标平台" Style="{StaticResource FieldLabelTextStyle}" />
                 <ComboBox SelectedValue="{Binding Platform, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,0,0,14">
                     <ComboBoxItem Content="Android" />
                     <ComboBoxItem Content="Win64" />
                 </ComboBox>
-                <TextBlock Text="包名" FontWeight="SemiBold" Margin="0,0,0,6" Visibility="{Binding IsAndroid, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <TextBlock Text="包名" Style="{StaticResource FieldLabelTextStyle}" Visibility="{Binding IsAndroid, Converter={StaticResource BoolToVisibilityConverter}}" />
                 <TextBox Text="{Binding PackageName, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-                <TextBlock Text="UE 项目名" FontWeight="SemiBold" Margin="0,12,0,6" />
+                <TextBlock Text="UE 项目名" Style="{StaticResource StackedFieldLabelTextStyle}" />
                 <TextBox Text="{Binding UnrealProjectName, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-                <TextBlock Text="Android Activity" FontWeight="SemiBold" Margin="0,12,0,6" Visibility="{Binding IsAndroid, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <TextBlock Text="Android Activity" Style="{StaticResource StackedFieldLabelTextStyle}" Visibility="{Binding IsAndroid, Converter={StaticResource BoolToVisibilityConverter}}" />
                 <TextBox Text="{Binding Activity, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-                <TextBlock Text="设备 UE Saved 路径模板" FontWeight="SemiBold" Margin="0,12,0,6" Visibility="{Binding IsAndroid, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <TextBlock Text="设备 UE Saved 路径模板" Style="{StaticResource StackedFieldLabelTextStyle}" Visibility="{Binding IsAndroid, Converter={StaticResource BoolToVisibilityConverter}}" />
                 <TextBox Text="{Binding DeviceSavedRootTemplate, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
-                <TextBlock Text="Win64 可执行文件路径" FontWeight="SemiBold" Margin="0,12,0,6" Visibility="{Binding IsWin64, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <TextBlock Text="Win64 可执行文件路径" Style="{StaticResource StackedFieldLabelTextStyle}" Visibility="{Binding IsWin64, Converter={StaticResource BoolToVisibilityConverter}}" />
                 <TextBox Text="{Binding Win64Executable, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Visibility="{Binding IsWin64, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBlock Text="Win64 工作目录" FontWeight="SemiBold" Margin="0,12,0,6" Visibility="{Binding IsWin64, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <TextBlock Text="Win64 工作目录" Style="{StaticResource StackedFieldLabelTextStyle}" Visibility="{Binding IsWin64, Converter={StaticResource BoolToVisibilityConverter}}" />
                 <TextBox Text="{Binding Win64WorkingDirectory, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Visibility="{Binding IsWin64, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBlock Text="默认 Capture 标签" FontWeight="SemiBold" Margin="0,12,0,6" />
+                <TextBlock Text="默认 Capture 标签" Style="{StaticResource StackedFieldLabelTextStyle}" />
                 <TextBox Text="{Binding CaptureTag, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-                <TextBlock Text="ADB 路径（可选）" FontWeight="SemiBold" Margin="0,12,0,6" />
+                <TextBlock Text="ADB 路径（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
                 <TextBox Text="{Binding AdbPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-                <TextBlock Text="保存到 Config/DefaultGame.ini。采集和命令行会读取相同项目配置。" Foreground="#FF52616B" TextWrapping="Wrap" Margin="0,12,0,0" />
+                <TextBlock Text="保存到 Config/DefaultGame.ini。采集和命令行会读取相同项目配置。" Style="{StaticResource HintTextStyle}" Margin="0,12,0,0" />
                 <Button Content="保存项目配置" Command="{Binding SaveProjectSettingsCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,16,0,0" />
             </StackPanel>
         </ScrollViewer>

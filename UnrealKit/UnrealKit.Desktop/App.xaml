@@ -4,7 +4,13 @@
              xmlns:converters="clr-namespace:UnrealKit.Desktop.Converters"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <converters:PointsToPointCollectionConverter x:Key="PointsConverter" />
-        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/Typography.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <converters:PointsToPointCollectionConverter x:Key="PointsConverter" />
+            <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

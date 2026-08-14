@@ -7,11 +7,11 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <TextBlock Text="采集归档" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Text="采集归档" Style="{StaticResource SectionTitleTextStyle}" />
         <StackPanel Grid.Row="1" Margin="0,14,0,0">
-            <TextBlock Text="Capture 标签" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <TextBlock Text="Capture 标签" Style="{StaticResource FieldLabelTextStyle}" />
             <TextBox Text="{Binding CaptureTag, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-            <TextBlock Text="执行会采集 dumpsys meminfo 并拉取 UE Saved；原始文件只会写入新的 Content Capture。" Foreground="#FF52616B" TextWrapping="Wrap" Margin="0,10,0,0" />
+            <TextBlock Text="执行会采集 dumpsys meminfo 并拉取 UE Saved；原始文件只会写入新的 Content Capture。" Style="{StaticResource HintTextStyle}" Margin="0,10,0,0" />
         </StackPanel>
         <Grid Grid.Row="2" Margin="0,18,0,0">
             <Grid.RowDefinitions>

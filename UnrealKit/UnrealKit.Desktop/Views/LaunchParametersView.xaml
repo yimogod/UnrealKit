@@ -12,10 +12,10 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <TextBlock Text="启动参数预设" FontSize="18" FontWeight="SemiBold" />
-        <TextBlock Grid.Column="1" Text="uecommandline.txt 预览" FontSize="18" FontWeight="SemiBold" Margin="20,0,0,0" />
+        <TextBlock Text="启动参数预设" Style="{StaticResource SectionTitleTextStyle}" />
+        <TextBlock Grid.Column="1" Text="uecommandline.txt 预览" Style="{StaticResource SectionTitleTextStyle}" Margin="20,0,0,0" />
         <StackPanel Grid.Row="1" Margin="0,12,12,0">
-            <TextBlock Text="选择预设。不可组合的预设只能单独使用；无效组合会在预览中显示原因。" Foreground="#FF52616B" TextWrapping="Wrap" Margin="0,0,0,10" />
+            <TextBlock Text="选择预设。不可组合的预设只能单独使用；无效组合会在预览中显示原因。" Style="{StaticResource HintTextStyle}" Margin="0,0,0,10" />
             <ListBox ItemsSource="{Binding LaunchParameterPresets}" BorderBrush="#FFE2E6EA" BorderThickness="1" MinHeight="170">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
@@ -26,17 +26,17 @@
                             </Grid.ColumnDefinitions>
                             <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" Margin="0,3,8,0" />
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding Description}" Foreground="#FF52616B" TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding Arguments}" FontFamily="Consolas" Foreground="#FF52616B" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Name}" Style="{StaticResource EmphasisTextStyle}" />
+                                <TextBlock Text="{Binding Description}" Style="{StaticResource HintTextStyle}" />
+                                <TextBlock Text="{Binding Arguments}" Style="{StaticResource HintTextStyle}" FontFamily="Consolas" />
                             </StackPanel>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
-            <TextBlock Text="自定义参数" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <TextBlock Text="自定义参数" Style="{StaticResource StackedFieldLabelTextStyle}" />
             <TextBox Text="{Binding CustomLaunchArguments, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="64" Padding="8,6" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" />
-            <TextBlock Text="远端 uecommandline.txt 路径" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <TextBlock Text="远端 uecommandline.txt 路径" Style="{StaticResource StackedFieldLabelTextStyle}" />
             <TextBox Text="{Binding RemoteCommandLinePath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
         </StackPanel>
         <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding LaunchParameterPreview, Mode=OneWay}" IsReadOnly="True" Margin="8,12,0,0" Padding="8" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
@@ -51,12 +51,12 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <StackPanel>
-                <TextBlock Text="操作目标（推送、启动、删除前请核对）" FontWeight="SemiBold" />
+                <TextBlock Text="操作目标（推送、启动、删除前请核对）" Style="{StaticResource EmphasisTextStyle}" />
                 <TextBox Text="{Binding LaunchOperationSummary, Mode=OneWay}" IsReadOnly="True" Margin="0,6,8,0" Padding="8" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" />
             </StackPanel>
             <StackPanel Grid.Column="1">
-                <TextBlock Text="后台进度与 ADB 日志" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding OperationStage}" Foreground="#FF52616B" Margin="0,4,0,4" />
+                <TextBlock Text="后台进度与 ADB 日志" Style="{StaticResource EmphasisTextStyle}" />
+                <TextBlock Text="{Binding OperationStage}" Style="{StaticResource HintTextStyle}" Margin="0,4,0,4" />
                 <ListBox ItemsSource="{Binding OperationLogs}" Margin="8,0,0,0" Height="128" FontFamily="Consolas" />
             </StackPanel>
         </Grid>

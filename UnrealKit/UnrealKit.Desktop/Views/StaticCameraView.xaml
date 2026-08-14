@@ -8,14 +8,14 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <StackPanel>
-            <TextBlock Text="静态相机性能解析" FontSize="18" FontWeight="SemiBold" />
-            <TextBlock Text="选择包含 !!!Do Perf Start!!! / !!!Do Perf End!!! 标记的日志文件，可选指定截图目录进行关联。" Margin="0,10,0,16" TextWrapping="Wrap" />
-            <TextBlock Text="日志文件" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <TextBlock Text="静态相机性能解析" Style="{StaticResource SectionTitleTextStyle}" />
+            <TextBlock Text="选择包含 !!!Do Perf Start!!! / !!!Do Perf End!!! 标记的日志文件，可选指定截图目录进行关联。" Style="{StaticResource SectionDescriptionTextStyle}" />
+            <TextBlock Text="日志文件" Style="{StaticResource FieldLabelTextStyle}" />
             <DockPanel LastChildFill="True">
                 <Button Content="浏览…" Click="BrowseScpLog_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
                 <TextBox Text="{Binding ScpLogPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
             </DockPanel>
-            <TextBlock Text="截图目录 (可选)" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <TextBlock Text="截图目录 (可选)" Style="{StaticResource StackedFieldLabelTextStyle}" />
             <DockPanel LastChildFill="True">
                 <Button Content="浏览…" Click="BrowseScpScreenshots_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
                 <TextBox Text="{Binding ScpScreenshotsDir, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
@@ -24,7 +24,7 @@
         </StackPanel>
         <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Text="{Binding ScpParseDescription}" FontWeight="SemiBold" FontSize="16" />
+                <TextBlock Text="{Binding ScpParseDescription}" Style="{StaticResource ResultSummaryTextStyle}" />
                 <TabControl MinHeight="350" Margin="0,12,0,0">
                     <TabItem Header="Frames">
                         <DataGrid ItemsSource="{Binding ScpFrames}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">

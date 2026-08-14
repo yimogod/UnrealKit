@@ -50,7 +50,7 @@
                             <Border Background="White" BorderBrush="#FFE2E6EA" BorderThickness="0,0,1,0">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                     <StackPanel Margin="0,12,0,12">
-                                        <TextBlock Text="工作流" FontWeight="SemiBold" Foreground="#FF52616B" Margin="16,6,8,10" />
+                                        <TextBlock Text="工作流" Style="{StaticResource NavigationGroupLabelTextStyle}" Margin="16,6,8,10" />
                                         <StackPanel IsItemsHost="True" />
                                     </StackPanel>
                                 </ScrollViewer>
@@ -62,8 +62,8 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
-                                <TextBlock Text="{Binding SelectedNavigationItem}" FontSize="20" FontWeight="SemiBold" Foreground="#FF1B263B" />
-                                <TextBlock Grid.Row="1" Text="{Binding PageDescription}" Foreground="#FF52616B" Margin="0,8,0,0" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding SelectedNavigationItem}" Style="{StaticResource PageHeaderTextStyle}" />
+                                <TextBlock Grid.Row="1" Text="{Binding PageDescription}" Style="{StaticResource HintTextStyle}" Margin="0,8,0,0" />
                                 <Border Grid.Row="2" Background="White" CornerRadius="6" BorderBrush="#FFE2E6EA" BorderThickness="1" Padding="20">
                                     <ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" />
                                 </Border>
@@ -84,7 +84,7 @@
 
         <Border Background="#FF1B263B" Padding="20,14">
             <DockPanel>
-                <TextBlock Text="UnrealKit" Foreground="White" FontSize="22" FontWeight="SemiBold" DockPanel.Dock="Left" />
+                <TextBlock Text="UnrealKit" Style="{StaticResource AppTitleTextStyle}" DockPanel.Dock="Left" />
                 <TextBlock Text="{Binding ProjectTitle}" Foreground="#FFD8E0EC" HorizontalAlignment="Right" VerticalAlignment="Center" />
             </DockPanel>
         </Border>
@@ -113,7 +113,7 @@
         </TabControl>
 
         <Border Grid.Row="2" Background="White" BorderBrush="#FFE2E6EA" BorderThickness="0,1,0,0" Padding="12,8">
-            <TextBlock Text="{Binding StatusMessage}" Foreground="#FF52616B" />
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource HintTextStyle}" />
         </Border>
     </Grid>
 </Window>
