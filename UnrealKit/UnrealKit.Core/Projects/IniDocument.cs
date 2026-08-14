@@ -4,14 +4,82 @@ namespace UnrealKit.Core.Projects;
 
 public sealed class IniDocument
 {
+    /// <summary>
+    /// 双字典. section下保存的多个keyvalue. 忽略大小写
+    /// </summary>
     private readonly Dictionary<string, Dictionary<string, string>> _sections = new(StringComparer.OrdinalIgnoreCase);
 
-    public string? GetValue(string section, string key) =>
-        _sections.TryGetValue(section, out var values) && values.TryGetValue(key, out var value) ? value : null;
+    /// <summary>
+    /// 通过解析字符串获取Ini类
+    /// </summary>
+    public static IniDocument Parse(string content)
+    {
+        var document = new IniDocument();
 
+        // 缓存当前的section名称
+        var section = string.Empty;
+
+        // 统一回车符
+        string tempContent = content.Replace("\r\n", "\n", StringComparison.Ordinal);
+        string[] lines = tempContent.Split('\n');
+
+        // 按顺序 从上往下读取内容
+        foreach (var rawLine in lines)
+        {
+            // 去除空格
+            var line = rawLine.Trim();
+
+            // 不处理注释等
+            if (line.Length == 0 || line.StartsWith(';') || line.StartsWith('#'))
+            {
+                continue;
+            }
+
+            // 获取section的名称
+            if (line.StartsWith('[') && line.EndsWith(']'))
+            {
+                section = line[1..^1].Trim();
+                continue;
+            }
+
+            if(section.Length == 0)continue;
+
+            // 获取ini的 kev, value
+            var separatorIndex = line.IndexOf('=');
+            if (separatorIndex <= 0)continue;
+
+            string key = line[..separatorIndex].Trim();
+            string value = line[(separatorIndex + 1)..].Trim();
+            document.SetValue(section, key, value);
+        }
+
+        return document;
+    }
+
+    public bool HasSection(string section) => _sections.ContainsKey(section);
+
+    /// <summary>
+    /// 获取section下的所有的值
+    /// </summary>
     public IReadOnlyDictionary<string, string> GetSection(string section) =>
         _sections.TryGetValue(section, out var values) ? values : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+
+    /// <summary>
+    /// 是否保存了值
+    /// </summary>
+    public bool HasValue(string section, string key) =>
+        _sections.TryGetValue(section, out var values) && values.ContainsKey(key);
+
+    /// <summary>
+    /// 获取 section:key下面的值
+    /// </summary>
+    public string? GetValue(string section, string key) =>
+        _sections.TryGetValue(section, out var values) && values.TryGetValue(key, out var value) ? value : null;
+
+    /// <summary>
+    /// 设置section段的keyvalue值
+    /// </summary>
     public void SetValue(string section, string key, string value)
     {
         if (!_sections.TryGetValue(section, out var values))
@@ -23,39 +91,9 @@ public sealed class IniDocument
         values[key] = value;
     }
 
-    public bool HasSection(string section) => _sections.ContainsKey(section);
-
-    public bool HasValue(string section, string key) =>
-        _sections.TryGetValue(section, out var values) && values.ContainsKey(key);
-
-    public static IniDocument Parse(string content)
-    {
-        var document = new IniDocument();
-        var section = string.Empty;
-        foreach (var rawLine in content.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
-        {
-            var line = rawLine.Trim();
-            if (line.Length == 0 || line.StartsWith(';') || line.StartsWith('#'))
-            {
-                continue;
-            }
-
-            if (line.StartsWith('[') && line.EndsWith(']'))
-            {
-                section = line[1..^1].Trim();
-                continue;
-            }
-
-            var separatorIndex = line.IndexOf('=');
-            if (separatorIndex > 0 && section.Length > 0)
-            {
-                document.SetValue(section, line[..separatorIndex].Trim(), line[(separatorIndex + 1)..].Trim());
-            }
-        }
-
-        return document;
-    }
-
+    /// <summary>
+    /// 保存ini
+    /// </summary>
     public async Task SaveAsync(string path, CancellationToken cancellationToken)
     {
         var builder = new StringBuilder();

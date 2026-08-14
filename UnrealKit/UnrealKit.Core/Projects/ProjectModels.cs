@@ -3,14 +3,8 @@ using UnrealKit.Core.Diagnostics;
 namespace UnrealKit.Core.Projects;
 
 /// <summary>
-/// 目标平台枚举。Core 层不得依据平台做 UI 分支，仅用于采集策略选择。
+/// 项目描述符, 用于描述项目的基本信息.
 /// </summary>
-public enum TargetPlatform
-{
-    Android,
-    Win64
-}
-
 public sealed record UkitProjectDescriptor(
     int FormatVersion,
     string ProjectName,
@@ -25,13 +19,16 @@ public sealed record UkitProjectDescriptor(
         CurrentFormatVersion, projectName, "Content", "Config", "Saved", "Intermediate");
 }
 
+/// <summary>
+/// 命令序列预设, 用于预定义命令序列.
+/// </summary>
 public sealed record ConsoleSequencePreset(string Name, string StepsDefinition, string Description)
 {
     public static ConsoleSequencePreset Create(string name, string stepsDefinition, string? description = null) =>
         new(name.Trim(), stepsDefinition.Trim(), description?.Trim() ?? string.Empty);
 
     /// <summary>
-    /// 将步骤定义字符串解析为命令序列定义。
+    /// 将步骤定义字符串解析为命令序列定义, 
     /// 格式：cmd1; wait 2000; cmd2; tag marker; cmd3
     /// </summary>
     public Console.CommandSequenceDefinition ToSequenceDefinition()
@@ -62,8 +59,14 @@ public sealed record ConsoleSequencePreset(string Name, string StepsDefinition, 
     }
 }
 
+/// <summary>
+/// 启动参数预设
+/// </summary>
 public sealed record LaunchParameterPreset(string Name, string Arguments, string Description, bool IsComposable);
 
+/// <summary>
+/// 项目设置
+/// </summary>
 public sealed record ProjectSettings(
     string PackageName,
     string UnrealProjectName,
@@ -109,6 +112,9 @@ public sealed record ProjectSettings(
         "Command");
 }
 
+/// <summary>
+/// 游戏启动参数预设默认值
+/// </summary>
 public static class LaunchParameterPresetDefaults
 {
     public static IReadOnlyList<LaunchParameterPreset> All { get; } =
@@ -125,16 +131,25 @@ public static class LaunchParameterPresetDefaults
     ];
 }
 
+/// <summary>
+/// 项目配置快照
+/// </summary>
 public sealed record ProjectConfigurationSnapshot(
     UkitProjectDescriptor Descriptor,
     ProjectSettings Settings,
     DateTimeOffset CapturedAt);
 
+/// <summary>
+/// 项目验证结果
+/// </summary>
 public sealed record ProjectValidationResult(IReadOnlyList<Diagnostic> Diagnostics)
 {
     public bool IsValid => Diagnostics.All(diagnostic => diagnostic.Severity != DiagnosticSeverity.Error);
 }
 
+/// <summary>
+/// 项目实例
+/// </summary>
 public sealed record UkitProject(
     string ProjectFilePath,
     string RootDirectory,
@@ -157,6 +172,12 @@ public sealed record UkitProject(
         new(Descriptor, Settings, DateTimeOffset.UtcNow);
 }
 
+/// <summary>
+/// 创建项目请求
+/// </summary>
 public sealed record CreateProjectRequest(string DirectoryPath, string ProjectName);
 
+/// <summary>
+/// 项目创建结果
+/// </summary>
 public sealed record ProjectCreateResult(UkitProject Project, ProjectValidationResult Validation);

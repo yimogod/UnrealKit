@@ -1,11 +1,17 @@
 ﻿namespace UnrealKit.Core.Projects;
 
+/// <summary>
+/// 生成AGENTS.md的模版
+/// </summary>
 public static class AgentTemplates
 {
     public const string AgentsMdFileName = "AGENTS.md";
     public const string SkillFileName = "SKILL.md";
     public const string SkillDirectory = ".codex/skills/ukit-analyze";
 
+    /// <summary>
+    /// 宪章的内容
+    /// </summary>
     public static string AgentsMdContent(string projectName) => $@"# {projectName}  Performance Analysis
 
 This is an UnrealKit performance capture project for Unreal Engine Android builds.
@@ -72,6 +78,9 @@ Conclusions must distinguish:
 - The Agent may only generate analysis and reports, never delete, overwrite, or upload raw capture data without explicit user confirmation.
 ";
 
+    /// <summary>
+    /// 技能的内容
+    /// </summary>
     public static string SkillMdContent => @"# ukit-analyze
 
 Analyze Unreal Engine Android performance capture data from an UnrealKit project.

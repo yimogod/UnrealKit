@@ -4,6 +4,9 @@ using UnrealKit.Core.Runtime;
 
 namespace UnrealKit.Core.Projects;
 
+/// <summary>
+/// 项目服务
+/// </summary>
 public sealed class ProjectService : IProjectService
 {
     private const string DescriptorSection = "UnrealKit.Project";
@@ -18,10 +21,14 @@ public sealed class ProjectService : IProjectService
         _logger = logger ?? NullOperationLogger.Instance;
     }
 
+    /// <summary>
+    /// 异步创建项目
+    /// </summary>
     public async Task<ProjectCreateResult> CreateProjectAsync(CreateProjectRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         const string operationId = "project-create";
         ArgumentException.ThrowIfNullOrWhiteSpace(request.DirectoryPath);
+
         ValidateProjectName(request.ProjectName);
         var rootDirectory = Path.GetFullPath(request.DirectoryPath);
         var descriptorPath = Path.Combine(rootDirectory, $"{request.ProjectName}.ukit");
@@ -52,6 +59,9 @@ public sealed class ProjectService : IProjectService
         return new ProjectCreateResult(new UkitProject(descriptorPath, rootDirectory, descriptor, settings), validation);
     }
 
+    /// <summary>
+    /// 异步打开项目
+    /// </summary>
     public async Task<UkitProject> OpenProjectAsync(string projectFilePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         const string operationId = "project-open";
@@ -64,6 +74,9 @@ public sealed class ProjectService : IProjectService
         return new UkitProject(fullPath, rootDirectory, descriptor, settings);
     }
 
+    /// <summary>
+    /// 异步更新项目设置
+    /// </summary>
     public async Task<UkitProject> UpdateSettingsAsync(UkitProject project, ProjectSettings settings, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         const string operationId = "project-settings-update";
@@ -78,6 +91,9 @@ public sealed class ProjectService : IProjectService
         return project with { Settings = settings };
     }
 
+    /// <summary>
+    /// 异步校验项目
+    /// </summary>
     public async Task<ProjectValidationResult> ValidateProjectAsync(string projectFilePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         const string operationId = "project-validate";
@@ -119,8 +135,14 @@ public sealed class ProjectService : IProjectService
         return new ProjectValidationResult(diagnostics);
     }
 
+    /// <summary>
+    /// 获取 BaseGame.ini 路径
+    /// </summary>
     public static string ResolveBaseGameIniPath() => Path.Combine(ApplicationPaths.AppDir, BaseGameIniFileName);
 
+    /// <summary>
+    /// 异步创建 Agent需要的AGENTS.md和Skill文件
+    /// </summary>
     private static async Task WriteAgentTemplatesAsync(string rootDirectory, string projectName, CancellationToken cancellationToken)
     {
         // AGENTS.md
@@ -247,15 +269,25 @@ public sealed class ProjectService : IProjectService
             RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlCommandParameter"), defaults.RemoteControlCommandParameter));
     }
 
-    private static string RequireValue(IniDocument document, string key) => document.GetValue(DescriptorSection, key) is { Length: > 0 } value ? value : throw new InvalidDataException($".ukit 缺少必需字段 {DescriptorSection}/{key}。");
+    private static string RequireValue(IniDocument document, string key)
+    {
+        return document.GetValue(DescriptorSection, key) is { Length: > 0 } value ? value : throw new InvalidDataException($".ukit 缺少必需字段 {DescriptorSection}/{key}。");
+    }
 
+    /// <summary>
+    /// .ukit文件路径
+    /// </summary>
     private static string GetProjectFilePath(string projectFilePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(projectFilePath);
         var fullPath = Path.GetFullPath(projectFilePath);
-        return string.Equals(Path.GetExtension(fullPath), ".ukit", StringComparison.OrdinalIgnoreCase) ? fullPath : throw new ArgumentException("工程描述文件必须使用 .ukit 扩展名。", nameof(projectFilePath));
+        bool extValid = string.Equals(Path.GetExtension(fullPath), ".ukit", StringComparison.OrdinalIgnoreCase);
+        return extValid ? fullPath : throw new ArgumentException("工程描述文件必须使用 .ukit 扩展名。", nameof(projectFilePath));
     }
 
+    /// <summary>
+    /// 验证项目名称
+    /// </summary>
     private static void ValidateProjectName(string projectName)
     {
         if (string.IsNullOrWhiteSpace(projectName) || projectName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || projectName is "." or "..")
