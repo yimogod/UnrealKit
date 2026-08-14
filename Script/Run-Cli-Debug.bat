@@ -2,7 +2,7 @@
 setlocal
 
 set "SCRIPT_DIR=%~dp0"
-set "EXE=%SCRIPT_DIR%..\UnrealKit\UnrealKit.Cli\bin\Debug\net9.0\UnrealKit.Cli.exe"
+set "EXE=%SCRIPT_DIR%..\UnrealKit\Output\Bin\UnrealKit.Cli\Debug\net9.0\UnrealKit.Cli.exe"
 
 if not exist "%EXE%" (
     echo Debug CLI executable was not found. Run Build-Debug.bat first.

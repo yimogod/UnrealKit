@@ -4,5 +4,29 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild></PropertyGroup>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <!--
+    集中式构建输出：所有项目的 bin/obj 收敛到 UnrealKit/Output 下，避免污染各项目目录。
+      Output\Bin\<项目>\<配置>\<框架>\
+      Output\Obj\<项目>\<配置>\<框架>\
+    WPF 编译临时工程名形如 UnrealKit.Desktop_xxxxxxxx_wpftmp，去掉后缀后与主工程共用同一 obj，
+    与 SDK 默认行为保持一致，防止产生大量一次性目录。
+  -->
+  <PropertyGroup>
+    <UnrealKitOutputRoot>$(MSBuildThisFileDirectory)Output\</UnrealKitOutputRoot>
+    <UnrealKitProjectName>$([System.Text.RegularExpressions.Regex]::Replace($(MSBuildProjectName), '_[a-z0-9]+_wpftmp$', ''))</UnrealKitProjectName>
+
+    <BaseOutputPath>$(UnrealKitOutputRoot)Bin\$(UnrealKitProjectName)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(UnrealKitOutputRoot)Obj\$(UnrealKitProjectName)\</BaseIntermediateOutputPath>
+
+    <!--
+      SDK 默认只把 $(BaseOutputPath) 和 $(BaseIntermediateOutputPath) 排除在源文件 glob 之外。
+      上面把两者指向 Output\ 之后，字面量 bin\ 和 obj\ 就不再被排除，于是任何遗留或被
+      外部工具重建的项目内 obj\ 里的 AssemblyInfo.cs 都会被编译进来，导致 CS0579 特性重复。
+      显式排除这两个名字，保证旧目录存在时构建依然正确。
+    -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**</DefaultItemExcludes>
+  </PropertyGroup>
 </Project>

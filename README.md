@@ -43,7 +43,10 @@ UnrealKit/
 ├─ UnrealKit.Core/       Domain models, config, ADB, capture, parsing, export
 ├─ UnrealKit.Cli/        CLI argument binding and console output
 ├─ UnrealKit.Desktop/    WPF views and ViewModels
-└─ UnrealKit.Tests/      Unit tests and sample data
+├─ UnrealKit.Tests/      Unit tests and sample data
+└─ Output/               Centralized build output (git-ignored)
+   ├─ Bin/<project>/<configuration>/<framework>/
+   └─ Obj/<project>/<configuration>/<framework>/
 ```
 
 ## CLI Reference

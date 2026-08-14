@@ -4,6 +4,12 @@ All notable changes to UnrealKit.
 
 ## [Unreleased]
 
+### Build Layout
+- Build output is centralized under `UnrealKit/Output/` instead of per-project `bin/` and `obj/` directories: `Output/Bin/<project>/<configuration>/<framework>/` and `Output/Obj/<project>/<configuration>/<framework>/`. Set via `BaseOutputPath` / `BaseIntermediateOutputPath` in `UnrealKit/Directory.Build.props`
+- WPF XAML compilation temp projects (`UnrealKit.Desktop_<hash>_wpftmp`) now share the main project's intermediate directory, so they no longer accumulate one-off `obj` directories
+- `DefaultItemExcludes` explicitly excludes `bin\**` and `obj\**`. The SDK only excludes the configured output paths from the source glob, so once those point at `Output\`, a leftover project-local `obj\` would otherwise be compiled in and fail with duplicate-attribute errors (CS0579)
+- `Script/Run-Cli-*.bat` and `Script/Run-Gui-*.bat` updated to the new output paths. `Script/Publish-Shipping.bat` is unaffected because it passes `--output` explicitly. Existing per-project `bin/`/`obj/` directories can be deleted; both are already git-ignored
+
 ### Platform Abstraction (behavior changes)
 - `PlatformNames` is now the single mapping between `TargetPlatform` and the `"Android"` / `"Win64"` contract strings used by archive directories and `.ukit`
 - `IDeviceService.Supports(DeviceCapability)` replaces platform type checks. Unsupported operations throw `DeviceCapabilityNotSupportedException` instead of returning empty results — notably `StreamLogAsync` on Win64, which previously returned an empty stream indistinguishable from "connected, no logs yet"
