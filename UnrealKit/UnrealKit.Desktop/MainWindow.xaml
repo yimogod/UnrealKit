@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:UnrealKit.Desktop.Views"
         xmlns:models="clr-namespace:UnrealKit.Desktop.Models"
-        Title="UnrealKit" Height="740" Width="1120" MinHeight="520" MinWidth="900">
+        Title="UnrealKit" Height="960" Width="1600" MinHeight="520" MinWidth="900">
     <Window.Resources>
         <!--
             导航样式只以 x:Key 显式引用，不使用隐式 TargetType 样式：
@@ -66,17 +66,16 @@
             每个 View 只实例化一次，切换导航不重建，页面内的输入状态因此得以保留。
         -->
         <x:Array x:Key="NavigationPages" Type="models:NavigationPage">
-            <models:NavigationPage Title="工程"       Group="工程"><views:ProjectView /></models:NavigationPage>
-            <models:NavigationPage Title="工程配置"   Group="工程"><views:SettingsView /></models:NavigationPage>
-            <models:NavigationPage Title="设备"       Group="设备与运行"><views:DevicesView /></models:NavigationPage>
-            <models:NavigationPage Title="启动参数"   Group="设备与运行"><views:LaunchParametersView /></models:NavigationPage>
-            <models:NavigationPage Title="控制台"     Group="设备与运行"><views:ConsoleView /></models:NavigationPage>
-            <models:NavigationPage Title="采集归档"   Group="采集"><views:CaptureView /></models:NavigationPage>
-            <models:NavigationPage Title="RenderDoc"  Group="采集"><views:RenderDocView /></models:NavigationPage>
-            <models:NavigationPage Title="内存解析"   Group="分析"><views:MemInfoParseView /></models:NavigationPage>
-            <models:NavigationPage Title="静态相机"   Group="分析"><views:StaticCameraView /></models:NavigationPage>
-            <models:NavigationPage Title="基线差分"   Group="分析"><views:BaselineDiffView /></models:NavigationPage>
-            <models:NavigationPage Title="历史趋势"   Group="分析"><views:HistoryTrendView /></models:NavigationPage>
+            <models:NavigationPage Title="工程"       Group="----工程----"><views:ProjectView /></models:NavigationPage>
+            <models:NavigationPage Title="工程配置"   Group="----工程----"><views:SettingsView /></models:NavigationPage>
+            <models:NavigationPage Title="设备"       Group="-----运行-----"><views:DevicesView /></models:NavigationPage>
+            <models:NavigationPage Title="启动参数"   Group="-----运行-----"><views:LaunchParametersView /></models:NavigationPage>
+            <models:NavigationPage Title="控制台"     Group="-----运行-----"><views:ConsoleView /></models:NavigationPage>
+            <models:NavigationPage Title="采集归档"   Group="----采集----"><views:CaptureView /></models:NavigationPage>
+            <models:NavigationPage Title="RenderDoc"  Group="----采集----"><views:RenderDocView /></models:NavigationPage>
+            <models:NavigationPage Title="内存解析"   Group="----分析----"><views:MemInfoParseView /></models:NavigationPage>
+            <models:NavigationPage Title="基线差分"   Group="----分析----"><views:BaselineDiffView /></models:NavigationPage>
+            <models:NavigationPage Title="历史趋势"   Group="----分析----"><views:HistoryTrendView /></models:NavigationPage>
         </x:Array>
 
         <CollectionViewSource x:Key="NavigationPagesView" Source="{StaticResource NavigationPages}">
