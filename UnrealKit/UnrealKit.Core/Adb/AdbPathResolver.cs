@@ -1,5 +1,8 @@
 ﻿namespace UnrealKit.Core.Adb;
 
+/// <summary>
+/// ADB 路径的来源
+/// </summary>
 public enum AdbPathSource
 {
     Explicit,
@@ -8,6 +11,9 @@ public enum AdbPathSource
     Path
 }
 
+/// <summary>
+/// ADB 路径解析尝试的状态
+/// </summary>
 public enum AdbPathAttemptStatus
 {
     NotConfigured,
@@ -15,6 +21,9 @@ public enum AdbPathAttemptStatus
     Resolved
 }
 
+/// <summary>
+/// ADB 路径解析数据
+/// </summary>
 public sealed record AdbPathAttempt(
     AdbPathSource Source,
     string Description,
@@ -28,10 +37,13 @@ public sealed record AdbPathResolution(
     public bool IsResolved => ResolvedPath is not null;
 }
 
+/// <summary>
+/// ADB 路径解析异常
+/// </summary>
 public sealed class AdbPathResolutionException : InvalidOperationException
 {
     public AdbPathResolutionException(AdbPathResolution resolution)
-        : base("无法找到可执行的 ADB。请使用 --adb-path 指定 adb.exe，或在项目配置、ADB_PATH、ANDROID_SDK_ROOT、ANDROID_HOME 或 PATH 中配置 Android SDK Platform-Tools。")
+        : base("无法找到可执行的 ADB. 请使用 --adb-path 指定 adb.exe, 或在项目配置, ADB_PATH, ANDROID_SDK_ROOT, ANDROID_HOME 或 PATH 中配置 Android SDK Platform-Tools. ")
     {
         Resolution = resolution;
     }
@@ -39,12 +51,19 @@ public sealed class AdbPathResolutionException : InvalidOperationException
     public AdbPathResolution Resolution { get; }
 }
 
+/// <summary>
+/// ADB 路径解析器
+/// </summary>
 public sealed class AdbPathResolver
 {
     private static readonly string[] EnvironmentVariableNames = ["ADB_PATH", "ANDROID_SDK_ROOT", "ANDROID_HOME"];
     private readonly Func<string, string?> _getEnvironmentVariable;
     private readonly Func<string, bool> _fileExists;
+
+    // 是否为 Windows 系统
     private readonly bool _isWindows;
+
+    private string ExecutableName => _isWindows ? "adb.exe" : "adb";
 
     public AdbPathResolver(
         Func<string, string?>? getEnvironmentVariable = null,
@@ -56,6 +75,9 @@ public sealed class AdbPathResolver
         _isWindows = isWindows ?? OperatingSystem.IsWindows();
     }
 
+    /// <summary>
+    /// 解析 ADB 路径的执行函数
+    /// </summary>
     public AdbPathResolution Resolve(string? explicitPath, string? projectAdbPath)
     {
         var attempts = new List<AdbPathAttempt>();
@@ -70,12 +92,18 @@ public sealed class AdbPathResolver
         return new AdbPathResolution(null, attempts);
     }
 
+    /// <summary>
+    /// 解析 ADB 路径，确保成功解析
+    /// </summary>
     public string ResolveRequired(string? explicitPath, string? projectAdbPath)
     {
         var resolution = Resolve(explicitPath, projectAdbPath);
         return resolution.ResolvedPath ?? throw new AdbPathResolutionException(resolution);
     }
 
+    /// <summary>
+    /// 尝试解析配置的 ADB 路径
+    /// </summary>
     private bool TryResolveEnvironment(ICollection<AdbPathAttempt> attempts, out string? resolvedPath)
     {
         foreach (var variableName in EnvironmentVariableNames)
@@ -104,6 +132,9 @@ public sealed class AdbPathResolver
         return false;
     }
 
+    /// <summary>
+    /// 尝试解析 PATH 环境变量中的 ADB 路径
+    /// </summary>
     private bool TryResolvePath(ICollection<AdbPathAttempt> attempts, out string? resolvedPath)
     {
         var pathValue = _getEnvironmentVariable("PATH");
@@ -130,6 +161,9 @@ public sealed class AdbPathResolver
         return false;
     }
 
+    /// <summary>
+    /// 尝试解析配置的 ADB 路径
+    /// </summary> 
     private bool TryResolveConfiguredPath(AdbPathSource source, string description, string? configuredPath, ICollection<AdbPathAttempt> attempts, out string? resolvedPath)
     {
         if (string.IsNullOrWhiteSpace(configuredPath))
@@ -150,6 +184,4 @@ public sealed class AdbPathResolver
         resolvedPath = null;
         return false;
     }
-
-    private string ExecutableName => _isWindows ? "adb.exe" : "adb";
 }

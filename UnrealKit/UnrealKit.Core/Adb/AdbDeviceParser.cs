@@ -1,7 +1,13 @@
 namespace UnrealKit.Core.Adb;
 
+/// <summary>
+/// ADB 设备解析器
+/// </summary>
 public static class AdbDeviceParser
 {
+    /// <summary>
+    /// 解析 ADB 设备列表输出
+    /// </summary>
     public static IReadOnlyList<AdbDevice> Parse(string output)
     {
         ArgumentNullException.ThrowIfNull(output);

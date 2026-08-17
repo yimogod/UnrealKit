@@ -27,8 +27,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly IProjectService _projectService;
     private readonly IDesktopAdbServiceFactory _adbServiceFactory;
     private readonly IUserConfirmationService _confirmationService;
-    private string _selectedNavigationItem = "工程";
-    private string _statusMessage = "未打开工程。";
+    // 工程与工程配置已移到菜单栏，导航首项因此是「设备」。
+    private string _selectedNavigationItem = "设备";
+    private string _statusMessage = "未打开工程。请从菜单栏「工程」打开或创建工程。";
     private string _projectFilePath = string.Empty;
     private string _newProjectDirectory = string.Empty;
     private string _newProjectName = string.Empty;
@@ -201,8 +202,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     public string PageDescription => SelectedNavigationItem switch
     {
-        "工程" => "创建或打开 .ukit 工程后，设备与启动参数页面将共享工程配置。",
-        "工程配置" => "编辑包名、路径与默认标签，保存到 Config/DefaultGame.ini；采集与命令行读取同一份配置。",
         "设备" => "刷新 ADB 设备并明确选择目标设备；不会依赖默认第一台设备。",
         "启动参数" => "选择预设并预览 uecommandline.txt，然后推送到已明确选择的设备。",
         "控制台" => "向运行中的 UE Android 应用发送控制台指令，支持序列编排和 logcat 条件执行。",
@@ -358,7 +357,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         StatusMessage = $"已创建工程：{result.Project.ProjectFilePath}";
     });
 
-    private Task OpenProjectAsync() => RunAsync("正在打开工程…", async progress =>
+    /// <summary>
+    /// 打开 <see cref="ProjectFilePath"/> 指向的工程。菜单栏「打开工程」在文件对话框
+    /// 选定路径后直接调用，无需经由命令，因此设为 public。
+    /// </summary>
+    public Task OpenProjectAsync() => RunAsync("正在打开工程…", async progress =>
     {
         var project = await _projectService.OpenProjectAsync(ProjectFilePath, progress, OperationCancellationToken);
         SetCurrentProject(project);

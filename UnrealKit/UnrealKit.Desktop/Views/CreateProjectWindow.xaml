@@ -1,0 +1,38 @@
+<Window x:Class="UnrealKit.Desktop.Views.CreateProjectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="创建工程" Width="620" SizeToContent="Height"
+        ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+    <Grid Background="#FFF7F8FA">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Margin="20">
+            <TextBlock Text="创建工程只会生成必要的 .ukit、默认配置和空目录；目标目录非空时会拒绝覆盖。"
+                       Style="{StaticResource SectionDescriptionTextStyle}" Margin="0,0,0,16" />
+            <TextBlock Text="工程名称" Style="{StaticResource FieldLabelTextStyle}" />
+            <TextBox Text="{Binding NewProjectName, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+            <TextBlock Text="工程目录" Style="{StaticResource StackedFieldLabelTextStyle}" />
+            <DockPanel LastChildFill="True">
+                <Button Content="浏览…" Click="BrowseDirectory_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                <TextBox Text="{Binding NewProjectDirectory, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" Padding="8,6" />
+            </DockPanel>
+        </StackPanel>
+
+        <Border Grid.Row="1" Background="White" BorderBrush="#FFE2E6EA" BorderThickness="0,1,0,0" Padding="20,12">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <!--
+                    同时挂 Command 和 Click：Command 负责执行与可用性（WPF 依 CanExecute 自动同步
+                    IsEnabled，名称或目录为空时按钮变灰），Click 只负责关窗。命令落在共享的
+                    ShellViewModel 上，生命周期长于本窗口，因此两者的先后顺序都不影响创建流程。
+                -->
+                <Button Content="创建" Command="{Binding CreateProjectCommand}" Click="Create_Click"
+                        IsDefault="True" Padding="18,7" />
+                <Button Content="取消" IsCancel="True" Padding="18,7" Margin="10,0,0,0" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

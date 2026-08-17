@@ -6,10 +6,54 @@
         Title="UnrealKit" Height="960" Width="1600" MinHeight="520" MinWidth="900">
     <Window.Resources>
         <!--
-            导航样式只以 x:Key 显式引用，不使用隐式 TargetType 样式：
+            导航样式只以 x:Key 显式引用，不使用隐式 TargetType 样式: 
             页面内部（例如 MemInfoParseView）也使用 TabControl 展示数据分页，
-            隐式样式会顺着资源查找链污染这些内部分页。
+            隐式样式会顺着资源查找链污染这些内部分页. 
         -->
+        <!--
+            品牌栏顶级菜单项. 自带模板而不是只改 Foreground: 
+            默认模板的高亮态用系统浅色背景，浅色文字在上面读不清. 
+            下拉项（Popup 里的 MenuItem）不套这个样式，用系统默认深色文字，
+            因此这里显式给出 SubmenuItemForeground 覆盖继承下来的浅色前景. 
+        -->
+        <Style x:Key="BrandMenuItemStyle" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="#FFD8E0EC" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="ItemRoot" Background="Transparent" CornerRadius="3" Padding="12,6">
+                            <Grid>
+                                <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                                <!-- 顶级项的下拉容器；无子项时 Popup 永不打开，多余开销为零.  -->
+                                <Popup x:Name="PART_Popup"
+                                       IsOpen="{TemplateBinding IsSubmenuOpen}"
+                                       Placement="Bottom"
+                                       AllowsTransparency="True"
+                                       Focusable="False"
+                                       PopupAnimation="Fade">
+                                    <Border Background="White" BorderBrush="#FFE2E6EA" BorderThickness="1" Padding="2"
+                                            TextElement.Foreground="#FF1B263B">
+                                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemRoot" Property="Background" Value="#FF2C3A55" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsSubmenuOpen" Value="True">
+                                <Setter TargetName="ItemRoot" Property="Background" Value="#FF2C3A55" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="NavigationTabItemStyle" TargetType="TabItem">
             <Setter Property="Padding" Value="13,10" />
             <Setter Property="FontSize" Value="14" />
@@ -39,8 +83,8 @@
         </Style>
 
         <!--
-            分组标签样式。GroupStyle 需要 ContainerStyle 显式给出 GroupItem 模板：
-            默认模板只渲染子项、不渲染 Name，分组标签不会出现。
+            分组标签样式. GroupStyle 需要 ContainerStyle 显式给出 GroupItem 模板: 
+            默认模板只渲染子项、不渲染 Name，分组标签不会出现. 
         -->
         <GroupStyle x:Key="NavigationGroupStyle">
             <GroupStyle.ContainerStyle>
@@ -62,12 +106,10 @@
         </GroupStyle>
 
         <!--
-            页面清单。顺序即导航顺序：分组内按此顺序排列，分组顺序取各组首次出现的顺序。
-            每个 View 只实例化一次，切换导航不重建，页面内的输入状态因此得以保留。
+            页面清单. 顺序即导航顺序: 分组内按此顺序排列，分组顺序取各组首次出现的顺序. 
+            每个 View 只实例化一次，切换导航不重建，页面内的输入状态因此得以保留. 
         -->
         <x:Array x:Key="NavigationPages" Type="models:NavigationPage">
-            <models:NavigationPage Title="工程"       Group="----工程----"><views:ProjectView /></models:NavigationPage>
-            <models:NavigationPage Title="工程配置"   Group="----工程----"><views:SettingsView /></models:NavigationPage>
             <models:NavigationPage Title="设备"       Group="-----运行-----"><views:DevicesView /></models:NavigationPage>
             <models:NavigationPage Title="启动参数"   Group="-----运行-----"><views:LaunchParametersView /></models:NavigationPage>
             <models:NavigationPage Title="控制台"     Group="-----运行-----"><views:ConsoleView /></models:NavigationPage>
@@ -84,7 +126,7 @@
             </CollectionViewSource.GroupDescriptions>
         </CollectionViewSource>
 
-        <!-- 导航项只显示标题；页面内容由模板里的 SelectedItem.View 直接承载。 -->
+        <!-- 导航项只显示标题；页面内容由模板里的 SelectedItem.View 直接承载.  -->
         <DataTemplate x:Key="NavigationItemTemplate" DataType="{x:Type models:NavigationPage}">
             <TextBlock Text="{Binding Title}" />
         </DataTemplate>
@@ -102,10 +144,10 @@
                             <Border Background="White" BorderBrush="#FFE2E6EA" BorderThickness="0,0,1,0">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                     <!--
-                                        必须用 ItemsPresenter，不能用 IsItemsHost="True" 的裸面板：
+                                        必须用 ItemsPresenter，不能用 IsItemsHost="True" 的裸面板: 
                                         分组是由 ItemsPresenter 生成 GroupItem 实现的，裸面板会绕过
-                                        这一步，导致 GroupStyle 完全不生效（分组标签不渲染）。
-                                        面板类型改由下方 ItemsPanel 指定。
+                                        这一步，导致 GroupStyle 完全不生效（分组标签不渲染）. 
+                                        面板类型改由下方 ItemsPanel 指定. 
                                     -->
                                     <ItemsPresenter Margin="0,6,0,12" />
                                 </ScrollViewer>
@@ -121,9 +163,9 @@
                                 <TextBlock Grid.Row="1" Text="{Binding PageDescription}" Style="{StaticResource HintTextStyle}" Margin="0,8,0,0" />
                                 <Border Grid.Row="2" Background="White" CornerRadius="6" BorderBrush="#FFE2E6EA" BorderThickness="1" Padding="20">
                                     <!--
-                                        直接取 SelectedItem.View，不用 ContentSource="SelectedContent"：
+                                        直接取 SelectedItem.View，不用 ContentSource="SelectedContent": 
                                         ItemsSource 承载的是 NavigationPage 而非 TabItem，
-                                        TabControl 无法从中推导 SelectedContent（实测恒为 null）。
+                                        TabControl 无法从中推导 SelectedContent（实测恒为 null）. 
                                     -->
                                     <ContentPresenter x:Name="PART_SelectedContentHost"
                                                       Content="{Binding SelectedItem.View, RelativeSource={RelativeSource TemplatedParent}}" />
@@ -146,17 +188,28 @@
         <Border Background="#FF1B263B" Padding="20,14">
             <DockPanel LastChildFill="False">
                 <TextBlock Text="UnrealKit" Style="{StaticResource AppTitleTextStyle}" DockPanel.Dock="Left" />
-                <!-- 日志入口放品牌栏：所有页面都看得见，不属于任何单页。 -->
-                <Button DockPanel.Dock="Right" Content="操作日志" Click="OpenOperationLog_Click"
-                        Padding="12,5" Margin="16,0,0,0" VerticalAlignment="Center" />
-                <TextBlock DockPanel.Dock="Right" Text="{Binding ProjectTitle}" Foreground="#FFD8E0EC" VerticalAlignment="Center" />
+                <!--
+                    工程与配置入口放菜单栏: 它们是全局动作而非页面，不占左侧导航. 
+                    Menu 自身透明，顶级项配色跟随品牌栏；下拉项沿用系统默认样式. 
+                -->
+                <Menu DockPanel.Dock="Left" Background="Transparent" Margin="24,0,0,0"
+                      VerticalAlignment="Center" Foreground="#FFD8E0EC">
+                    <MenuItem Header="Project" Style="{StaticResource BrandMenuItemStyle}">
+                        <MenuItem Header="Open..." Click="OpenProject_Click" Foreground="#000000" />
+                        <MenuItem Header="Create..." Click="CreateProject_Click" Foreground="#000000" />
+                        <Separator />
+                        <MenuItem Header="Setting..." Click="OpenSettings_Click" Foreground="#000000" />
+                    </MenuItem>
+                    
+                    <MenuItem Header="Log" Click="OpenOperationLog_Click" Style="{StaticResource BrandMenuItemStyle}" />
+                </Menu>
             </DockPanel>
         </Border>
 
         <!--
-            Title 即导航标识：SelectedValuePath="Title" 让 SelectedNavigationItem
-            继续作为唯一的当前页面来源，标题、说明文本和 ViewModel 判断都读它。
-            新增页面时在 NavigationPages 里追加一项，并同步 ShellViewModel.PageDescription 的分支。
+            Title 即导航标识: SelectedValuePath="Title" 让 SelectedNavigationItem
+            继续作为唯一的当前页面来源，标题、说明文本和 ViewModel 判断都读它. 
+            新增页面时在 NavigationPages 里追加一项，并同步 ShellViewModel.PageDescription 的分支. 
         -->
         <TabControl Grid.Row="1"
                     ItemsSource="{Binding Source={StaticResource NavigationPagesView}}"
@@ -165,11 +218,11 @@
                     ItemTemplate="{StaticResource NavigationItemTemplate}"
                     SelectedValuePath="Title"
                     SelectedValue="{Binding SelectedNavigationItem, Mode=TwoWay}">
-            <!-- GroupStyle 是只读集合属性，只能追加、不能用特性赋值。 -->
+            <!-- GroupStyle 是只读集合属性，只能追加、不能用特性赋值.  -->
             <TabControl.GroupStyle>
                 <StaticResource ResourceKey="NavigationGroupStyle" />
             </TabControl.GroupStyle>
-            <!-- 导航项竖排；TabControl 默认横排面板会让分组失去意义。 -->
+            <!-- 导航项竖排；TabControl 默认横排面板会让分组失去意义.  -->
             <TabControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <StackPanel Orientation="Vertical" />

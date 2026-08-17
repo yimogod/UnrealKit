@@ -221,7 +221,7 @@ public sealed class CaptureService : ICaptureService
             {
                 throw new InvalidOperationException(
                     "Win64 采集需要在工程配置中设置 Win64WorkingDirectory，用于定位 UE 的 Saved 目录。" +
-                    "请在「工程」页面填写 Win64 工作目录，或在 .ukit 中设置 Win64WorkingDirectory。");
+                    "请在菜单栏 Setting 中填写 Win64 工作目录，或在 .ukit 中设置 Win64WorkingDirectory。");
             }
 
             var savedDirectory = Path.Combine(settings.Win64WorkingDirectory, settings.UnrealProjectName, "Saved");

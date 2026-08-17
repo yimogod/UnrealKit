@@ -3,6 +3,9 @@ using UnrealKit.Core.Processes;
 
 namespace UnrealKit.Core.Adb;
 
+/// <summary>
+/// ADB 设备状态
+/// </summary>
 public enum AdbDeviceStatus
 {
     Device,
@@ -12,6 +15,9 @@ public enum AdbDeviceStatus
     Unknown
 }
 
+/// <summary>
+/// ADB 连接类型
+/// </summary>
 public enum AdbConnectionType
 {
     Usb,
@@ -19,6 +25,9 @@ public enum AdbConnectionType
     Unknown
 }
 
+/// <summary>
+/// ADB 设备数据对象
+/// </summary>
 public sealed record AdbDevice(
     string SerialNumber,
     AdbDeviceStatus Status,
@@ -36,6 +45,9 @@ public sealed record AdbDevice(
     bool IDevice.IsAvailable => IsAvailable;
 }
 
+/// <summary>
+/// ADB 命令执行异常
+/// </summary>
 public sealed class AdbCommandException : Exception
 {
     public AdbCommandException(string message, ProcessExecutionResult result)
@@ -47,6 +59,9 @@ public sealed class AdbCommandException : Exception
     public ProcessExecutionResult Result { get; }
 }
 
+/// <summary>
+/// ADB 设备选择异常
+/// </summary>
 public sealed class AdbDeviceSelectionException : InvalidOperationException
 {
     public AdbDeviceSelectionException(string message)
