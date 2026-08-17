@@ -44,6 +44,134 @@ public sealed class DesktopShellViewModelTests
     }
 
     [Fact]
+    public async Task OperationLogs_CarryTimestampAndCategory_AndClearCommandEmptiesThem()
+    {
+        var adb = new RecordingAdbService();
+        var project = CreateProject();
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true))
+        {
+            ProjectFilePath = project.ProjectFilePath
+        };
+
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+
+        Assert.NotEmpty(viewModel.OperationLogs);
+        Assert.True(viewModel.HasOperationLogs);
+        // 时间戳与分类由 AddOperationLog 统一生成，调用方不再自带前缀。
+        Assert.All(viewModel.OperationLogs, entry =>
+        {
+            Assert.NotEqual(default, entry.Timestamp);
+            Assert.False(string.IsNullOrWhiteSpace(entry.Category));
+            Assert.DoesNotContain('[', entry.Message);
+        });
+
+        var saved = viewModel.OperationLogs[0].ToString();
+        Assert.Contains($"[{viewModel.OperationLogs[0].Category}]", saved);
+
+        Assert.True(viewModel.ClearOperationLogsCommand.CanExecute(null));
+        viewModel.ClearOperationLogsCommand.Execute(null);
+
+        Assert.Empty(viewModel.OperationLogs);
+        Assert.False(viewModel.HasOperationLogs);
+        Assert.False(viewModel.ClearOperationLogsCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task SaveOperationLogs_WritesOneLinePerEntry()
+    {
+        var adb = new RecordingAdbService();
+        var project = CreateProject();
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true))
+        {
+            ProjectFilePath = project.ProjectFilePath
+        };
+
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+        var expected = viewModel.OperationLogs.Count;
+        Assert.True(expected > 0);
+
+        var outputPath = Path.Combine(Path.GetTempPath(), $"ukit-log-test-{Guid.NewGuid():N}.txt");
+        try
+        {
+            await viewModel.SaveOperationLogsAsync(outputPath);
+            var lines = await File.ReadAllLinesAsync(outputPath);
+            Assert.Equal(expected, lines.Length);
+        }
+        finally
+        {
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+        }
+    }
+
+    [Fact]
+    public async Task ParseMemReport_PopulatesMetricsAndLeavesBusyCleared()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.MemReportInputPath = TestDataPath("MemReport", "complete-details.memreport");
+
+        Assert.True(viewModel.ParseMemReportCommand.CanExecute(null));
+        await ((AsyncDelegateCommand)viewModel.ParseMemReportCommand).ExecuteAsync();
+
+        Assert.NotEmpty(viewModel.MemReportMetrics);
+        Assert.Contains("Changelist", viewModel.MemReportParseDescription);
+        // 嵌套复用 core 方法后，外层解析结束必须把忙碌状态清掉。
+        Assert.False(viewModel.IsBusy);
+    }
+
+    [Theory]
+    [InlineData("MemInfo", "complete-meminfo.txt", ".tsv")]
+    [InlineData("MemInfo", "complete-meminfo.txt", ".xlsx")]
+    [InlineData("MemReport", "complete-details.memreport", ".tsv")]
+    [InlineData("MemReport", "complete-details.memreport", ".xlsx")]
+    public async Task ExportCaptureData_WritesFileForEachInputAndFormat(string folder, string sample, string extension)
+    {
+        var viewModel = CreateViewModel();
+        var outputPath = Path.Combine(Path.GetTempPath(), $"ukit-export-{Guid.NewGuid():N}{extension}");
+
+        viewModel.ExportInputPath = TestDataPath(folder, sample);
+        viewModel.ExportOutputPath = outputPath;
+
+        Assert.True(viewModel.ExportCaptureDataCommand.CanExecute(null));
+        try
+        {
+            await ((AsyncDelegateCommand)viewModel.ExportCaptureDataCommand).ExecuteAsync();
+
+            Assert.True(File.Exists(outputPath), $"未生成导出文件：{viewModel.ExportProgress}");
+            Assert.Contains("Exported to", viewModel.ExportProgress);
+            Assert.False(viewModel.IsBusy);
+        }
+        finally
+        {
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+        }
+    }
+
+    [Fact]
+    public void ExportCommand_StaysDisabledUntilBothPathsProvided()
+    {
+        var viewModel = CreateViewModel();
+        Assert.False(viewModel.ExportCaptureDataCommand.CanExecute(null));
+
+        viewModel.ExportInputPath = TestDataPath("MemInfo", "complete-meminfo.txt");
+        Assert.False(viewModel.ExportCaptureDataCommand.CanExecute(null));
+
+        viewModel.ExportOutputPath = Path.Combine(Path.GetTempPath(), "ukit-unused.tsv");
+        Assert.True(viewModel.ExportCaptureDataCommand.CanExecute(null));
+    }
+
+    private static ShellViewModel CreateViewModel()
+    {
+        var project = CreateProject();
+        return new ShellViewModel(
+            new StaticProjectService(project),
+            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new RecordingConfirmationService(true));
+    }
+
+    private static string TestDataPath(string folder, string fileName) =>
+        Path.Combine(AppContext.BaseDirectory, "TestData", folder, fileName);
+
+    [Fact]
     public async Task DeleteLaunchParameters_DoesNotCallAdbWhenUserDeclines()
     {
         var adb = new RecordingAdbService();

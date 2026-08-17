@@ -1,7 +1,13 @@
 <UserControl x:Class="UnrealKit.Desktop.Views.MemInfoParseView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid>
+    <!--
+        内存解析页分三块：meminfo、memreport 各自离线解析，导出把任一种解析结果写成文件。
+        这里用页内 TabControl 分页；导航样式以 x:Key 显式引用，不会污染这些内部分页。
+    -->
+    <TabControl>
+        <TabItem Header="Android meminfo">
+    <Grid Margin="0,12,0,0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -77,4 +83,141 @@
             </StackPanel>
         </ScrollViewer>
     </Grid>
+        </TabItem>
+
+        <TabItem Header="UE memreport">
+            <Grid Margin="0,12,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="离线 UE memreport 解析" Style="{StaticResource SectionTitleTextStyle}" />
+                <StackPanel Grid.Row="1" Margin="0,14,0,0">
+                    <TextBlock Text="选择一个 .memreport 文件。解析只读取原始文件，不会修改归档中的原件。" Style="{StaticResource HintTextStyle}" />
+                    <DockPanel Margin="0,12,0,0" LastChildFill="True">
+                        <Button Content="浏览…" Click="BrowseMemReportFile_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                        <TextBox Text="{Binding MemReportInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                    </DockPanel>
+                    <Button Content="解析 memreport" Command="{Binding ParseMemReportCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,12,0,0" />
+                </StackPanel>
+                <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="{Binding MemReportParseDescription}" Style="{StaticResource ResultSummaryTextStyle}" />
+                        <TextBlock Text="{Binding MemReportParsedAt}" Style="{StaticResource HintTextStyle}" Margin="0,5,0,12" />
+                        <TabControl MinHeight="320">
+                            <TabItem Header="Summary Metrics">
+                                <DataGrid ItemsSource="{Binding MemReportMetrics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Group" Binding="{Binding Group}" Width="140" />
+                                        <DataGridTextColumn Header="Metric" Binding="{Binding Name}" Width="*" />
+                                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="140" />
+                                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </TabItem>
+                            <TabItem Header="Sections">
+                                <DataGrid ItemsSource="{Binding MemReportSummaries}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="200" />
+                                        <DataGridTextColumn Header="Count" Binding="{Binding Count}" Width="120" />
+                                        <DataGridTextColumn Header="Details" Binding="{Binding Details}" Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </TabItem>
+                        </TabControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </TabItem>
+
+        <TabItem Header="导出">
+            <Grid Margin="0,12,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="导出解析结果" Style="{StaticResource SectionTitleTextStyle}" />
+                <StackPanel Grid.Row="1" Margin="0,14,0,0">
+                    <TextBlock Text="输入 .txt（meminfo）或 .memreport；输出格式由保存对话框选择的扩展名决定：.xlsx 写出真实工作簿，.tsv 写制表符文本。" Style="{StaticResource HintTextStyle}" />
+                    <TextBlock Text="输入文件" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                    <DockPanel LastChildFill="True">
+                        <Button Content="浏览…" Click="BrowseExportInput_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                        <TextBox Text="{Binding ExportInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                    </DockPanel>
+                    <TextBlock Text="输出文件" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                    <DockPanel LastChildFill="True">
+                        <Button Content="另存为…" Click="BrowseExportOutput_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                        <TextBox Text="{Binding ExportOutputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                    </DockPanel>
+                    <CheckBox Content="包含明细（Detailed PSS / 纹理等逐条数据）" IsChecked="{Binding ExportIncludeDetails}" Margin="0,14,0,0" />
+                    <Button Content="导出" Command="{Binding ExportCaptureDataCommand}" Padding="18,8" HorizontalAlignment="Left" Margin="0,16,0,0" />
+                </StackPanel>
+                <TextBlock Grid.Row="2" Text="{Binding ExportProgress}" Style="{StaticResource HintTextStyle}" Margin="0,18,0,0" VerticalAlignment="Top" />
+            </Grid>
+        </TabItem>
+
+        <TabItem Header="归档浏览">
+            <Grid Margin="0,12,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <DockPanel>
+                    <Button Content="刷新归档" Command="{Binding RefreshCaptureResultsCommand}" Padding="14,7" DockPanel.Dock="Right" />
+                    <TextBlock Text="工程内的 Capture 归档" Style="{StaticResource SectionTitleTextStyle}" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBlock Grid.Row="1" Text="{Binding CaptureResultsCount}" Style="{StaticResource HintTextStyle}" Margin="0,10,0,0" />
+                <Grid Grid.Row="2" Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Capture" Style="{StaticResource FieldLabelTextStyle}" />
+                        <DataGrid Grid.Row="1" ItemsSource="{Binding CaptureResults}" SelectedItem="{Binding SelectedCaptureResult}"
+                                  AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Capture ID" Binding="{Binding CaptureId}" Width="*" />
+                                <DataGridTextColumn Header="Tag" Binding="{Binding Tag}" Width="90" />
+                                <DataGridTextColumn Header="Date" Binding="{Binding CaptureDate, StringFormat=yyyy-MM-dd HH:mm}" Width="130" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                    <Grid Grid.Column="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="文件" Style="{StaticResource FieldLabelTextStyle}" />
+                        <DataGrid Grid.Row="1" ItemsSource="{Binding CaptureResultFiles}" SelectedItem="{Binding SelectedCaptureResultFile}"
+                                  AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*" />
+                                <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="100" />
+                                <DataGridTextColumn Header="Bytes" Binding="{Binding SizeBytes}" Width="90" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <Button Grid.Row="2" Content="查看选中文件" Command="{Binding ViewCaptureResultFileCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,12,0,0" />
+                        <DataGrid Grid.Row="3" ItemsSource="{Binding CaptureResultMetrics}" AutoGenerateColumns="False" CanUserAddRows="False"
+                                  IsReadOnly="True" HeadersVisibility="Column" MaxHeight="190" Margin="0,12,0,0">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Metric" Binding="{Binding Name}" Width="*" />
+                                <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="140" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Grid>
+            </Grid>
+        </TabItem>
+    </TabControl>
 </UserControl>

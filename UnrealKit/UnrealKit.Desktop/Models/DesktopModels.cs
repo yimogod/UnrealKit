@@ -13,6 +13,18 @@ public sealed record MemInfoNamedEntryOption(string Name, string Value, string L
 
 public sealed record MemInfoDiagnosticOption(string Severity, string Code, string Line, string Message);
 
+/// <summary>
+/// 一条操作日志。时间戳由 <c>ShellViewModel.AddOperationLog</c> 统一打，
+/// 调用方只提供分类与正文，避免各处各自格式化导致时间戳格式不一或重复。
+/// </summary>
+public sealed record OperationLogEntry(DateTimeOffset Timestamp, string Category, string Message)
+{
+    public string Time => Timestamp.ToString("HH:mm:ss");
+
+    /// <summary>保存到文本文件时的单行格式。</summary>
+    public override string ToString() => $"{Timestamp:yyyy-MM-dd HH:mm:ss} [{Category}] {Message}";
+}
+
 public sealed record MemReportMetricOption(string Group, string Name, string Value, string Status);
 
 public sealed record MemReportSummaryOption(string Category, string Count, string Details);

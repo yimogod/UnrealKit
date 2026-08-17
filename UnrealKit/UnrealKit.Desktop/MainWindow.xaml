@@ -145,9 +145,12 @@
         </Grid.RowDefinitions>
 
         <Border Background="#FF1B263B" Padding="20,14">
-            <DockPanel>
+            <DockPanel LastChildFill="False">
                 <TextBlock Text="UnrealKit" Style="{StaticResource AppTitleTextStyle}" DockPanel.Dock="Left" />
-                <TextBlock Text="{Binding ProjectTitle}" Foreground="#FFD8E0EC" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <!-- 日志入口放品牌栏：所有页面都看得见，不属于任何单页。 -->
+                <Button DockPanel.Dock="Right" Content="操作日志" Click="OpenOperationLog_Click"
+                        Padding="12,5" Margin="16,0,0,0" VerticalAlignment="Center" />
+                <TextBlock DockPanel.Dock="Right" Text="{Binding ProjectTitle}" Foreground="#FFD8E0EC" VerticalAlignment="Center" />
             </DockPanel>
         </Border>
 

@@ -54,10 +54,11 @@
                 <TextBlock Text="操作目标（推送、启动、删除前请核对）" Style="{StaticResource EmphasisTextStyle}" />
                 <TextBox Text="{Binding LaunchOperationSummary, Mode=OneWay}" IsReadOnly="True" Margin="0,6,8,0" Padding="8" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" />
             </StackPanel>
-            <StackPanel Grid.Column="1">
-                <TextBlock Text="后台进度与 ADB 日志" Style="{StaticResource EmphasisTextStyle}" />
-                <TextBlock Text="{Binding OperationStage}" Style="{StaticResource HintTextStyle}" Margin="0,4,0,4" />
-                <ListBox ItemsSource="{Binding OperationLogs}" Margin="8,0,0,0" Height="128" FontFamily="Consolas" />
+            <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                <TextBlock Text="后台进度" Style="{StaticResource EmphasisTextStyle}" />
+                <TextBlock Text="{Binding OperationStage}" Style="{StaticResource HintTextStyle}" Margin="0,4,0,0" />
+                <!-- 完整日志见品牌栏的「操作日志」窗口，此处只显示当前阶段。 -->
+                <TextBlock Text="完整 ADB 与操作日志请打开右上角「操作日志」。" Style="{StaticResource HintTextStyle}" Margin="0,8,0,0" />
             </StackPanel>
         </Grid>
     </Grid>

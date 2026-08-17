@@ -94,6 +94,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private UkitProject? _project;
     private IDevice? _selectedDevice;
     private CaptureFileInfo? _selectedCaptureResultFile;
+    private CaptureDirectoryInfo? _selectedCaptureResult;
     private bool _isBusy;
     private CancellationTokenSource? _operationCancellation;
     private CancellationToken OperationCancellationToken => _operationCancellation?.Token ?? CancellationToken.None;
@@ -135,6 +136,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _sendConsoleCommandCommand = new AsyncDelegateCommand(SendConsoleCommandAsync, () => !IsBusy && _selectedDevice is not null && !string.IsNullOrWhiteSpace(_consoleCommandText));
         _runConsoleSequenceCommand = new AsyncDelegateCommand(RunConsoleSequenceAsync, () => !IsBusy && _selectedDevice is not null);
         ExportCaptureDataCommand = new AsyncDelegateCommand(ExportCaptureDataAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ExportInputPath) && !string.IsNullOrWhiteSpace(ExportOutputPath));
+        _clearOperationLogsCommand = new DelegateCommand(ClearOperationLogs, () => OperationLogs.Count > 0);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -151,7 +153,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<MemInfoMetricOption> CaptureResultMetrics { get; } = [];
     public ObservableCollection<MemReportMetricOption> MemReportMetrics { get; } = [];
     public ObservableCollection<MemReportSummaryOption> MemReportSummaries { get; } = [];
-    public ObservableCollection<string> OperationLogs { get; } = [];
+    public ObservableCollection<OperationLogEntry> OperationLogs { get; } = [];
     public ObservableCollection<ScpFrameOption> ScpFrames { get; } = [];
     public ObservableCollection<ScpAverageOption> ScpAverages { get; } = [];
     public ObservableCollection<ScpDiagnosticOption> ScpDiagnostics { get; } = [];
@@ -206,7 +208,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "控制台" => "向运行中的 UE Android 应用发送控制台指令，支持序列编排和 logcat 条件执行。",
         "采集归档" => "将采集数据归档到新的 Content Capture，避免覆盖历史数据。",
         "RenderDoc" => "调用独立的 RenderDoc Python 脚本，查看退出码与输出目录。",
-        "内存解析" => "明确选择输入文件，查看格式诊断和解析结果。",
+        "内存解析" => "离线解析 meminfo 与 memreport，导出结果，或浏览工程内已归档的 Capture。",
         "静态相机" => "解析静态相机性能日志，查看逐相机指标并生成 HTML 报告。",
         "基线差分" => "明确选择基线与当前两份输入，比较指标回退与改善。",
         "历史趋势" => "按标签和时间范围汇总工程内的历史 Capture，查看指标走势。",
@@ -300,6 +302,44 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// 当前选中的 Capture 目录。选中后立即列出其中的文件，
+    /// 否则 <see cref="CaptureResultFiles"/> 永远为空、查看命令无法启用。
+    /// </summary>
+    public CaptureDirectoryInfo? SelectedCaptureResult
+    {
+        get => _selectedCaptureResult;
+        set
+        {
+            if (!SetField(ref _selectedCaptureResult, value)) return;
+            RaiseCommandStates();
+            _ = LoadCaptureResultFilesAsync(value);
+        }
+    }
+
+    private async Task LoadCaptureResultFilesAsync(CaptureDirectoryInfo? capture)
+    {
+        CaptureResultFiles.Clear();
+        SelectedCaptureResultFile = null;
+        CaptureResultMetrics.Clear();
+        if (capture is null) return;
+
+        try
+        {
+            var files = await new CaptureAnalysisService().ListCaptureFilesAsync(capture.FullPath);
+            foreach (var file in files)
+            {
+                CaptureResultFiles.Add(file);
+            }
+            CaptureResultsCount = $"{capture.CaptureId}：{CaptureResultFiles.Count} 个文件。";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+            AddOperationLog("Error", $"列出 Capture 文件失败：{exception.Message}");
+        }
+    }
+
     public string SelectedDeviceDescription => SelectedDevice is null
         ? "尚未选择设备。"
         : $"{SelectedDevice.Id} · {(SelectedDevice.IsAvailable ? "device" : "offline")} · {SelectedDevice.Name ?? "未知名称"}";
@@ -355,7 +395,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var result = await new AggregateDeviceProvider(providers).ListDevicesAsync(progress, cancellationToken);
         foreach (var failure in result.Failures)
         {
-            AddOperationLog($"{failure.Platform} device enumeration failed: {failure.Message}");
+            AddOperationLog("Error", $"{failure.Platform} device enumeration failed: {failure.Message}");
         }
 
         return result.Devices;
@@ -364,7 +404,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private IAdbService CreateAdbService()
     {
         return _adbServiceFactory.Create(_project?.Settings, new Progress<ProcessOutput>(output =>
-            AddOperationLog($"{output.Timestamp:HH:mm:ss} [{output.Stream}] {output.Text}")));
+            AddOperationLog(output.Stream.ToString(), output.Text)));
     }
 
     private IDeviceService CreateDeviceServiceForDevice(IDevice device) =>
@@ -615,21 +655,21 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         IsBusy = true;
         StatusMessage = initialMessage;
         OperationStage = initialMessage;
-        AddOperationLog($"{DateTimeOffset.Now:HH:mm:ss} [Info] {initialMessage}");
+        AddOperationLog("Info", initialMessage);
         try
         {
             await operation(new Progress<OperationProgress>(item =>
             {
                 OperationStage = item.Stage;
                 StatusMessage = item.Message;
-                AddOperationLog($"{DateTimeOffset.Now:HH:mm:ss} [{item.Stage}] {item.Message}");
+                AddOperationLog(item.Stage, item.Message);
             }));
         }
         catch (Exception exception)
         {
             StatusMessage = exception.Message;
             OperationStage = "Error";
-            AddOperationLog($"{DateTimeOffset.Now:HH:mm:ss} [Error] {exception.Message}");
+            AddOperationLog("Error", exception.Message);
         }
         finally
         {
@@ -662,14 +702,53 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
     }
 
-    private void AddOperationLog(string message)
+    /// <summary>
+    /// 追加一条操作日志。时间戳在此统一生成，调用方不要自带时间前缀。
+    /// 上限满时丢弃最旧一条，保证长时间运行不会无限增长。
+    /// </summary>
+    private void AddOperationLog(string category, string message)
     {
-        OperationLogs.Add(message);
-        const int maximumLogEntries = 300;
-        if (OperationLogs.Count > maximumLogEntries)
+        OperationLogs.Add(new OperationLogEntry(DateTimeOffset.Now, category, message));
+        const int maximumLogEntries = 2000;
+        while (OperationLogs.Count > maximumLogEntries)
         {
             OperationLogs.RemoveAt(0);
         }
+        RaiseOperationLogStates();
+    }
+
+    public string OperationLogCount => OperationLogs.Count == 0
+        ? "暂无日志。"
+        : $"{OperationLogs.Count} 条日志。";
+
+    public bool HasOperationLogs => OperationLogs.Count > 0;
+
+    public ICommand ClearOperationLogsCommand => _clearOperationLogsCommand;
+    private readonly DelegateCommand _clearOperationLogsCommand;
+
+    private void RaiseOperationLogStates()
+    {
+        OnPropertyChanged(nameof(OperationLogCount));
+        OnPropertyChanged(nameof(HasOperationLogs));
+        _clearOperationLogsCommand.RaiseCanExecuteChanged();
+    }
+
+    private void ClearOperationLogs()
+    {
+        OperationLogs.Clear();
+        RaiseOperationLogStates();
+        StatusMessage = "已清空操作日志。";
+    }
+
+    /// <summary>
+    /// 将当前日志写入文本文件。目标路径由调用方（视图的保存对话框）给出，
+    /// 覆盖确认交由对话框本身完成。
+    /// </summary>
+    public async Task SaveOperationLogsAsync(string outputPath)
+    {
+        var lines = OperationLogs.Select(entry => entry.ToString()).ToArray();
+        await File.WriteAllLinesAsync(outputPath, lines);
+        StatusMessage = $"已保存 {lines.Length} 条日志到 {outputPath}";
     }
 
     private async Task RefreshCaptureResultsAsync()
@@ -687,7 +766,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 CaptureResults.Add(capture);
             }
 
-            CaptureResultsCount = $"{CaptureResults.Count} capture(s) found.";
+            SelectedCaptureResult = null;
+            CaptureResultsCount = $"找到 {CaptureResults.Count} 个 Capture。";
             StatusMessage = CaptureResultsCount;
         }
         catch (Exception exception)
@@ -733,11 +813,18 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     CaptureResultMetrics.Add(new MemInfoMetricOption("TOTAL PSS", (summary.TotalPssKb?.ToString() ?? "N/A") + " KB"));
                 }
 
-                StatusMessage = "Parsed meminfo: " + filePath;
+                StatusMessage = "已解析 meminfo：" + filePath;
+            }
+            else if (string.Equals(category, "MemReport", StringComparison.OrdinalIgnoreCase))
+            {
+                // memreport 直接填进本页的 memreport 输入框并解析，
+                // 不再把用户推到另一个页面重新选一次文件。
+                MemReportInputPath = filePath;
+                await ParseMemReportCoreAsync();
             }
             else
             {
-                StatusMessage = "File category '" + category + "' not supported for inline viewing. Use the Parse page for memreport files.";
+                StatusMessage = $"文件类别「{category}」暂不支持内联查看；仅支持 MemInfo 与 MemReport。";
             }
         }
         catch (Exception exception)
@@ -756,6 +843,24 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         if (string.IsNullOrWhiteSpace(MemReportInputPath)) return;
         IsBusy = true;
         OperationStage = "Parsing memreport";
+        try
+        {
+            await ParseMemReportCoreAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+            OperationStage = "Idle";
+        }
+    }
+
+    /// <summary>
+    /// memreport 解析主体，不触碰 <see cref="IsBusy"/>／<see cref="OperationStage"/>。
+    /// 供外层已经持有忙碌状态的流程（如从 Capture 文件内联查看）复用，
+    /// 避免嵌套调用提前把忙碌状态清掉。
+    /// </summary>
+    private async Task ParseMemReportCoreAsync()
+    {
         try
         {
             var result = await new UnrealMemReportParser().ParseFileAsync(MemReportInputPath);
@@ -784,19 +889,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             }
             else
             {
-                MemReportParseDescription = "Parse failed.";
+                MemReportParseDescription = "解析失败。";
                 MemReportParsedAt = string.Empty;
-                StatusMessage = "MemReport parse failed.";
+                StatusMessage = "MemReport 解析失败。";
             }
         }
         catch (Exception exception)
         {
             StatusMessage = exception.Message;
-        }
-        finally
-        {
-            IsBusy = false;
-            OperationStage = "Idle";
+            AddOperationLog("Error", $"MemReport 解析失败：{exception.Message}");
         }
     }
 
@@ -1049,14 +1150,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             log.AppendLine(result.StandardError);
         }
         StatusMessage = $"RenderDoc finished (exit {result.ExitCode}).";
-        AddOperationLog(log.ToString());
+        AddOperationLog("RenderDoc", log.ToString().TrimEnd());
     });
     public async Task GenerateScpHtmlReportAsync(string outputPath)
     {
         if (_lastScpParseResult?.Report is null) return;
         await new StaticCameraHtmlReportService().GenerateAsync(
             new StaticCameraHtmlReportRequest(_lastScpParseResult, outputPath));
-        AddOperationLog($"HTML report saved: {outputPath}");
+        AddOperationLog("Info", $"HTML report saved: {outputPath}");
     }
     private void UpdateTrendChart()
     {
