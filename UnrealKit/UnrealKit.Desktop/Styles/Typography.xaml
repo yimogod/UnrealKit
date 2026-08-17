@@ -70,7 +70,7 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <!-- 左侧导航栏的分组标签「工作流」：弱化颜色 + 加粗 -->
+    <!-- 左侧导航栏的分组标签（工程／设备与运行／采集／分析）：弱化颜色 + 加粗 -->
     <Style x:Key="NavigationGroupLabelTextStyle" TargetType="TextBlock"
            BasedOn="{StaticResource HintTextStyle}">
         <Setter Property="FontWeight" Value="SemiBold" />

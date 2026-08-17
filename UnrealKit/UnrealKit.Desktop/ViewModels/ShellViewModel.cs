@@ -200,16 +200,17 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string PageDescription => SelectedNavigationItem switch
     {
         "工程" => "创建或打开 .ukit 工程后，设备与启动参数页面将共享工程配置。",
+        "工程配置" => "编辑包名、路径与默认标签，保存到 Config/DefaultGame.ini；采集与命令行读取同一份配置。",
         "设备" => "刷新 ADB 设备并明确选择目标设备；不会依赖默认第一台设备。",
         "启动参数" => "选择预设并预览 uecommandline.txt，然后推送到已明确选择的设备。",
-        "采集" => "将采集数据归档到新的 Content Capture，避免覆盖历史数据。",
         "控制台" => "向运行中的 UE Android 应用发送控制台指令，支持序列编排和 logcat 条件执行。",
-        "解析" => "明确选择输入文件，查看格式诊断和解析结果。",
+        "采集归档" => "将采集数据归档到新的 Content Capture，避免覆盖历史数据。",
+        "RenderDoc" => "调用独立的 RenderDoc Python 脚本，查看退出码与输出目录。",
+        "内存解析" => "明确选择输入文件，查看格式诊断和解析结果。",
         "静态相机" => "解析静态相机性能日志，查看逐相机指标并生成 HTML 报告。",
         "基线差分" => "明确选择基线与当前两份输入，比较指标回退与改善。",
         "历史趋势" => "按标签和时间范围汇总工程内的历史 Capture，查看指标走势。",
-        "RenderDoc" => "调用独立的 RenderDoc Python 脚本，查看退出码与输出目录。",
-        _ => "查看可复制日志与应用设置。"
+        _ => string.Empty
     };
 
     public string StatusMessage { get => _statusMessage; private set => SetField(ref _statusMessage, value); }
