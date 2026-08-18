@@ -192,6 +192,92 @@ public sealed class DesktopShellViewModelTests
         Assert.Equal("已取消删除设备启动参数。", viewModel.StatusMessage);
     }
 
+    [Fact]
+    public async Task ShowDeviceIpAddresses_LogsEveryInterfaceAndSummarizesWiFi()
+    {
+        var adb = new RecordingAdbService();
+        var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
+
+        await ((AsyncDelegateCommand)viewModel.ShowDeviceIpAddressesCommand).ExecuteAsync();
+
+        Assert.Equal("R58M123ABC", adb.IpQuerySerialNumber);
+
+        // 每个接口各自成一条日志，蜂窝地址不因摘要只显示 WiFi 而丢失。
+        var logged = viewModel.OperationLogs.Where(entry => entry.Category == "DeviceIp").Select(entry => entry.Message).ToArray();
+        Assert.Equal(2, logged.Length);
+        Assert.Contains(logged, message => message.Contains("wlan0 192.168.1.23/24", StringComparison.Ordinal));
+        Assert.Contains(logged, message => message.Contains("rmnet_data0 10.148.22.7/30", StringComparison.Ordinal));
+
+        // 摘要取 WiFi，那是同网段连这台手机要用的地址。
+        Assert.Equal("wlan0 192.168.1.23/24", viewModel.SelectedDeviceIpSummary);
+        Assert.False(viewModel.IsBusy);
+    }
+
+    [Fact]
+    public async Task ShowDeviceIpAddresses_ReportsUnavailableInsteadOfClaimingAnAddress()
+    {
+        var adb = new RecordingAdbService();
+        adb.IpAddresses.Clear();
+        var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
+
+        await ((AsyncDelegateCommand)viewModel.ShowDeviceIpAddressesCommand).ExecuteAsync();
+
+        Assert.Equal("未查到 IPv4 地址。", viewModel.SelectedDeviceIpSummary);
+        // 消息里带上尝试过的命令，用户才能区分「设备没联网」和「查询没跑起来」。
+        Assert.Contains("ip -f inet addr", viewModel.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ShowDeviceIpAddressesCommand_RequiresAvailableAndroidDevice()
+    {
+        var adb = new RecordingAdbService();
+        var project = CreateProject();
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true))
+        {
+            ProjectFilePath = project.ProjectFilePath
+        };
+
+        Assert.False(viewModel.ShowDeviceIpAddressesCommand.CanExecute(null));
+
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+        await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+
+        // Win64 本机地址不经 ADB shell，这条命令对它无意义。
+        viewModel.SelectedDevice = viewModel.Devices.First(device => device.Platform == "Win64");
+        Assert.False(viewModel.ShowDeviceIpAddressesCommand.CanExecute(null));
+
+        viewModel.SelectedDevice = viewModel.Devices.First(device => device.Platform == "Android");
+        Assert.True(viewModel.ShowDeviceIpAddressesCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task SelectedDeviceIpSummary_ResetsWhenDeviceChanges()
+    {
+        var adb = new RecordingAdbService();
+        var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
+        await ((AsyncDelegateCommand)viewModel.ShowDeviceIpAddressesCommand).ExecuteAsync();
+        Assert.Contains("192.168.1.23", viewModel.SelectedDeviceIpSummary, StringComparison.Ordinal);
+
+        // 换设备后仍显示上一台的地址会被读成当前设备的。
+        viewModel.SelectedDevice = viewModel.Devices.First(device => device.Platform == "Win64");
+
+        Assert.DoesNotContain("192.168.1.23", viewModel.SelectedDeviceIpSummary, StringComparison.Ordinal);
+    }
+
+    private static async Task<ShellViewModel> CreateViewModelWithSelectedAndroidDeviceAsync(RecordingAdbService adb)
+    {
+        var project = CreateProject();
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true))
+        {
+            ProjectFilePath = project.ProjectFilePath
+        };
+
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+        await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+        viewModel.SelectedDevice = viewModel.Devices.First(device => device.Platform == "Android");
+        return viewModel;
+    }
+
     private static UkitProject CreateProject()
     {
         var settings = ProjectSettings.CreateDefaults("Sample") with
@@ -271,6 +357,21 @@ public sealed class DesktopShellViewModelTests
         public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
         public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public async IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await System.Threading.Tasks.Task.CompletedTask; yield break; }
-        public Task<IReadOnlyList<DeviceIpAddress>> GetIpAddressesAsync(string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<DeviceIpAddress>>([]);
+        /// <summary>置空表示设备未联网，与真实服务一致地抛异常而不是返回空列表。</summary>
+        public List<DeviceIpAddress> IpAddresses { get; } =
+        [
+            new("wlan0", "192.168.1.23", 24, DeviceNetworkInterfaceKind.WiFi),
+            new("rmnet_data0", "10.148.22.7", 30, DeviceNetworkInterfaceKind.Cellular)
+        ];
+
+        public string? IpQuerySerialNumber { get; private set; }
+
+        public Task<IReadOnlyList<DeviceIpAddress>> GetIpAddressesAsync(string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            IpQuerySerialNumber = serialNumber;
+            return IpAddresses.Count == 0
+                ? throw new AdbDeviceAddressUnavailableException(serialNumber, [$"adb -s {serialNumber} shell ip -f inet addr"])
+                : Task.FromResult<IReadOnlyList<DeviceIpAddress>>(IpAddresses);
+        }
     }
 }

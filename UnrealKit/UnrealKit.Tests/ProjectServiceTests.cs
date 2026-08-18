@@ -63,8 +63,7 @@ public sealed class ProjectServiceTests : IDisposable
             Android = new AndroidPlatformProfile(
                 PackageName: "com.example.memoryreview",
                 Activity: "com.epicgames.unreal.GameActivity",
-                GameRootTemplate: AndroidPlatformProfile.DefaultGameRootTemplate,
-                SavedRootTemplate: "/sdcard/Android/data/{PackageName}/files/Saved",
+                GameRootTemplate: "/sdcard/Android/data/{PackageName}/files/UnrealGame",
                 AdbPath: "C:\\Android\\platform-tools\\adb.exe")
         };
 

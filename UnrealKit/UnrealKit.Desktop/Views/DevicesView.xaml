@@ -46,6 +46,13 @@
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
-        <TextBlock Grid.Row="3" Text="{Binding SelectedDeviceDescription}" Style="{StaticResource HintTextStyle}" Margin="0,14,0,0" />
+        <StackPanel Grid.Row="3" Margin="0,14,0,0">
+            <DockPanel LastChildFill="True">
+                <Button Content="获取 IP" Command="{Binding ShowDeviceIpAddressesCommand}" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right"
+                        ToolTip="查询所选 Android 设备的 IPv4 地址，逐接口写入操作日志。" />
+                <TextBlock Text="{Binding SelectedDeviceDescription}" Style="{StaticResource HintTextStyle}" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock Text="{Binding SelectedDeviceIpSummary}" Style="{StaticResource HintTextStyle}" Margin="0,6,0,0" TextWrapping="Wrap" />
+        </StackPanel>
     </Grid>
 </UserControl>

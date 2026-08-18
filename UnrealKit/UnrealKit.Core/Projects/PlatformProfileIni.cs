@@ -67,7 +67,6 @@ internal static class PlatformProfileIni
                 document.SetValue(section, "PackageName", android.PackageName);
                 document.SetValue(section, "Activity", android.Activity);
                 document.SetValue(section, "GameRootTemplate", android.GameRootTemplate);
-                document.SetValue(section, "SavedRootTemplate", android.SavedRootTemplate);
                 document.SetValue(section, "AdbPath", android.AdbPath);
                 break;
 
@@ -89,7 +88,6 @@ internal static class PlatformProfileIni
             PackageName: value("PackageName", defaults.PackageName),
             Activity: value("Activity", defaults.Activity),
             GameRootTemplate: value("GameRootTemplate", defaults.GameRootTemplate),
-            SavedRootTemplate: value("SavedRootTemplate", defaults.SavedRootTemplate),
             AdbPath: value("AdbPath", defaults.AdbPath));
     }
 

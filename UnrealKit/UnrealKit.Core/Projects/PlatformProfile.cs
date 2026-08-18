@@ -12,6 +12,12 @@ namespace UnrealKit.Core.Projects;
 /// </summary>
 public abstract record PlatformProfile
 {
+    /// <summary>
+    /// UE 在游戏根目录下存放 Saved 的固定子目录名。所有平台一致，因此不是可配置项：
+    /// 由 Game 目录派生保证两者永远指向同一棵树。
+    /// </summary>
+    public const string SavedDirectoryName = "Saved";
+
     /// <summary>该配置描述的平台。</summary>
     public abstract TargetPlatform Platform { get; }
 
@@ -78,15 +84,11 @@ public sealed record AndroidPlatformProfile(
     string PackageName,
     string Activity,
     string GameRootTemplate,
-    string SavedRootTemplate,
     string AdbPath) : PlatformProfile
 {
     /// <summary>设备端游戏根目录模板的默认值，与旧工具的 UE Saved 路径规则一致。</summary>
     public const string DefaultGameRootTemplate =
         "/sdcard/Android/data/{PackageName}/files/UnrealGame/{UnrealProjectName}/{UnrealProjectName}";
-
-    /// <summary>设备端 Saved 目录模板的默认值。</summary>
-    public const string DefaultSavedRootTemplate = $"{DefaultGameRootTemplate}/Saved";
 
     public override TargetPlatform Platform => TargetPlatform.Android;
 
@@ -96,7 +98,6 @@ public sealed record AndroidPlatformProfile(
         PackageName: string.Empty,
         Activity: string.Empty,
         GameRootTemplate: DefaultGameRootTemplate,
-        SavedRootTemplate: DefaultSavedRootTemplate,
         AdbPath: string.Empty);
 
     public override PlatformTarget Resolve(string unrealProjectName)
@@ -107,25 +108,28 @@ public sealed record AndroidPlatformProfile(
                 "Android 操作需要包名。请在工程配置的 Android 分组中填写 PackageName。");
         }
 
+        // Saved 目录由 Game 目录派生，与 Win64 一致：UE 自身把 Saved 固定放在
+        // 游戏根目录下，单独配置只会让两者对不上，且错开的路径会让采集拉到空目录。
+        var gameRoot = ValidateDevicePath(
+            Expand(GameRootTemplate, unrealProjectName), PathStyle, nameof(GameRootTemplate));
+
         return new PlatformTarget(
             Platform,
             PathStyle,
             ProcessIdentity: PackageName,
             LaunchTarget: PackageName,
             LaunchActivity: Activity,
-            GameRootPath: ValidateDevicePath(Expand(GameRootTemplate, unrealProjectName), PathStyle, nameof(GameRootTemplate)),
-            SavedRootPath: ValidateDevicePath(Expand(SavedRootTemplate, unrealProjectName), PathStyle, nameof(SavedRootTemplate)));
+            GameRootPath: gameRoot,
+            SavedRootPath: $"{gameRoot.TrimEnd('/')}/{SavedDirectoryName}");
     }
 
     public override void Validate()
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(GameRootTemplate, nameof(GameRootTemplate));
-        ArgumentException.ThrowIfNullOrWhiteSpace(SavedRootTemplate, nameof(SavedRootTemplate));
 
         // 模板含未展开的占位符，只校验风格：占位符值可能尚未填写，
         // 但模板本身写成 Windows 路径一定是错的。
         ValidateDevicePath(GameRootTemplate, PathStyle, nameof(GameRootTemplate));
-        ValidateDevicePath(SavedRootTemplate, PathStyle, nameof(SavedRootTemplate));
     }
 
     private string Expand(string template, string unrealProjectName) => template
@@ -181,7 +185,7 @@ public sealed record Win64PlatformProfile(
             LaunchTarget: ValidateDevicePath(Executable, PathStyle, nameof(Executable)),
             LaunchActivity: null,
             GameRootPath: gameRoot,
-            SavedRootPath: Path.Combine(gameRoot, "Saved"));
+            SavedRootPath: Path.Combine(gameRoot, SavedDirectoryName));
     }
 
     public override void Validate()

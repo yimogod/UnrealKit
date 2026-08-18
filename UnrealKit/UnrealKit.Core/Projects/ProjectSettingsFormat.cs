@@ -67,7 +67,6 @@ public static class ProjectSettingsFormat
          PackageName=<原 PackageName>
          Activity=<原 Activity>
          GameRootTemplate=<原 DeviceGameRootTemplate>
-         SavedRootTemplate=<原 DeviceSavedRootTemplate>
          AdbPath=<原 AdbPath>
 
          [{PlatformProfileIni.SectionName(TargetPlatform.Win64)}]
@@ -75,6 +74,7 @@ public static class ProjectSettingsFormat
          WorkingDirectory=<原 Win64WorkingDirectory>
 
          原 Platform 字段已移除：本次操作用哪个平台由所选设备决定，不再写进工程配置。
+         原 DeviceSavedRootTemplate 也已移除：Saved 目录固定是 Game 目录下的 Saved 子目录。
          其余字段（DefaultCaptureTag、DefaultExportDirectory、RemoteControl* 等）位置不变。
          """;
 }

@@ -10,6 +10,13 @@ All notable changes to UnrealKit.
 - Queries `ip -f inet addr` first (gives interface name and prefix length), falling back to `ip route`'s `src` address (no prefix length) on firmware where the former is unavailable. `getprop dhcp.wlan0.ipaddress` is deliberately not used — it is frequently empty on current Android and would silently return a wrong answer. Loopback is excluded
 - When neither command yields an address, `AdbDeviceAddressUnavailableException` lists the commands attempted, so "device is on no network" stays distinguishable from "the query never ran"
 - New `unrealkit adb ip <serial> [--adb-path <path>]` prints one line per interface
+- The GUI Devices page has a 获取 IP button, enabled only for a selected Android device in `device` state. Every interface goes to the operation log (`DeviceIp` category); the inline summary shows the WiFi address, falling back to all interfaces when there is no WiFi. The summary resets when the selected device changes, so one device's address is never read as another's
+
+### Saved Directory Derived From Game Directory (breaking)
+- **Breaking:** `AndroidPlatformProfile.SavedRootTemplate` and its `[UnrealKit.Platform.Android] SavedRootTemplate` INI key are removed, along with `AndroidPlatformProfile.DefaultSavedRootTemplate`. The device Saved path is now `GameRootTemplate` + `/Saved`, matching what Win64 already did and what UE itself lays out on disk. Two independently-configured paths could drift apart, and a Saved path pointing outside the game directory makes a capture pull an empty directory while reporting success
+- `PlatformProfile.SavedDirectoryName` (`"Saved"`) is the single definition of that subdirectory name, shared by both platforms
+- A leftover `SavedRootTemplate=` line in an existing `Config/DefaultGame.ini` is ignored, not an error — no rewrite is required. If it pointed somewhere other than `<GameRoot>/Saved`, the effective capture source changes, so check it before the next capture
+- GUI settings show 设备 UE Game 路径模板 in place of the Saved template, with the derived Saved path displayed read-only underneath so the actual capture location stays visible
 
 ### Multi-Platform Projects (breaking)
 

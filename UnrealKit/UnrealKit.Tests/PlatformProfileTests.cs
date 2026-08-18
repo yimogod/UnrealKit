@@ -19,6 +19,23 @@ public sealed class PlatformProfileTests
     }
 
     [Fact]
+    public void AndroidProfile_Resolve_DerivesSavedRootFromGameRoot()
+    {
+        // Saved 目录不单独配置：改了 Game 目录，Saved 必须跟着走，
+        // 否则采集会在旧路径下拉到空目录却报告成功。
+        var profile = AndroidPlatformProfile.CreateDefaults() with
+        {
+            PackageName = "com.example.game",
+            GameRootTemplate = "/sdcard/Custom/{PackageName}/{UnrealProjectName}"
+        };
+
+        var target = profile.Resolve("Sample");
+
+        Assert.Equal("/sdcard/Custom/com.example.game/Sample", target.GameRootPath);
+        Assert.Equal("/sdcard/Custom/com.example.game/Sample/Saved", target.SavedRootPath);
+    }
+
+    [Fact]
     public void AndroidProfile_Resolve_MissingPackageName_ThrowsNamingTheField()
     {
         // 包名缺失时展开出的路径含字面量 {PackageName}，采集会拉到不存在的目录。
@@ -57,7 +74,7 @@ public sealed class PlatformProfileTests
     [Fact]
     public void AndroidProfile_Validate_RejectsWindowsStyleTemplate()
     {
-        var profile = AndroidPlatformProfile.CreateDefaults() with { SavedRootTemplate = @"C:\sdcard\Saved" };
+        var profile = AndroidPlatformProfile.CreateDefaults() with { GameRootTemplate = @"C:\sdcard\Game" };
 
         Assert.Throws<ArgumentException>(() => profile.Validate());
     }

@@ -41,7 +41,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _packageName = string.Empty;
     private string _unrealProjectName = string.Empty;
     private string _activity = string.Empty;
-    private string _deviceSavedRootTemplate = string.Empty;
+    private string _deviceGameRootTemplate = string.Empty;
     private string _adbPath = string.Empty;
     private string _memInfoInputPath = string.Empty;
     private string _memInfoProcessDescription = "Select a meminfo text file to begin offline parsing.";
@@ -95,6 +95,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private bool _isConsoleSequenceRunning;
     private UkitProject? _project;
     private IDevice? _selectedDevice;
+    private string _selectedDeviceIpSummary = "点击「获取 IP」查询所选设备的地址。";
     private CaptureFileInfo? _selectedCaptureResultFile;
     private CaptureDirectoryInfo? _selectedCaptureResult;
     private bool _isBusy;
@@ -118,6 +119,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         OpenProjectCommand = new AsyncDelegateCommand(OpenProjectAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ProjectFilePath));
         RefreshDevicesCommand = new AsyncDelegateCommand(RefreshDevicesAsync, () => !IsBusy);
         ConnectWirelessDeviceCommand = new AsyncDelegateCommand(ConnectWirelessDeviceAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(WirelessEndpoint));
+        ShowDeviceIpAddressesCommand = new AsyncDelegateCommand(ShowDeviceIpAddressesAsync, CanQuerySelectedDeviceIp);
         PushLaunchParametersCommand = new AsyncDelegateCommand(PushLaunchParametersAsync, CanOperateOnSelectedDevice);
         DeleteLaunchParametersCommand = new AsyncDelegateCommand(DeleteLaunchParametersAsync, CanOperateOnSelectedDevice);
         StartApplicationCommand = new AsyncDelegateCommand(StartApplicationAsync, CanOperateOnSelectedDevice);
@@ -174,6 +176,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand OpenProjectCommand { get; }
     public ICommand RefreshDevicesCommand { get; }
     public ICommand ConnectWirelessDeviceCommand { get; }
+    public ICommand ShowDeviceIpAddressesCommand { get; }
     public ICommand PushLaunchParametersCommand { get; }
     public ICommand DeleteLaunchParametersCommand { get; }
     public ICommand StartApplicationCommand { get; }
@@ -231,7 +234,22 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public bool AndroidEnabled { get => _androidEnabled; set => SetField(ref _androidEnabled, value); }
     public string PackageName { get => _packageName; set => SetField(ref _packageName, value); }
     public string Activity { get => _activity; set => SetField(ref _activity, value); }
-    public string DeviceSavedRootTemplate { get => _deviceSavedRootTemplate; set => SetField(ref _deviceSavedRootTemplate, value); }
+    /// <summary>
+    /// 设备端游戏根目录模板。Saved 目录不单独配置，由该目录 + <c>Saved</c> 派生，
+    /// 见 <see cref="DeviceSavedRootPreview"/>。
+    /// </summary>
+    public string DeviceGameRootTemplate
+    {
+        get => _deviceGameRootTemplate;
+        set { if (SetField(ref _deviceGameRootTemplate, value)) OnPropertyChanged(nameof(DeviceSavedRootPreview)); }
+    }
+
+    /// <summary>由 Game 目录派生的 Saved 目录，只读展示，让用户看到实际采集位置。</summary>
+    public string DeviceSavedRootPreview =>
+        DeviceGameRootTemplate.Trim() is { Length: > 0 } template
+            ? $"{template.TrimEnd('/')}/{PlatformProfile.SavedDirectoryName}"
+            : string.Empty;
+
     public string AdbPath { get => _adbPath; set => SetField(ref _adbPath, value); }
 
     public bool Win64Enabled { get => _win64Enabled; set => SetField(ref _win64Enabled, value); }
@@ -296,6 +314,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(SelectedDeviceDescription));
             // 当前平台由所选设备派生，换设备就可能换平台。
             OnPropertyChanged(nameof(Platform));
+            // IP 属于具体某台设备，换设备后旧值不再成立。
+            SelectedDeviceIpSummary = "点击「获取 IP」查询所选设备的地址。";
             UpdateCaptureArchivePreview();
             UpdateLaunchOperationSummary();
             UpdateLaunchParameterPreview();
@@ -355,6 +375,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         ? "尚未选择设备。"
         : $"{SelectedDevice.Id} · {(SelectedDevice.IsAvailable ? "device" : "offline")} · {SelectedDevice.Name ?? "未知名称"}";
 
+    /// <summary>
+    /// 上次查询到的所选设备 IP。换设备时清空——留着上一台的地址会被读成当前设备的。
+    /// </summary>
+    public string SelectedDeviceIpSummary
+    {
+        get => _selectedDeviceIpSummary;
+        private set => SetField(ref _selectedDeviceIpSummary, value);
+    }
+
     private bool CanCreateProject() =>
         !IsBusy &&
         !string.IsNullOrWhiteSpace(NewProjectDirectory) &&
@@ -393,6 +422,48 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var devices = await ListDevicesAsync(progress, OperationCancellationToken);
         UpdateDevices(devices);
         StatusMessage = $"已连接 {WirelessEndpoint.Trim()}，请从列表中明确选择目标设备。";
+    });
+
+    /// <summary>
+    /// 仅 Android 设备可查 IP：这条能力由 ADB shell 提供，Win64 本机地址不经此路径。
+    /// 要求设备状态为 device——离线或未授权设备上 shell 调用必然失败。
+    /// </summary>
+    private bool CanQuerySelectedDeviceIp() =>
+        !IsBusy
+        && SelectedDevice?.IsAvailable == true
+        && PlatformNames.TryParse(SelectedDevice.Platform, out var platform)
+        && platform == TargetPlatform.Android;
+
+    private Task ShowDeviceIpAddressesAsync() => RunAsync("正在查询设备 IP 地址…", async progress =>
+    {
+        var device = SelectedDevice;
+        if (device is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var addresses = await CreateAdbService().GetIpAddressesAsync(device.Id, progress, OperationCancellationToken);
+            foreach (var address in addresses)
+            {
+                AddOperationLog("DeviceIp", $"{device.Id} · {address.InterfaceName} · {address.Kind} · {address}");
+            }
+
+            // 摘要只列 WiFi 地址，那是「同网段连这台手机」时要用的；其它接口在日志里完整可见。
+            // 没有 WiFi 时退到全部接口，不假装设备没有地址。
+            var wifi = addresses.Where(address => address.Kind == DeviceNetworkInterfaceKind.WiFi).ToArray();
+            var shown = wifi.Length > 0 ? wifi : addresses;
+            SelectedDeviceIpSummary = string.Join("　", shown.Select(address => address.ToString()));
+            StatusMessage = $"{device.Id} 共 {addresses.Count} 个地址：{SelectedDeviceIpSummary}";
+        }
+        catch (AdbDeviceAddressUnavailableException exception)
+        {
+            // 「设备未联网」不是操作失败，作为结果如实呈现，不冒充地址。
+            SelectedDeviceIpSummary = "未查到 IPv4 地址。";
+            StatusMessage = exception.Message;
+            AddOperationLog("DeviceIp", exception.Message);
+        }
     });
 
     private async Task<IReadOnlyList<IDevice>> ListDevicesAsync(IProgress<OperationProgress> progress, CancellationToken cancellationToken)
@@ -523,7 +594,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var androidValues = android ?? AndroidPlatformProfile.CreateDefaults();
         PackageName = androidValues.PackageName;
         Activity = androidValues.Activity;
-        DeviceSavedRootTemplate = androidValues.SavedRootTemplate;
+        DeviceGameRootTemplate = androidValues.GameRootTemplate;
         AdbPath = androidValues.AdbPath;
 
         var win64 = project.Settings.Win64;
@@ -550,9 +621,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 ? new AndroidPlatformProfile(
                     PackageName: PackageName.Trim(),
                     Activity: Activity.Trim(),
-                    GameRootTemplate: _project.Settings.Android?.GameRootTemplate
-                        ?? AndroidPlatformProfile.DefaultGameRootTemplate,
-                    SavedRootTemplate: DeviceSavedRootTemplate.Trim(),
+                    GameRootTemplate: DeviceGameRootTemplate.Trim(),
                     AdbPath: AdbPath.Trim())
                 : null,
             Win64 = Win64Enabled
@@ -1463,7 +1532,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
