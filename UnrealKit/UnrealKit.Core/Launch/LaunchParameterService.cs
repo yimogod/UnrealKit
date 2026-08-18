@@ -8,9 +8,9 @@ namespace UnrealKit.Core.Launch;
 /// <summary>
 /// 启动参数（uecommandline.txt）的构建与投放。
 ///
-/// 平台差异只体现在「路径长什么样」上（Android 是 Unix 绝对路径，Win64 是本机路径）；
-/// 写文件、删文件、启动应用一律委托 IDeviceService，不在此处按平台分支重复实现——
-/// 那会让 Win64DeviceService 已有的实现被绕过，同一逻辑存在两份。
+/// 此类不含任何平台分支：路径与启动目标由 <see cref="PlatformTarget"/> 提供，
+/// 写文件、删文件、启动应用一律委托 IDeviceService。目标平台由传入的设备决定，
+/// 不来自工程配置——同一工程可以同时跑多个平台。
 /// </summary>
 public sealed class LaunchParameterService : ILaunchParameterService
 {
@@ -39,30 +39,17 @@ public sealed class LaunchParameterService : ILaunchParameterService
         return string.Join(Environment.NewLine, presets.Select(preset => preset.Arguments).Append(customArguments ?? string.Empty).Where(argument => !string.IsNullOrWhiteSpace(argument)).Select(argument => argument.Trim()));
     }
 
+    /// <summary>
+    /// 启动参数文件在设备上的路径。平台取自本服务所绑定的设备服务，
+    /// 因此同一工程针对不同平台的设备会解析出各自正确的路径。
+    /// </summary>
     public string GetRemotePath(ProjectSettings settings, string? remotePathOverride = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        if (!string.IsNullOrWhiteSpace(remotePathOverride))
-        {
-            return ValidatePath(settings, remotePathOverride);
-        }
-
-        if (settings.Platform == TargetPlatform.Win64)
-        {
-            if (string.IsNullOrWhiteSpace(settings.Win64WorkingDirectory))
-            {
-                throw new InvalidOperationException(
-                    "Win64 启动参数需要在工程配置中设置 Win64WorkingDirectory 以定位 uecommandline.txt。" +
-                    "回退到当前工作目录会让 GUI 与 CLI 写到不同位置。");
-            }
-
-            return ValidatePath(settings, Path.Combine(settings.Win64WorkingDirectory, settings.UnrealProjectName, FileName));
-        }
-
-        var root = settings.DeviceGameRootTemplate
-            .Replace("{PackageName}", settings.PackageName, StringComparison.Ordinal)
-            .Replace("{UnrealProjectName}", settings.UnrealProjectName, StringComparison.Ordinal);
-        return ValidatePath(settings, $"{root.TrimEnd('/')}/{FileName}");
+        var target = ResolveTarget(settings);
+        return string.IsNullOrWhiteSpace(remotePathOverride)
+            ? target.CombineDevicePath(target.GameRootPath, FileName)
+            : ValidateOverridePath(target, remotePathOverride);
     }
 
     public async Task<LaunchParameterPushResult> PushAsync(UkitProject project, LaunchParameterRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
@@ -72,7 +59,7 @@ public sealed class LaunchParameterService : ILaunchParameterService
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SerialNumber);
         var content = BuildContent(project.Settings, request.PresetNames, request.CustomArguments);
         var remotePath = GetRemotePath(project.Settings, request.RemotePathOverride);
-        var device = ResolveDevice(project.Settings, request.SerialNumber);
+        var device = ResolveDevice(request.SerialNumber);
 
         // 内容先落到本地临时文件，再交给设备服务投放。Win64 的「推送」就是复制，
         // Android 是 adb push——两者都由 IDeviceService.PushFileAsync 负责。
@@ -101,7 +88,7 @@ public sealed class LaunchParameterService : ILaunchParameterService
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(serialNumber);
         var path = GetRemotePath(project.Settings, remotePathOverride);
-        return _deviceService.DeleteRemoteFileAsync(ResolveDevice(project.Settings, serialNumber), path, progress, cancellationToken);
+        return _deviceService.DeleteRemoteFileAsync(ResolveDevice(serialNumber), path, progress, cancellationToken);
     }
 
     public Task<ProcessExecutionResult> StartApplicationAsync(UkitProject project, string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
@@ -109,48 +96,32 @@ public sealed class LaunchParameterService : ILaunchParameterService
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(serialNumber);
 
-        var settings = project.Settings;
-        var device = ResolveDevice(settings, serialNumber);
-
-        // 启动目标在 Android 上是包名 + Activity，在 Win64 上是可执行文件路径。
-        var (target, activity) = settings.Platform == TargetPlatform.Win64
-            ? (!string.IsNullOrWhiteSpace(settings.Win64Executable)
-                ? settings.Win64Executable
-                : throw new InvalidOperationException("Win64Executable is not configured in project settings."), null)
-            : (settings.PackageName, settings.Activity);
-
-        return _deviceService.StartApplicationAsync(device, target, activity, progress, cancellationToken);
+        var target = ResolveTarget(project.Settings);
+        return _deviceService.StartApplicationAsync(
+            ResolveDevice(serialNumber), target.LaunchTarget, target.LaunchActivity, progress, cancellationToken);
     }
 
     /// <summary>
-    /// 校验启动参数路径。Android 要求 Unix 绝对路径；Win64 要求绝对本机路径——
-    /// 相对路径会按当前进程工作目录解析，GUI 与 CLI 下指向不同位置。
+    /// 解析本服务所绑定平台的落地值。该平台在工程中未配置时报错并列出已配置平台。
     /// </summary>
-    private static string ValidatePath(ProjectSettings settings, string path)
+    private PlatformTarget ResolveTarget(ProjectSettings settings) =>
+        settings.ResolveTarget(_deviceService.Platform, "投放启动参数需要该平台的配置。");
+
+    /// <summary>
+    /// 校验调用方显式指定的路径。覆盖值绕过了模板展开，因此必须在此确认它符合
+    /// 目标平台的路径风格——相对路径会按当前进程工作目录解析，GUI 与 CLI 下指向不同位置。
+    /// </summary>
+    private static string ValidateOverridePath(PlatformTarget target, string path) => target.PathStyle switch
     {
-        if (settings.Platform == TargetPlatform.Win64)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                throw new ArgumentException("Launch parameter path must not be empty.", nameof(path));
-            }
+        DevicePathStyle.Unix when !path.StartsWith('/') || path.Contains('\\') || path.Contains('\0') =>
+            throw new ArgumentException($"{target.PlatformName} 启动参数路径必须是绝对 Unix 路径: {path}", nameof(path)),
+        DevicePathStyle.Unix => path,
+        DevicePathStyle.Windows when !Path.IsPathFullyQualified(path) =>
+            throw new ArgumentException($"{target.PlatformName} 启动参数路径必须是绝对路径: {path}", nameof(path)),
+        DevicePathStyle.Windows => Path.GetFullPath(path),
+        _ => throw new ArgumentOutOfRangeException(nameof(target), target.PathStyle, "Unsupported device path style.")
+    };
 
-            if (!Path.IsPathFullyQualified(path))
-            {
-                throw new ArgumentException($"Win64 launch parameter path must be absolute: {path}", nameof(path));
-            }
-
-            return Path.GetFullPath(path);
-        }
-
-        if (!path.StartsWith("/", StringComparison.Ordinal) || path.Contains('\\') || path.Contains('\0'))
-        {
-            throw new ArgumentException("Launch parameter remote path must be an absolute Unix path.", nameof(path));
-        }
-
-        return path;
-    }
-
-    private static IDevice ResolveDevice(ProjectSettings settings, string serialNumber) =>
-        DeviceReference.Create(serialNumber, settings.Platform);
+    private IDevice ResolveDevice(string serialNumber) =>
+        DeviceReference.Create(serialNumber, _deviceService.Platform);
 }

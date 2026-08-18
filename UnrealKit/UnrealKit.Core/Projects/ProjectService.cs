@@ -187,24 +187,23 @@ public sealed class ProjectService : IProjectService
     private static async Task WriteSettingsAsync(string path, ProjectSettings settings, CancellationToken cancellationToken)
     {
         var document = new IniDocument();
-        document.SetValue(SettingsSection, "PackageName", settings.PackageName);
+        document.SetValue(SettingsSection, "SettingsVersion", ProjectSettingsFormat.CurrentVersion.ToString(System.Globalization.CultureInfo.InvariantCulture));
         document.SetValue(SettingsSection, "UnrealProjectName", settings.UnrealProjectName);
-        document.SetValue(SettingsSection, "Activity", settings.Activity);
-        document.SetValue(SettingsSection, "DeviceGameRootTemplate", settings.DeviceGameRootTemplate);
-        document.SetValue(SettingsSection, "DeviceSavedRootTemplate", settings.DeviceSavedRootTemplate);
         document.SetValue(SettingsSection, "LocalWorkingDirectory", settings.LocalWorkingDirectory);
-        document.SetValue(SettingsSection, "AdbPath", settings.AdbPath);
         document.SetValue(SettingsSection, "RemoteControlHttpPort", settings.RemoteControlHttpPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
         document.SetValue(SettingsSection, "RemoteControlObjectPath", settings.RemoteControlObjectPath);
         document.SetValue(SettingsSection, "RemoteControlFunctionName", settings.RemoteControlFunctionName);
         document.SetValue(SettingsSection, "RemoteControlCommandParameter", settings.RemoteControlCommandParameter);
         document.SetValue(SettingsSection, "DefaultCaptureTag", settings.DefaultCaptureTag);
         document.SetValue(SettingsSection, "DefaultExportDirectory", settings.DefaultExportDirectory);
-        document.SetValue(SettingsSection, "Platform", settings.Platform.ToString());
-        if (!string.IsNullOrWhiteSpace(settings.Win64Executable))
-            document.SetValue(SettingsSection, "Win64Executable", settings.Win64Executable);
-        if (!string.IsNullOrWhiteSpace(settings.Win64WorkingDirectory))
-            document.SetValue(SettingsSection, "Win64WorkingDirectory", settings.Win64WorkingDirectory);
+
+        // 只写出已配置的平台。写一份全默认值的空节会让「该平台未配置」无法与
+        // 「配置过但字段留空」区分，用户删掉平台后下次打开又会看到它。
+        foreach (var profile in settings.ConfiguredProfiles)
+        {
+            PlatformProfileIni.Write(document, profile);
+        }
+
         foreach (var preset in settings.LaunchParameterPresets)
         {
             document.SetValue(PresetsSection, preset.Name, preset.Arguments);
@@ -229,6 +228,10 @@ public sealed class ProjectService : IProjectService
         var defaults = ProjectSettings.CreateDefaults(projectName);
         var basePath = ResolveBaseGameIniPath();
         var layered = await LayeredIniDocument.FromFilesAsync(basePath, defaultGameIniPath, cancellationToken);
+        ProjectSettingsFormat.RequireSupportedVersion(
+            layered.Override.GetValue(SettingsSection, "SettingsVersion"),
+            layered.Override.HasSection(SettingsSection),
+            defaultGameIniPath);
 
         var configuredPresets = layered.GetSection(PresetsSection);
         var presets = LaunchParameterPresetDefaults.All
@@ -247,22 +250,16 @@ public sealed class ProjectService : IProjectService
             .ToList();
 
         return new ProjectSettings(
-            layered.GetValue(SettingsSection, "PackageName") ?? defaults.PackageName,
             layered.GetValue(SettingsSection, "UnrealProjectName") ?? defaults.UnrealProjectName,
-            layered.GetValue(SettingsSection, "Activity") ?? defaults.Activity,
-            layered.GetValue(SettingsSection, "DeviceGameRootTemplate") ?? defaults.DeviceGameRootTemplate,
-            layered.GetValue(SettingsSection, "DeviceSavedRootTemplate") ?? defaults.DeviceSavedRootTemplate,
             layered.GetValue(SettingsSection, "LocalWorkingDirectory") ?? defaults.LocalWorkingDirectory,
-            layered.GetValue(SettingsSection, "AdbPath") ?? defaults.AdbPath,
             layered.GetValue(SettingsSection, "DefaultCaptureTag") ?? defaults.DefaultCaptureTag,
             layered.GetValue(SettingsSection, "DefaultExportDirectory") ?? defaults.DefaultExportDirectory,
             presets,
             sequences,
             layered.GetValue(SettingsSection, "PreCaptureSequence"),
             layered.GetValue(SettingsSection, "PostCaptureSequence"),
-            ParsePlatform(layered.GetValue(SettingsSection, "Platform"), defaults.Platform),
-            layered.GetValue(SettingsSection, "Win64Executable"),
-            layered.GetValue(SettingsSection, "Win64WorkingDirectory"),
+            PlatformProfileIni.Read<AndroidPlatformProfile>(layered, TargetPlatform.Android),
+            PlatformProfileIni.Read<Win64PlatformProfile>(layered, TargetPlatform.Win64),
             ParseRemoteControlPort(layered.GetValue(SettingsSection, "RemoteControlHttpPort"), defaults.RemoteControlHttpPort),
             RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlObjectPath"), defaults.RemoteControlObjectPath),
             RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlFunctionName"), defaults.RemoteControlFunctionName),
@@ -299,12 +296,16 @@ public sealed class ProjectService : IProjectService
     private static void ValidateSettings(ProjectSettings settings)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(settings.UnrealProjectName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(settings.DeviceGameRootTemplate);
-        ArgumentException.ThrowIfNullOrWhiteSpace(settings.DeviceSavedRootTemplate);
         ArgumentException.ThrowIfNullOrWhiteSpace(settings.DefaultCaptureTag);
         ValidateCaptureTag(settings.DefaultCaptureTag);
-        ValidateUnixTemplate(settings.DeviceGameRootTemplate, nameof(settings.DeviceGameRootTemplate));
-        ValidateUnixTemplate(settings.DeviceSavedRootTemplate, nameof(settings.DeviceSavedRootTemplate));
+
+        // 只校验已配置平台，且由 profile 自己校验：Android 的 Unix 模板与 Win64 的
+        // 绝对本机路径规则不同，在此处按平台分支等于把平台知识重新散出去。
+        foreach (var profile in settings.ConfiguredProfiles)
+        {
+            profile.Validate();
+        }
+
         if (settings.RemoteControlHttpPort is < 1 or > 65535)
         {
             throw new ArgumentException("RemoteControlHttpPort must be between 1 and 65535.", nameof(settings));
@@ -320,14 +321,6 @@ public sealed class ProjectService : IProjectService
         if (tag.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || tag.Contains('/') || tag.Contains('\\') || tag is "." or "..")
         {
             throw new ArgumentException("Default capture tag must be a single valid directory name.", nameof(tag));
-        }
-    }
-
-    private static void ValidateUnixTemplate(string path, string parameterName)
-    {
-        if (!path.StartsWith("/", StringComparison.Ordinal) || path.Contains('\\') || path.Contains('\0'))
-        {
-            throw new ArgumentException("Device path templates must be absolute Unix paths.", parameterName);
         }
     }
 
@@ -380,21 +373,6 @@ public sealed class ProjectService : IProjectService
         }
 
         return port;
-    }
-
-    /// <summary>
-    /// 解析配置中的 Platform。未配置时用默认平台；
-    /// 配置了但无法识别（例如拼错成 Andriod）必须报错——静默回退到 Android
-    /// 会让 Win64 工程采到错误平台的数据却看起来成功。
-    /// </summary>
-    private static TargetPlatform ParsePlatform(string? value, TargetPlatform defaultPlatform)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return defaultPlatform;
-        }
-
-        return PlatformNames.Parse(value, "Platform");
     }
 
     private static void Report(IProgress<OperationProgress>? progress, string operationId, string stage, string message, int? current = null, int? total = null) => progress?.Report(new OperationProgress(operationId, stage, current, total, message));

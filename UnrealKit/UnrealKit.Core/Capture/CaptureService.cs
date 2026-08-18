@@ -24,21 +24,21 @@ public sealed class CaptureService : ICaptureService
 
     public CapturePlan CreatePlan(CaptureRequest request, DateTimeOffset? capturedAt = null)
     {
-        ValidateRequest(request);
+        var target = ValidateRequest(request);
         var capturedLocalTime = capturedAt ?? _timeProvider.GetLocalNow();
         var captureId = string.IsNullOrWhiteSpace(request.CaptureId)
             ? CreateCaptureId(capturedLocalTime, request.Device.Id)
             : ValidateCaptureId(request.CaptureId);
-        var platform = PlatformNames.ToName(request.Project.Settings.Platform);
         var contentRoot = request.Project.ContentDir;
-        var captureDirectory = Path.Combine(contentRoot, platform, NormalizeTag(request.Tag), capturedLocalTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), captureId);
-        return new CapturePlan(captureId, captureDirectory, ResolveDeviceSavedDirectory(request.Project.Settings));
+        var captureDirectory = Path.Combine(contentRoot, target.PlatformName, NormalizeTag(request.Tag), capturedLocalTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), captureId);
+        return new CapturePlan(captureId, captureDirectory, target.SavedRootPath);
     }
 
     public async Task<CaptureResult> CaptureAsync(CaptureRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         if (_deviceService is null) throw new InvalidOperationException("CaptureService requires an IDeviceService for live capture. Use ImportAsync for importing local data.");
         var startedAt = _timeProvider.GetLocalNow();
+        var target = ValidateRequest(request);
         var plan = CreatePlan(request, startedAt);
         if (Directory.Exists(plan.CaptureDirectory))
         {
@@ -49,7 +49,7 @@ public sealed class CaptureService : ICaptureService
         Directory.CreateDirectory(stagingDirectory);
         try
         {
-            return await CaptureToStagingAsync(request, plan, startedAt, stagingDirectory, progress, cancellationToken);
+            return await CaptureToStagingAsync(request, plan, target, startedAt, stagingDirectory, progress, cancellationToken);
         }
         finally
         {
@@ -57,7 +57,7 @@ public sealed class CaptureService : ICaptureService
         }
     }
 
-    private async Task<CaptureResult> CaptureToStagingAsync(CaptureRequest request, CapturePlan plan, DateTimeOffset startedAt, string stagingDirectory, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
+    private async Task<CaptureResult> CaptureToStagingAsync(CaptureRequest request, CapturePlan plan, PlatformTarget target, DateTimeOffset startedAt, string stagingDirectory, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
         // Pre-capture console sequence. A configured sequence that cannot run must abort the
         // capture rather than be skipped: silently collecting from an unprepared game state
@@ -69,7 +69,7 @@ public sealed class CaptureService : ICaptureService
             progress?.Report(new OperationProgress("capture", "PreSequence", 0, 4, $"Running pre-capture sequence: {preSequenceName}"));
             var seqDef = preset.ToSequenceDefinition();
             var preResult = await _consoleService!.RunSequenceAsync(
-                new SequenceExecutionRequest(seqDef, request.Device.Id, request.Project.Settings.PackageName),
+                new SequenceExecutionRequest(seqDef, request.Device.Id, target.ProcessIdentity),
                 progress, cancellationToken);
             if (!preResult.Succeeded)
             {
@@ -85,9 +85,8 @@ public sealed class CaptureService : ICaptureService
 
         var memInfoDirectory = Path.Combine(stagingDirectory, "MemInfo");
         Directory.CreateDirectory(memInfoDirectory);
-        var captureTarget = ResolveCaptureTarget(request.Project.Settings);
-        progress?.Report(new OperationProgress("capture", "MemInfo", ++currentStep, totalSteps, $"Collecting memory info for {captureTarget}."));
-        var memInfo = await _deviceService!.CaptureMemoryAsync(request.Device, captureTarget, progress, cancellationToken);
+        progress?.Report(new OperationProgress("capture", "MemInfo", ++currentStep, totalSteps, $"Collecting memory info for {target.ProcessIdentity}."));
+        var memInfo = await _deviceService!.CaptureMemoryAsync(request.Device, target.ProcessIdentity, progress, cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(memInfoDirectory, $"meminfo_{startedAt:yyyyMMdd-HHmmss}.txt"), memInfo.StandardOutput, cancellationToken);
 
         if (!request.SkipSaved)
@@ -96,7 +95,7 @@ public sealed class CaptureService : ICaptureService
             await _deviceService!.PullDirectoryAsync(request.Device, plan.DeviceSavedDirectory, Path.Combine(stagingDirectory, "Saved"), progress, cancellationToken);
         }
 
-        var manifest = await CreateManifestAsync(request, plan, startedAt, stagingDirectory, cancellationToken);
+        var manifest = await CreateManifestAsync(request, plan, target, startedAt, stagingDirectory, cancellationToken);
         progress?.Report(new OperationProgress("capture", "Manifest", ++currentStep, totalSteps, "Writing capture manifest and archiving original data."));
         await WriteManifestAsync(stagingDirectory, manifest, cancellationToken);
 
@@ -113,7 +112,7 @@ public sealed class CaptureService : ICaptureService
             progress?.Report(new OperationProgress("capture", "PostSequence", null, null, $"Running post-capture sequence: {postSequenceName}"));
             var seqDef = preset.ToSequenceDefinition();
             var postResult = await _consoleService!.RunSequenceAsync(
-                new SequenceExecutionRequest(seqDef, request.Device.Id, request.Project.Settings.PackageName),
+                new SequenceExecutionRequest(seqDef, request.Device.Id, target.ProcessIdentity),
                 progress, cancellationToken);
             if (!postResult.Succeeded)
             {
@@ -149,7 +148,9 @@ public sealed class CaptureService : ICaptureService
 
             var startedAt = _timeProvider.GetLocalNow();
             progress?.Report(new OperationProgress("import", "Manifest", 2, 3, "Creating manifest."));
-            var manifest = await CreateManifestFromDirectoryAsync(stagingDirectory, captureId, request.Platform, request.Tag, startedAt, request.Project, "import", null, "imported", request.Project.Settings.PackageName, string.Empty, cancellationToken);
+            // 导入没有涉及任何设备，因此没有平台落地值可记录。写入 null 而不是硬凑一份，
+            // 否则读者无法区分「导入的归档」与「采集时用过这些路径」。
+            var manifest = await CreateManifestFromDirectoryAsync(stagingDirectory, captureId, request.Platform, request.Tag, startedAt, request.Project, "import", null, "imported", target: null, string.Empty, cancellationToken);
             await WriteManifestAsync(stagingDirectory, manifest, cancellationToken);
 
             progress?.Report(new OperationProgress("import", "Finalize", 3, 3, "Archiving to Content directory."));
@@ -167,9 +168,9 @@ public sealed class CaptureService : ICaptureService
     //  Helpers
     // ---------------------------------------------------------------------
 
-    private async Task<CaptureManifest> CreateManifestAsync(CaptureRequest request, CapturePlan plan, DateTimeOffset startedAt, string stagingDirectory, CancellationToken cancellationToken)
+    private async Task<CaptureManifest> CreateManifestAsync(CaptureRequest request, CapturePlan plan, PlatformTarget target, DateTimeOffset startedAt, string stagingDirectory, CancellationToken cancellationToken)
     {
-        return await CreateManifestFromDirectoryAsync(stagingDirectory, plan.CaptureId, PlatformNames.ToName(request.Project.Settings.Platform), request.Tag, startedAt, request.Project, request.Device.Id, request.Device.Name, request.Device.IsAvailable ? "available" : "unavailable", request.Project.Settings.PackageName, plan.DeviceSavedDirectory, cancellationToken);
+        return await CreateManifestFromDirectoryAsync(stagingDirectory, plan.CaptureId, target.PlatformName, request.Tag, startedAt, request.Project, request.Device.Id, request.Device.Name, request.Device.IsAvailable ? "available" : "unavailable", target, plan.DeviceSavedDirectory, cancellationToken);
     }
 
     private static async Task WriteManifestAsync(string stagingDirectory, CaptureManifest manifest, CancellationToken cancellationToken)
@@ -198,7 +199,7 @@ public sealed class CaptureService : ICaptureService
         }
     }
 
-    private async Task<CaptureManifest> CreateManifestFromDirectoryAsync(string directory, string captureId, string platform, string tag, DateTimeOffset startedAt, Projects.UkitProject project, string deviceSerial, string? deviceModel, string deviceStatus, string packageName, string deviceSavedDirectory, CancellationToken cancellationToken)
+    private async Task<CaptureManifest> CreateManifestFromDirectoryAsync(string directory, string captureId, string platform, string tag, DateTimeOffset startedAt, Projects.UkitProject project, string deviceSerial, string? deviceModel, string deviceStatus, PlatformTarget? target, string deviceSavedDirectory, CancellationToken cancellationToken)
     {
         var files = new List<CaptureFileManifestEntry>();
         foreach (var path in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories).OrderBy(path => path, StringComparer.Ordinal))
@@ -208,40 +209,7 @@ public sealed class CaptureService : ICaptureService
             files.Add(new CaptureFileManifestEntry(Path.GetRelativePath(directory, path).Replace(Path.DirectorySeparatorChar, '/'), new FileInfo(path).Length, Convert.ToHexStringLower(hash)));
         }
 
-        return new CaptureManifest(captureId, platform, tag, startedAt, _timeProvider.GetLocalNow(), project.CreateConfigurationSnapshot(), deviceSerial, deviceModel, deviceStatus, packageName, deviceSavedDirectory, files);
-    }
-
-    private static string ResolveDeviceSavedDirectory(ProjectSettings settings)
-    {
-        if (settings.Platform == TargetPlatform.Win64)
-        {
-            // Win64: Saved 目录在本机文件系统上。必须解析为绝对路径——返回相对路径会让后续
-            // 拉取步骤按当前进程工作目录解析，GUI 与 CLI 下指向不同位置。
-            if (string.IsNullOrWhiteSpace(settings.Win64WorkingDirectory))
-            {
-                throw new InvalidOperationException(
-                    "Win64 采集需要在工程配置中设置 Win64WorkingDirectory，用于定位 UE 的 Saved 目录。" +
-                    "请在菜单栏 Setting 中填写 Win64 工作目录，或在 .ukit 中设置 Win64WorkingDirectory。");
-            }
-
-            var savedDirectory = Path.Combine(settings.Win64WorkingDirectory, settings.UnrealProjectName, "Saved");
-            if (!Path.IsPathFullyQualified(savedDirectory))
-            {
-                throw new InvalidOperationException(
-                    $"Win64WorkingDirectory 必须是绝对路径，当前解析结果为相对路径: {savedDirectory}");
-            }
-
-            return Path.GetFullPath(savedDirectory);
-        }
-
-        // Android: 模板展开后必须是 Unix 风格的绝对路径。
-        var path = settings.DeviceSavedRootTemplate.Replace("{PackageName}", settings.PackageName, StringComparison.Ordinal).Replace("{UnrealProjectName}", settings.UnrealProjectName, StringComparison.Ordinal);
-        if (!path.StartsWith("/", StringComparison.Ordinal) || path.Contains('\\') || path.Contains('\0'))
-        {
-            throw new InvalidOperationException("The configured UE Saved path must be an absolute Unix path.");
-        }
-
-        return path;
+        return new CaptureManifest(captureId, platform, tag, startedAt, _timeProvider.GetLocalNow(), project.CreateConfigurationSnapshot(), deviceSerial, deviceModel, deviceStatus, target, deviceSavedDirectory, files);
     }
 
     /// <summary>
@@ -289,31 +257,13 @@ public sealed class CaptureService : ICaptureService
     }
 
     /// <summary>
-    /// 解析内存采集的目标进程标识。Android 上是包名；Win64 上是进程名
-    /// （取 Win64Executable 的文件名，回退到 UnrealProjectName）。
+    /// 校验采集请求并解析出本次采集的平台落地值。
+    ///
+    /// 目标平台由所选设备决定，而不是由工程配置指定：同一工程可以同时配置多个平台，
+    /// 「本次打哪个」是会话选择。设备所在平台未配置时报错并列出已配置平台，
+    /// 不回退到其他平台的配置——用错误的路径采集会拉到空目录却报告成功。
     /// </summary>
-    private static string ResolveCaptureTarget(ProjectSettings settings)
-    {
-        if (settings.Platform != TargetPlatform.Win64)
-        {
-            return settings.PackageName;
-        }
-
-        if (!string.IsNullOrWhiteSpace(settings.Win64Executable))
-        {
-            return Path.GetFileNameWithoutExtension(settings.Win64Executable);
-        }
-
-        if (!string.IsNullOrWhiteSpace(settings.UnrealProjectName))
-        {
-            return settings.UnrealProjectName;
-        }
-
-        throw new InvalidOperationException(
-            "Win64 采集需要目标进程名。请在工程配置中设置 Win64Executable 或 UnrealProjectName。");
-    }
-
-    private void ValidateRequest(CaptureRequest request)
+    private PlatformTarget ValidateRequest(CaptureRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Project);
@@ -321,26 +271,11 @@ public sealed class CaptureService : ICaptureService
         if (!request.Device.IsAvailable) throw new InvalidOperationException($"Capture requires a device with status 'available'. Device '{request.Device.Id}' is not available.");
 
         var settings = request.Project.Settings;
-        var devicePlatform = PlatformNames.Parse(request.Device.Platform, nameof(request));
         ValidateConfiguredSequences(settings);
-        if (devicePlatform != settings.Platform)
-        {
-            throw new InvalidOperationException(
-                $"设备平台 ({devicePlatform}) 与工程配置的目标平台 ({settings.Platform}) 不一致。" +
-                "请选择匹配的设备，或在工程配置中修改目标平台。");
-        }
-
-        // PackageName 只对 Android 有意义；Win64 的目标进程名由 ResolveCaptureTarget 推导。
-        if (settings.Platform == TargetPlatform.Android)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(settings.PackageName);
-        }
-        else
-        {
-            ResolveCaptureTarget(settings);
-        }
-
         NormalizeTag(request.Tag);
+
+        var devicePlatform = PlatformNames.Parse(request.Device.Platform, nameof(request));
+        return settings.ResolveTarget(devicePlatform, $"设备 '{request.Device.Id}' 属于 {PlatformNames.ToName(devicePlatform)} 平台。");
     }
 
     private static string NormalizeTag(string tag)

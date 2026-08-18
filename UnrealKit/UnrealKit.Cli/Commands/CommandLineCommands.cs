@@ -16,8 +16,9 @@ internal static class CommandLineCommands
 
         var options = commandArguments[1..];
         var project = await new ProjectService().OpenProjectAsync(CliOptions.GetRequired(options, "--project"));
-        var (deviceService, serialNumber) = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
-        var service = new LaunchParameterService(deviceService);
+        var resolved = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
+        var serialNumber = resolved.DeviceId;
+        var service = new LaunchParameterService(resolved.DeviceService);
         var remotePath = CliOptions.GetOptional(options, "--remote-path");
 
         switch (commandArguments[0].ToLowerInvariant())

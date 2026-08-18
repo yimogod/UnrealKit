@@ -27,24 +27,31 @@ internal static class ProjectCommands
     {
         var directory = CliOptions.GetPositional(arguments, 0);
         var name = CliOptions.GetOptional(arguments, "--name");
-        var platform = CliOptions.GetOptional(arguments, "--platform");
+
+        // --platform 可重复：一个工程可以同时配置多个平台。不指定则全部平台都给默认配置。
+        var platforms = CliOptions.GetCommaSeparated(arguments, "--platform")
+            .Select(value => PlatformNames.Parse(value, "--platform"))
+            .Distinct()
+            .ToArray();
 
         if (string.IsNullOrWhiteSpace(directory) || string.IsNullOrWhiteSpace(name))
         {
-            Console.Error.WriteLine("Usage: unrealkit project create <directory> --name <name> [--platform Android|Win64]");
+            Console.Error.WriteLine("Usage: unrealkit project create <directory> --name <name> [--platform Android|Win64] ...");
             return 2;
         }
 
         var result = await service.CreateProjectAsync(new CreateProjectRequest(directory, name));
         Console.WriteLine($"Created project: {result.Project.ProjectFilePath}");
 
-        if (!string.IsNullOrWhiteSpace(platform)
-            && Enum.TryParse<TargetPlatform>(platform, ignoreCase: true, out var targetPlatform)
-            && targetPlatform != result.Project.Settings.Platform)
+        if (platforms.Length > 0)
         {
-            var settings = result.Project.Settings with { Platform = targetPlatform };
+            var settings = result.Project.Settings with
+            {
+                Android = platforms.Contains(TargetPlatform.Android) ? AndroidPlatformProfile.CreateDefaults() : null,
+                Win64 = platforms.Contains(TargetPlatform.Win64) ? Win64PlatformProfile.CreateDefaults() : null
+            };
             await service.UpdateSettingsAsync(result.Project, settings);
-            Console.WriteLine($"Platform set to: {targetPlatform}");
+            Console.WriteLine($"Configured platforms: {string.Join(", ", settings.ConfiguredPlatforms)}");
         }
 
         return CliOutput.WriteValidation(result.Validation);

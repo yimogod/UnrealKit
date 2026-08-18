@@ -26,9 +26,11 @@ Content/<Platform>/<Tag>/<YYYY-MM-DD>/<CaptureId>/
 | `StartedAt` / `CompletedAt` | 采集起止时间（`DateTimeOffset`） |
 | `ProjectConfiguration` | 采集时的工程配置快照（描述符 + 设置 + 快照时间） |
 | `DeviceSerialNumber` / `DeviceModel` / `DeviceStatus` | 设备标识与状态 |
-| `PackageName` | 实际使用的包名 |
+| `ResolvedTarget` | 本次采集实际用到的平台落地值（`PlatformTarget`：进程标识、启动目标、已展开的设备端路径）。导入的归档没有涉及设备，该字段为 `null` |
 | `DeviceSavedDirectory` | 实际拉取的设备端 Saved 路径 |
 | `InputFiles` | 每个文件的相对路径、字节大小、SHA-256 |
+
+`ProjectConfiguration` 是采集时的整份工程配置，含全部已配置平台；`ResolvedTarget` 指明本次用的是哪一个、模板展开成了什么。读者据此还原采集上下文，不必自己重新展开模板去猜。
 
 扩展 Manifest 时新增可空字段，避免破坏既有归档的反序列化；同时更新 `CaptureServiceTests` 的金样断言。
 

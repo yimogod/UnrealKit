@@ -26,8 +26,8 @@ internal static class AppCommands
     private static async Task<int> StartAsync(string[] options, string? adbPath)
     {
         var project = await new ProjectService().OpenProjectAsync(CliOptions.GetRequired(options, "--project"));
-        var (deviceService, deviceId) = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
-        await new LaunchParameterService(deviceService).StartApplicationAsync(project, deviceId);
+        var resolved = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
+        await new LaunchParameterService(resolved.DeviceService).StartApplicationAsync(project, resolved.DeviceId);
         return 0;
     }
 
@@ -51,18 +51,18 @@ internal static class AppCommands
 
     private static async Task<int> SendConsoleCommandAsync(string[] options, string? adbPath)
     {
-        CliOptions.EnsureOnly(options, CliOptions.Allowed("--device", "--cmd", "--project", "--adb-path"));
+        CliOptions.EnsureOnly(options, CliOptions.Allowed("--device", "--platform", "--cmd", "--project", "--adb-path"));
         var command = CliOptions.GetRequired(options, "--cmd");
         var project = await new ProjectService().OpenProjectAsync(CliOptions.GetRequired(options, "--project"));
-        var (deviceService, deviceId) = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
+        var resolved = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
 
-        var consoleService = new ConsoleCommandService(deviceService);
+        var consoleService = new ConsoleCommandService(resolved.DeviceService);
         var result = await consoleService.SendAsync(
-            deviceId,
+            resolved.DeviceId,
             ConsoleCommand.Create(command),
-            project.Settings.PackageName);
+            resolved.Target.ProcessIdentity);
 
-        Console.WriteLine($"Sent console command to {deviceId}: {command}");
+        Console.WriteLine($"Sent console command to {resolved.DeviceId}: {command}");
         if (!result.Succeeded)
         {
             Console.Error.WriteLine($"Failed with exit code {result.ExitCode}.");
@@ -85,7 +85,7 @@ internal static class AppCommands
 
     private static async Task<int> RunConsoleSequenceAsync(string[] options, string? adbPath)
     {
-        CliOptions.EnsureOnly(options, CliOptions.Allowed("--project", "--device", "--sequence", "--cmds", "--adb-path"));
+        CliOptions.EnsureOnly(options, CliOptions.Allowed("--project", "--device", "--platform", "--sequence", "--cmds", "--adb-path"));
         var projectPath = CliOptions.GetRequired(options, "--project");
         var sequenceName = CliOptions.GetOptional(options, "--sequence");
         var inlineCmds = CliOptions.GetOptional(options, "--cmds");
@@ -97,7 +97,8 @@ internal static class AppCommands
         }
 
         var project = await new ProjectService().OpenProjectAsync(projectPath);
-        var (deviceService, deviceSerial) = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
+        var resolved = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
+        var deviceSerial = resolved.DeviceId;
 
         CommandSequenceDefinition sequence;
         if (sequenceName is not null)
@@ -118,8 +119,8 @@ internal static class AppCommands
             sequence = new ConsoleSequencePreset("inline", inlineCmds!, string.Empty).ToSequenceDefinition();
         }
 
-        var consoleService = new ConsoleCommandService(deviceService);
-        var request = new SequenceExecutionRequest(sequence, deviceSerial, project.Settings.PackageName);
+        var consoleService = new ConsoleCommandService(resolved.DeviceService);
+        var request = new SequenceExecutionRequest(sequence, deviceSerial, resolved.Target.ProcessIdentity);
 
         Console.WriteLine($"Running sequence: {sequence.Name}");
         Console.WriteLine($"Device: {deviceSerial}");

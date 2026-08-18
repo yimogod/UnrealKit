@@ -59,21 +59,83 @@ public sealed class ProjectServiceTests : IDisposable
         var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "MemoryReview"));
         var settings = created.Project.Settings with
         {
-            PackageName = "com.example.memoryreview",
-            Activity = "com.epicgames.unreal.GameActivity",
             DefaultCaptureTag = "Nightly",
-            DeviceSavedRootTemplate = "/sdcard/Android/data/{PackageName}/files/Saved",
-            AdbPath = "C:\\Android\\platform-tools\\adb.exe"
+            Android = new AndroidPlatformProfile(
+                PackageName: "com.example.memoryreview",
+                Activity: "com.epicgames.unreal.GameActivity",
+                GameRootTemplate: AndroidPlatformProfile.DefaultGameRootTemplate,
+                SavedRootTemplate: "/sdcard/Android/data/{PackageName}/files/Saved",
+                AdbPath: "C:\\Android\\platform-tools\\adb.exe")
         };
 
         await service.UpdateSettingsAsync(created.Project, settings);
         var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
 
-        Assert.Equal(settings.PackageName, reopened.Settings.PackageName);
-        Assert.Equal(settings.Activity, reopened.Settings.Activity);
         Assert.Equal(settings.DefaultCaptureTag, reopened.Settings.DefaultCaptureTag);
-        Assert.Equal(settings.DeviceSavedRootTemplate, reopened.Settings.DeviceSavedRootTemplate);
-        Assert.Equal(settings.AdbPath, reopened.Settings.AdbPath);
+        Assert.Equal(settings.Android, reopened.Settings.Android);
+    }
+
+    [Fact]
+    public async Task UpdateSettingsAsync_MultiplePlatformsCoexist()
+    {
+        // 同一工程同时配置 Android 与 Win64：平台之间不互斥，
+        // 保存其中一个不能把另一个清掉。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "MultiPlatform");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "MultiPlatform"));
+        var settings = created.Project.Settings with
+        {
+            Android = AndroidPlatformProfile.CreateDefaults() with { PackageName = "com.example.game" },
+            Win64 = new Win64PlatformProfile(@"C:\Game\MyGame.exe", @"C:\Game")
+        };
+
+        await service.UpdateSettingsAsync(created.Project, settings);
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal("com.example.game", reopened.Settings.Android?.PackageName);
+        Assert.Equal(@"C:\Game\MyGame.exe", reopened.Settings.Win64?.Executable);
+        Assert.Equal(["Android", "Win64"], reopened.Settings.ConfiguredPlatforms);
+    }
+
+    [Fact]
+    public async Task UpdateSettingsAsync_DisabledPlatformIsRemovedNotBlanked()
+    {
+        // 取消某个平台后必须真正消失：留一份空值配置会让「该平台未配置」的报错
+        // 永不触发，改为在采集阶段以路径错误的形式出现。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "AndroidOnly");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "AndroidOnly"));
+
+        await service.UpdateSettingsAsync(created.Project, created.Project.Settings with { Win64 = null });
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Null(reopened.Settings.Win64);
+        Assert.Equal(["Android"], reopened.Settings.ConfiguredPlatforms);
+    }
+
+    [Fact]
+    public async Task OpenProjectAsync_LegacyV1Layout_FailsWithMigrationInstructions()
+    {
+        // v1 用单个 Platform 字段表示当前平台，另一平台的字段从未填写过，
+        // 自动迁移只能靠猜。这里必须报错并给出改法，而不是猜一份配置出来。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "LegacyProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "LegacyProject"));
+        await File.WriteAllTextAsync(created.Project.ConfigFilePath, """
+            [UnrealKit.ProjectSettings]
+            PackageName=com.example.legacy
+            UnrealProjectName=LegacyProject
+            Platform=Win64
+            Win64Executable=C:\Game\Legacy.exe
+            DefaultCaptureTag=Default
+            """);
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(
+            () => service.OpenProjectAsync(created.Project.ProjectFilePath));
+
+        Assert.Contains("SettingsVersion", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("UnrealKit.Platform.Android", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("UnrealKit.Platform.Win64", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -107,49 +169,42 @@ public sealed class ProjectServiceTests : IDisposable
         var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "Win64Project"));
         var settings = created.Project.Settings with
         {
-            Platform = TargetPlatform.Win64,
-            Win64Executable = @"C:\Game\MyGame.exe",
-            Win64WorkingDirectory = @"C:\Game",
-            PackageName = "MyGame-Win64-Shipping"
+            Win64 = new Win64PlatformProfile(@"C:\Game\MyGame.exe", @"C:\Game")
         };
 
         await service.UpdateSettingsAsync(created.Project, settings);
         var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
 
-        Assert.Equal(TargetPlatform.Win64, reopened.Settings.Platform);
-        Assert.Equal(@"C:\Game\MyGame.exe", reopened.Settings.Win64Executable);
-        Assert.Equal(@"C:\Game", reopened.Settings.Win64WorkingDirectory);
-        Assert.Equal("MyGame-Win64-Shipping", reopened.Settings.PackageName);
+        Assert.Equal(@"C:\Game\MyGame.exe", reopened.Settings.Win64?.Executable);
+        Assert.Equal(@"C:\Game", reopened.Settings.Win64?.WorkingDirectory);
     }
 
     [Fact]
-    public async Task OpenProjectAsync_MisspelledPlatform_FailsInsteadOfDefaultingToAndroid()
+    public async Task CreateProjectAsync_ConfiguresBothPlatformsByDefault()
     {
-        // 静默回退会让 Win64 工程按 Android 采集，产出空数据却报告成功。
-        var projectDirectory = Path.Combine(_temporaryDirectory, "TypoProject");
-        var service = new ProjectService();
-        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "TypoProject"));
-        var iniPath = created.Project.ConfigFilePath;
-        var ini = await File.ReadAllTextAsync(iniPath);
-        await File.WriteAllTextAsync(iniPath, ini.Replace("Platform=Android", "Platform=Andriod", StringComparison.Ordinal));
-
-        var exception = await Assert.ThrowsAsync<ArgumentException>(
-            () => service.OpenProjectAsync(created.Project.ProjectFilePath));
-
-        Assert.Contains("Andriod", exception.Message);
-        Assert.Contains("Win64", exception.Message);
-    }
-
-    [Fact]
-    public async Task OpenProjectAsync_AbsentPlatform_UsesDefault()
-    {
+        // 多平台是默认假设：新建工程不应该迫使用户先挑一个平台。
         var projectDirectory = Path.Combine(_temporaryDirectory, "DefaultPlatformProject");
         var service = new ProjectService();
         var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "DefaultPlatformProject"));
 
         var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
 
-        Assert.Equal(TargetPlatform.Android, reopened.Settings.Platform);
+        Assert.Equal(["Android", "Win64"], reopened.Settings.ConfiguredPlatforms);
+    }
+
+    [Fact]
+    public async Task ResolveTarget_UnconfiguredPlatform_ListsConfiguredPlatforms()
+    {
+        // 未配置的平台必须报错并说明有哪些可选，不能回退到另一个平台的配置。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "AndroidOnlyResolve");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "AndroidOnlyResolve"));
+        var settings = created.Project.Settings with { Win64 = null };
+
+        var exception = Assert.Throws<InvalidOperationException>(() => settings.ResolveTarget(TargetPlatform.Win64));
+
+        Assert.Contains("Win64", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Android", exception.Message, StringComparison.Ordinal);
     }
 
 

@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using UnrealKit.Core.Adb;
 using UnrealKit.Core.Capture;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Processes;
@@ -199,9 +200,7 @@ public sealed class Win64IntegrationTests
     {
         var settings = ProjectSettings.CreateDefaults("WinGame") with
         {
-            Platform = TargetPlatform.Win64,
-            PackageName = "WinGame",
-            Win64WorkingDirectory = @"C:\Projects\WinGame",
+            Win64 = new Win64PlatformProfile(@"C:\Projects\WinGame\WinGame.exe", @"C:\Projects\WinGame"),
             UnrealProjectName = "WinGame"
         };
         var project = new UkitProject(
@@ -224,9 +223,7 @@ public sealed class Win64IntegrationTests
     {
         var settings = ProjectSettings.CreateDefaults("WinGame") with
         {
-            Platform = TargetPlatform.Win64,
-            PackageName = "WinGame",
-            Win64WorkingDirectory = null,
+            Win64 = new Win64PlatformProfile(@"C:\Projects\WinGame\WinGame.exe", WorkingDirectory: string.Empty),
             UnrealProjectName = "WinGame"
         };
         var project = new UkitProject(
@@ -244,7 +241,7 @@ public sealed class Win64IntegrationTests
         var exception = Assert.Throws<InvalidOperationException>(
             () => service.CreatePlan(new CaptureRequest(project, device, "test")));
 
-        Assert.Contains("Win64WorkingDirectory", exception.Message);
+        Assert.Contains("WorkingDirectory", exception.Message);
     }
 
     [Fact]
@@ -252,9 +249,7 @@ public sealed class Win64IntegrationTests
     {
         var settings = ProjectSettings.CreateDefaults("WinGame") with
         {
-            Platform = TargetPlatform.Win64,
-            PackageName = "WinGame",
-            Win64WorkingDirectory = @"C:\Builds\WinGame",
+            Win64 = new Win64PlatformProfile(@"C:\Builds\WinGame\WinGame.exe", @"C:\Builds\WinGame"),
             UnrealProjectName = "WinGame"
         };
         var project = new UkitProject(
@@ -270,12 +265,14 @@ public sealed class Win64IntegrationTests
     }
 
     [Fact]
-    public void CaptureService_CreatePlan_RejectsDevicePlatformMismatch()
+    public void CaptureService_CreatePlan_RejectsDeviceOfUnconfiguredPlatform()
     {
+        // 只配置了 Android 的工程遇到 Win64 设备必须报错并列出已配置平台，
+        // 不能拿 Android 的路径去采 Win64——那会拉到空目录却报告成功。
         var settings = ProjectSettings.CreateDefaults("AndroidGame") with
         {
-            Platform = TargetPlatform.Android,
-            PackageName = "com.example.game"
+            Android = AndroidPlatformProfile.CreateDefaults() with { PackageName = "com.example.game" },
+            Win64 = null
         };
         var project = new UkitProject(
             @"C:\Projects\AndroidGame\AndroidGame.ukit",
@@ -283,13 +280,40 @@ public sealed class Win64IntegrationTests
             UkitProjectDescriptor.CreateDefault("AndroidGame"),
             settings);
 
-        // A Win64 device against an Android project must fail loudly rather than
-        // capture against the wrong platform's paths.
         var exception = Assert.Throws<InvalidOperationException>(
             () => new CaptureService().CreatePlan(new CaptureRequest(project, new Win64Device(), "test")));
 
         Assert.Contains("Win64", exception.Message);
         Assert.Contains("Android", exception.Message);
+    }
+
+    [Fact]
+    public void CaptureService_CreatePlan_SameProjectServesBothPlatforms()
+    {
+        // 同一工程配置了两个平台时，归档目录随设备平台走，互不干扰。
+        var settings = ProjectSettings.CreateDefaults("DualGame") with
+        {
+            UnrealProjectName = "DualGame",
+            Android = AndroidPlatformProfile.CreateDefaults() with { PackageName = "com.example.dual" },
+            Win64 = new Win64PlatformProfile(@"C:\Builds\DualGame\DualGame.exe", @"C:\Builds\DualGame")
+        };
+        var project = new UkitProject(
+            @"C:\Projects\DualGame\DualGame.ukit",
+            @"C:\Projects\DualGame",
+            UkitProjectDescriptor.CreateDefault("DualGame"),
+            settings);
+        var service = new CaptureService();
+
+        var win64Plan = service.CreatePlan(new CaptureRequest(project, new Win64Device(), "test"));
+        var androidPlan = service.CreatePlan(new CaptureRequest(
+            project,
+            new AdbDevice("device-01", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, string.Empty),
+            "test"));
+
+        Assert.Contains(Path.Combine("Content", "Win64"), win64Plan.CaptureDirectory);
+        Assert.Equal(@"C:\Builds\DualGame\DualGame\Saved", win64Plan.DeviceSavedDirectory);
+        Assert.Contains(Path.Combine("Content", "Android"), androidPlan.CaptureDirectory);
+        Assert.StartsWith("/sdcard/", androidPlan.DeviceSavedDirectory, StringComparison.Ordinal);
     }
 
     private sealed class UnknownDevice : IDevice

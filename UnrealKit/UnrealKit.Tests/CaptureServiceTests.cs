@@ -40,7 +40,7 @@ public sealed class CaptureServiceTests : IDisposable
         var settings = project.Project.Settings;
         var updatedSettings = settings with
         {
-            PackageName = "com.example.preseq",
+            Android = AndroidPlatformProfile.CreateDefaults() with { PackageName = "com.example.preseq" },
             ConsoleSequences = [ConsoleSequencePreset.Create("MyPreSeq", "stat fps")],
             PreCaptureSequence = "MyPreSeq"
         };
@@ -72,7 +72,7 @@ public sealed class CaptureServiceTests : IDisposable
         var settings = project.Project.Settings;
         var updatedSettings = settings with
         {
-            PackageName = "com.example.postseq",
+            Android = AndroidPlatformProfile.CreateDefaults() with { PackageName = "com.example.postseq" },
             ConsoleSequences = [ConsoleSequencePreset.Create("MyPostSeq", "stat fps")],
             PostCaptureSequence = "MyPostSeq"
         };

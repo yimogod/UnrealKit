@@ -31,25 +31,23 @@ internal static class CaptureCommands
     {
         CliOptions.EnsureOnly(
             arguments,
-            CliOptions.Allowed("--project", "--device", "--tag", "--format", "--skip-saved"),
+            CliOptions.Allowed("--project", "--device", "--platform", "--tag", "--format", "--skip-saved"),
             CliOptions.Allowed("--skip-saved"));
 
         var project = await new ProjectService().OpenProjectAsync(CliOptions.GetRequired(arguments, "--project"));
         var json = CliOptions.IsJsonFormat(arguments);
         var tag = CliOptions.GetOptional(arguments, "--tag") ?? project.Settings.DefaultCaptureTag;
         var skipSaved = CliOptions.HasFlag(arguments, "--skip-saved");
-        var (deviceService, deviceId) = await DeviceResolver.ResolveDeviceTargetAsync(project, arguments, adbPath, streamOutput: !json);
-
-        var device = await DeviceResolver.GetSelectedAvailableDeviceAsync(deviceService, deviceId);
+        var resolved = await DeviceResolver.ResolveDeviceTargetAsync(project, arguments, adbPath, streamOutput: !json);
 
         // 能力探测替代类型判断：不支持控制台指令的平台传 null，
         // CaptureService 会在配置了采集序列时明确报错而不是静默跳过。
-        var consoleService = deviceService.Supports(DeviceCapability.SendConsoleCommand)
-            ? new ConsoleCommandService(deviceService)
+        var consoleService = resolved.DeviceService.Supports(DeviceCapability.SendConsoleCommand)
+            ? new ConsoleCommandService(resolved.DeviceService)
             : null;
 
-        var result = await new CaptureService(deviceService, consoleService)
-            .CaptureAsync(new CaptureRequest(project, device, tag, SkipSaved: skipSaved));
+        var result = await new CaptureService(resolved.DeviceService, consoleService)
+            .CaptureAsync(new CaptureRequest(project, resolved.Device, tag, SkipSaved: skipSaved));
         WriteCaptureResult(result, json);
         return 0;
     }
@@ -59,10 +57,10 @@ internal static class CaptureCommands
         CliOptions.EnsureOnly(arguments, CliOptions.Allowed("--project", "--source", "--platform", "--tag", "--capture-id", "--format"));
         var project = await new ProjectService().OpenProjectAsync(CliOptions.GetRequired(arguments, "--project"));
         var source = CliOptions.GetRequired(arguments, "--source");
-        // 未指定 --platform 时沿用工程配置的目标平台，而不是无条件当作 Android。
-        var platform = CliOptions.GetOptional(arguments, "--platform") is { } requested
-            ? PlatformNames.ToName(PlatformNames.Parse(requested, "--platform"))
-            : PlatformNames.ToName(project.Settings.Platform);
+        // --platform 必填：导入没有设备可以据以判断平台，而归档目录按平台分区。
+        // 工程可能同时配置了多个平台，替用户挑一个会把数据归到错误的平台下。
+        var platform = PlatformNames.ToName(
+            PlatformNames.Parse(CliOptions.GetRequired(arguments, "--platform"), "--platform"));
         var tag = CliOptions.GetOptional(arguments, "--tag") ?? project.Settings.DefaultCaptureTag;
         var captureId = CliOptions.GetOptional(arguments, "--capture-id");
         var json = CliOptions.IsJsonFormat(arguments);

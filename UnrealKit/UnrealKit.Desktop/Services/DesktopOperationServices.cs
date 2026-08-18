@@ -25,7 +25,8 @@ public sealed class DesktopAdbServiceFactory(AdbPathResolver? adbPathResolver = 
         return new AdbService(new ProcessRunner(), adbPath, output);
     }
 
-    public AdbPathResolution Resolve(ProjectSettings? settings) => _adbPathResolver.Resolve(null, settings?.AdbPath);
+    // adb 路径属于 Android 配置：未配置 Android 平台的工程走环境变量与 PATH 解析。
+    public AdbPathResolution Resolve(ProjectSettings? settings) => _adbPathResolver.Resolve(null, settings?.Android?.AdbPath);
 }
 
 public interface IUserConfirmationService

@@ -9,27 +9,48 @@
         <TextBlock Text="项目默认配置" Style="{StaticResource SectionTitleTextStyle}" />
         <ScrollViewer Grid.Row="1" Margin="0,14,0,0" VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Text="目标平台" Style="{StaticResource FieldLabelTextStyle}" />
-                <ComboBox SelectedValue="{Binding Platform, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,0,0,14">
-                    <ComboBoxItem Content="Android" />
-                    <ComboBoxItem Content="Win64" />
-                </ComboBox>
-                <TextBlock Text="包名" Style="{StaticResource FieldLabelTextStyle}" Visibility="{Binding IsAndroid, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBox Text="{Binding PackageName, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-                <TextBlock Text="UE 项目名" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                <!-- 跨平台配置 -->
+                <TextBlock Text="UE 项目名" Style="{StaticResource FieldLabelTextStyle}" />
                 <TextBox Text="{Binding UnrealProjectName, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-                <TextBlock Text="Android Activity" Style="{StaticResource StackedFieldLabelTextStyle}" Visibility="{Binding IsAndroid, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBox Text="{Binding Activity, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-                <TextBlock Text="设备 UE Saved 路径模板" Style="{StaticResource StackedFieldLabelTextStyle}" Visibility="{Binding IsAndroid, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBox Text="{Binding DeviceSavedRootTemplate, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
-                <TextBlock Text="Win64 可执行文件路径" Style="{StaticResource StackedFieldLabelTextStyle}" Visibility="{Binding IsWin64, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBox Text="{Binding Win64Executable, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Visibility="{Binding IsWin64, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBlock Text="Win64 工作目录" Style="{StaticResource StackedFieldLabelTextStyle}" Visibility="{Binding IsWin64, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBox Text="{Binding Win64WorkingDirectory, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Visibility="{Binding IsWin64, Converter={StaticResource BoolToVisibilityConverter}}" />
                 <TextBlock Text="默认 Capture 标签" Style="{StaticResource StackedFieldLabelTextStyle}" />
                 <TextBox Text="{Binding CaptureTag, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-                <TextBlock Text="ADB 路径（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
-                <TextBox Text="{Binding AdbPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+
+                <!-- 各平台配置并列可编辑：同一工程可以同时跑多个平台，
+                     本次操作用哪个平台由设备列表中所选的设备决定，不在此处选择。 -->
+                <TextBlock Text="平台配置" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                <TextBlock Text="勾选本工程会用到的平台并填写其配置。采集时的平台由所选设备决定。"
+                           Style="{StaticResource HintTextStyle}" Margin="0,2,0,8" />
+
+                <GroupBox Margin="0,4,0,0" Padding="10,6,10,10">
+                    <GroupBox.Header>
+                        <CheckBox Content="Android" FontWeight="SemiBold"
+                                  IsChecked="{Binding AndroidEnabled, UpdateSourceTrigger=PropertyChanged}" />
+                    </GroupBox.Header>
+                    <StackPanel IsEnabled="{Binding AndroidEnabled}">
+                        <TextBlock Text="包名" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding PackageName, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                        <TextBlock Text="启动 Activity" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Activity, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                        <TextBlock Text="设备 UE Saved 路径模板" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding DeviceSavedRootTemplate, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
+                        <TextBlock Text="ADB 路径（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding AdbPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Margin="0,10,0,0" Padding="10,6,10,10">
+                    <GroupBox.Header>
+                        <CheckBox Content="Win64" FontWeight="SemiBold"
+                                  IsChecked="{Binding Win64Enabled, UpdateSourceTrigger=PropertyChanged}" />
+                    </GroupBox.Header>
+                    <StackPanel IsEnabled="{Binding Win64Enabled}">
+                        <TextBlock Text="可执行文件路径" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Win64Executable, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                        <TextBlock Text="工作目录" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Win64WorkingDirectory, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                    </StackPanel>
+                </GroupBox>
+
                 <TextBlock Text="保存到 Config/DefaultGame.ini。采集和命令行会读取相同项目配置。" Style="{StaticResource HintTextStyle}" Margin="0,12,0,0" />
                 <Button Content="保存项目配置" Command="{Binding SaveProjectSettingsCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,16,0,0" />
             </StackPanel>

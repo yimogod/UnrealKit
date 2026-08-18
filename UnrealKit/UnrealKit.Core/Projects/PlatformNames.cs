@@ -42,12 +42,16 @@ public static class PlatformNames
     {
         platform = default;
         if (string.IsNullOrWhiteSpace(value)) return false;
-        if (!Enum.IsDefined(platform)) return false;
-        
-        value = value.Trim();
-        if (Enum.TryParse(value, ignoreCase: true, out platform))return true;
 
-        return false;
+        // Enum.TryParse 会接受数字字符串（"99" → (TargetPlatform)99），因此必须在解析之后
+        // 校验取值是否真的是已声明的成员。IsDefined 放在解析前只会检查 default 值，永远为真。
+        if (!Enum.TryParse(value.Trim(), ignoreCase: true, out platform) || !Enum.IsDefined(platform))
+        {
+            platform = default;
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

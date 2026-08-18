@@ -63,8 +63,7 @@ public sealed class LaunchParameterServiceTests
     {
         var settings = ProjectSettings.CreateDefaults("Sample") with
         {
-            PackageName = "com.example.game",
-            Activity = "com.example.game.MainActivity"
+            Android = AndroidPlatformProfile.CreateDefaults() with { PackageName = "com.example.game", Activity = "com.example.game.MainActivity" }
         };
         return new UkitProject("C:\\Projects\\Sample\\Sample.ukit", "C:\\Projects\\Sample", UkitProjectDescriptor.CreateDefault("Sample"), settings);
     }

@@ -9,6 +9,18 @@ namespace UnrealKit.Cli;
 /// <summary>
 /// adb 服务构造与设备选择。歧义输入一律报错并列出候选，不取「默认第一台设备」。
 /// </summary>
+/// <summary>
+/// 一次操作的设备解析结果。同时带出 <see cref="Target"/>，让调用方拿到该平台的
+/// 进程标识与路径，而不必再从工程配置里按平台分支取一遍。
+/// </summary>
+internal sealed record ResolvedDeviceTarget(
+    IDeviceService DeviceService,
+    IDevice Device,
+    PlatformTarget Target)
+{
+    internal string DeviceId => Device.Id;
+}
+
 internal static class DeviceResolver
 {
     internal static AdbService CreateAdbService(string? explicitPath, string? projectAdbPath = null, bool streamOutput = true)
@@ -21,115 +33,158 @@ internal static class DeviceResolver
     }
 
     /// <summary>
-    /// 按工程配置的目标平台解析设备服务与设备标识。
-    /// Android 需要 ADB 并要求显式选择设备；Win64 只有本机一台，不需要 ADB。
+    /// 解析本次操作的设备服务与设备标识。
+    ///
+    /// 目标平台由 <c>--platform</c> 或所选设备决定，不取自工程配置——同一工程可以同时
+    /// 配置多个平台，「本次打哪个」是每次调用的显式选择。歧义输入一律报错并列出候选。
     /// </summary>
-    internal static async Task<(IDeviceService DeviceService, string DeviceId)> ResolveDeviceTargetAsync(
+    internal static async Task<ResolvedDeviceTarget> ResolveDeviceTargetAsync(
         UkitProject project,
         string[] options,
         string? adbPath,
         bool streamOutput = true)
     {
-        if (project.Settings.Platform == TargetPlatform.Win64)
-        {
-            var requestedDevice = CliOptions.GetOptional(options, "--device");
-            var localDevice = new Win64Device();
-            if (requestedDevice is not null && !string.Equals(requestedDevice, localDevice.Id, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new ArgumentException(
-                    $"Win64 工程只支持本机设备 '{localDevice.Id}'，无法使用 --device {requestedDevice}。");
-            }
-
-            return (new Win64DeviceService(new ProcessRunner(), RemoteControlOptions.FromProjectSettings(project.Settings)), localDevice.Id);
-        }
-
-        var adbService = CreateAdbService(adbPath, project.Settings.AdbPath, streamOutput);
-        var serialNumber = await ResolveDeviceSerialAsync(adbService, options);
-        return (new AdbDeviceService(adbService, RemoteControlOptions.FromProjectSettings(project.Settings)), serialNumber);
+        var device = await ResolveDeviceAsync(project, options, adbPath, streamOutput);
+        var platform = PlatformNames.Parse(device.Platform, nameof(device));
+        var target = project.Settings.ResolveTarget(platform, $"设备 '{device.Id}' 属于 {device.Platform} 平台。");
+        return new ResolvedDeviceTarget(CreateDeviceService(project, device, adbPath, streamOutput), device, target);
     }
 
     /// <summary>
-    /// 从设备枚举结果中取出指定设备，并要求其处于可用状态。
-    /// 「找不到设备」与「设备状态不对」是不同的失败，分别给出具体原因。
+    /// 选出本次操作的设备。<c>--platform</c> 缺省时跨全部平台查找，
+    /// 命中多台时报错并列出带平台的候选，不取「默认第一台」。
     /// </summary>
-    internal static async Task<IDevice> GetSelectedAvailableDeviceAsync(IDeviceService service, string deviceId)
+    internal static async Task<IDevice> ResolveDeviceAsync(
+        UkitProject project,
+        string[] options,
+        string? adbPath,
+        bool streamOutput = true)
     {
-        var devices = await service.ListDevicesAsync();
-        var device = devices.SingleOrDefault(candidate => string.Equals(candidate.Id, deviceId, StringComparison.Ordinal));
-        if (device is null)
+        var requestedPlatform = CliOptions.GetOptional(options, "--platform") is { } platformValue
+            ? PlatformNames.Parse(platformValue, "--platform")
+            : (TargetPlatform?)null;
+        var requestedDevice = CliOptions.GetOptional(options, "--device");
+
+        // 指定了平台就只枚举该平台：跨平台枚举会为一个用不到的平台去起 adb，
+        // 把「adb 未安装」变成 Win64 操作的失败原因。
+        var result = requestedPlatform is { } platform
+            ? await CreateDeviceProvider(adbPath, project, platform, streamOutput).ListDevicesAsync()
+            : await CreateDeviceProvider(adbPath, project, streamOutput: streamOutput).ListDevicesAsync();
+
+        var available = result.Devices.Where(device => device.IsAvailable).ToArray();
+        if (requestedDevice is not null && !string.Equals(requestedDevice, "auto", StringComparison.OrdinalIgnoreCase))
         {
-            var attached = devices.Count == 0
-                ? "(none attached)"
-                : string.Join(", ", devices.Select(candidate => candidate.Id));
-            throw new AdbDeviceSelectionException(
-                $"{service.Platform} device was not found: {deviceId}. Attached devices: {attached}.");
+            var matches = available
+                .Where(device => string.Equals(device.Id, requestedDevice, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            return matches.Length switch
+            {
+                1 => matches[0],
+                0 => throw new AdbDeviceSelectionException(
+                    $"未找到可用设备 '{requestedDevice}'。{DescribeCandidates(available, result.Failures)}"),
+                // 同一标识在多个平台上出现时必须显式指定平台，不能替用户挑一个。
+                _ => throw new AdbDeviceSelectionException(
+                    $"设备标识 '{requestedDevice}' 在多个平台上都存在: " +
+                    $"{string.Join(", ", matches.Select(device => device.Platform))}。请用 --platform 指定平台。")
+            };
         }
 
-        if (!device.IsAvailable)
+        return available.Length switch
         {
-            throw new AdbDeviceSelectionException(
-                $"{service.Platform} device '{deviceId}' is not available. Ensure it is connected and authorized.");
-        }
-
-        return device;
+            1 => available[0],
+            0 => throw new AdbDeviceSelectionException($"没有可用设备。{DescribeCandidates(available, result.Failures)}"),
+            _ => throw new AdbDeviceSelectionException(
+                $"有多台可用设备，请用 --device <id> 指定一台{(requestedPlatform is null ? "，或用 --platform 限定平台" : string.Empty)}。" +
+                $"{DescribeCandidates(available, result.Failures)}")
+        };
     }
 
-    internal static async Task<string> ResolveDeviceSerialAsync(IAdbService service, string[] options)
+    /// <summary>为指定设备构造设备服务。平台取自设备本身，不取自工程配置。</summary>
+    internal static IDeviceService CreateDeviceService(
+        UkitProject project,
+        IDevice device,
+        string? adbPath,
+        bool streamOutput = true)
     {
-        var serialNumber = CliOptions.GetOptional(options, "--device");
-        if (!string.IsNullOrWhiteSpace(serialNumber))
-        {
-            if (string.Equals(serialNumber, "auto", StringComparison.OrdinalIgnoreCase))
-            {
-                var availableDevices = (await service.ListDevicesAsync()).Where(device => device.IsAvailable).ToArray();
-                return availableDevices.Length switch
-                {
-                    1 => availableDevices[0].SerialNumber,
-                    0 => throw new AdbDeviceSelectionException("No available ADB devices found for auto-selection. Connect a device or specify --device <serial>."),
-                    _ => throw new AdbDeviceSelectionException($"Multiple devices available ({availableDevices.Length}). Use --device <serial> to select one: {string.Join(", ", availableDevices.Select(device => device.SerialNumber))}")
-                };
-            }
-
-            return serialNumber;
-        }
-
-        var devices = await service.ListDevicesAsync();
-        var available = devices.Where(device => device.IsAvailable).ToArray();
-        if (available.Length == 1)
-        {
-            Console.Error.WriteLine($"Only one available device found: {available[0].SerialNumber} ({available[0].Model ?? "unknown model"}). Use --device auto to select it.");
-        }
-        else if (available.Length == 0)
-        {
-            Console.Error.WriteLine("No available ADB devices found. Connect a device and try again.");
-        }
-        else
-        {
-            Console.Error.WriteLine("Multiple devices available. Use --device <serial> to select one:");
-            foreach (var device in available)
-            {
-                Console.Error.WriteLine($"  {device.SerialNumber}  {device.Status}  {device.Model ?? "unknown model"}");
-            }
-        }
-
-        throw new AdbDeviceSelectionException("No device specified. Use --device <serial> or --device auto when exactly one device is available.");
+        // 只有 Android 需要 adb；为 Win64 构造 AdbService 会把「adb 未安装」
+        // 变成本机操作的失败原因。
+        var adbService = PlatformNames.Parse(device.Platform, nameof(device)) == TargetPlatform.Android
+            ? CreateAdbService(adbPath, project.Settings.Android?.AdbPath, streamOutput)
+            : null;
+        return new DeviceServiceFactory(adbService, new ProcessRunner())
+            .CreateForDevice(device, project.Settings);
     }
+
+    private static string DescribeCandidates(
+        IReadOnlyList<IDevice> available,
+        IReadOnlyList<DeviceDiscoveryFailure> failures)
+    {
+        var builder = new System.Text.StringBuilder();
+        builder.Append(available.Count == 0
+            ? "当前无可用设备。"
+            : $"可用设备: {string.Join(", ", available.Select(device => $"{device.Id} ({device.Platform})"))}。");
+
+        // 枚举失败必须保留：缺少 adb 与「确实没插设备」是不同的问题，提示不同。
+        foreach (var failure in failures)
+        {
+            builder.Append($" {PlatformNames.ToName(failure.Platform)} 平台枚举失败: {failure.Message}。");
+        }
+
+        return builder.ToString();
+    }
+
 
     /// <summary>
-    /// 构造跨平台设备枚举器。ADB 不可用时该平台记为枚举失败，Win64 仍照常列出。
+    /// 构造跨平台设备枚举器。ADB 不可用时该平台记为枚举失败，其他平台仍照常列出。
     /// </summary>
-    internal static AggregateDeviceProvider CreateDeviceProvider(string? adbPath)
+    /// <param name="adbPath">显式 adb 路径，来自 <c>--adb-path</c>。</param>
+    /// <param name="project">已打开的工程，用于取工程级 adb 路径。未打开工程时为 null。</param>
+    /// <param name="onlyPlatform">只枚举该平台。null 表示枚举全部平台。</param>
+    /// <param name="streamOutput">是否把 adb 输出流式转发到控制台。</param>
+    internal static AggregateDeviceProvider CreateDeviceProvider(
+        string? adbPath,
+        UkitProject? project = null,
+        TargetPlatform? onlyPlatform = null,
+        bool streamOutput = true)
     {
-        var providers = new List<IDeviceProvider> { new Win64DeviceService() };
-        try
+        var providers = new List<IDeviceProvider>();
+        foreach (var platform in Enum.GetValues<TargetPlatform>())
         {
-            providers.Add(new AdbDeviceService(CreateAdbService(adbPath)));
-        }
-        catch (AdbPathResolutionException exception)
-        {
-            providers.Add(new UnavailableDeviceProvider(TargetPlatform.Android, exception.Message));
+            if (onlyPlatform is { } requested && platform != requested)
+            {
+                continue;
+            }
+
+            providers.Add(CreateProvider(platform, adbPath, project, streamOutput));
         }
 
         return new AggregateDeviceProvider(providers);
+    }
+
+    /// <summary>
+    /// 构造单平台设备枚举器。该平台的枚举前提不满足（例如找不到 adb）时返回
+    /// <see cref="UnavailableDeviceProvider"/>，让原因出现在结果里而不是让整份列表失败。
+    /// </summary>
+    private static IDeviceProvider CreateProvider(
+        TargetPlatform platform,
+        string? adbPath,
+        UkitProject? project,
+        bool streamOutput) => platform switch
+    {
+        TargetPlatform.Win64 => new Win64DeviceService(),
+        TargetPlatform.Android => TryCreateAndroidProvider(adbPath, project, streamOutput),
+        _ => new UnavailableDeviceProvider(platform, $"平台 {PlatformNames.ToName(platform)} 尚未实现设备枚举。")
+    };
+
+    private static IDeviceProvider TryCreateAndroidProvider(string? adbPath, UkitProject? project, bool streamOutput)
+    {
+        try
+        {
+            return new AdbDeviceService(CreateAdbService(adbPath, project?.Settings.Android?.AdbPath, streamOutput));
+        }
+        catch (AdbPathResolutionException exception)
+        {
+            return new UnavailableDeviceProvider(TargetPlatform.Android, exception.Message);
+        }
     }
 }

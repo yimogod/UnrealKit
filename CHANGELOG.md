@@ -4,6 +4,26 @@ All notable changes to UnrealKit.
 
 ## [Unreleased]
 
+### Multi-Platform Projects (breaking)
+
+One project can now be configured for several platforms at once. Previously `ProjectSettings.Platform` served two conflicting roles — which platform's fields are in effect, and which platform this operation targets. The second is a session choice, so keeping it in the versioned project config forced users to edit (and commit) the config every time they switched between Android and Win64 on the same UE project.
+
+- **Breaking:** `Config/DefaultGame.ini` uses layout `SettingsVersion=2`, with one `[UnrealKit.Platform.<name>]` section per platform. There is **no automatic migration**: a v1 `Platform=Win64` project never had its Android fields filled in, so migrating could only guess, and a wrong device path makes a capture pull an empty directory while reporting success. Opening a v1 project fails with the field-by-field rewrite instructions. See `Doc/工程格式与配置.md`
+- **Breaking:** `ProjectSettings.Platform`, `PackageName`, `Activity`, `DeviceGameRootTemplate`, `DeviceSavedRootTemplate`, `AdbPath`, `Win64Executable`, and `Win64WorkingDirectory` are replaced by `Android` / `Win64` platform profiles (`AndroidPlatformProfile`, `Win64PlatformProfile`). A null profile means "this project does not target that platform" — distinct from "configured but left blank"
+- **Breaking:** `capture import --platform` is now required. Import involves no device to infer the platform from, and archive directories are partitioned by platform, so picking one for the user files data under the wrong platform
+- `project create --platform` is repeatable and comma-separated (`--platform Android,Win64`), declaring which platforms to configure. Omitted, both get default profiles
+- Existing `Content/` archives are unaffected — archive directories were already partitioned by platform
+
+Platform differences now have a single exit point: `PlatformProfile.Resolve` returns a platform-neutral `PlatformTarget` (process identity, launch target, expanded device paths). `CaptureService` and `LaunchParameterService` consume that and contain no platform branches — five `if (settings.Platform == TargetPlatform.Win64)` checks are gone. Adding a platform means adding a `TargetPlatform` member, a `PlatformProfile` subclass, its INI mapping, and a device service; no call site changes.
+
+- The target platform is decided by the selected device, not by config. `CaptureService` no longer rejects a device/config platform mismatch; it resolves that device's platform profile, or fails naming the unconfigured platform and listing the configured ones
+- CLI device selection is unified across platforms: `--device` accepts any platform's identifier, `--platform` narrows enumeration, and an identifier present on multiple platforms requires `--platform` rather than being resolved arbitrarily. Per-platform enumeration failures (e.g. missing `adb`) are still reported as stated reasons
+- GUI settings show Android and Win64 as parallel checkbox-gated groups instead of a target-platform dropdown with fields hidden by platform. The launch-parameter remote path resolves per selected device, so a multi-platform project no longer shows one platform's path while operating on another
+- `CaptureManifest.PackageName` is replaced by `ResolvedTarget` (`PlatformTarget?`), recording which platform profile a capture actually used and what its templates expanded to. Null for imported archives, which involve no device
+
+### Fixed
+- `PlatformNames.TryParse` accepted numeric strings, so `Platform=99` parsed to an undefined `(TargetPlatform)99` instead of failing. The `Enum.IsDefined` guard ran before parsing, where it only ever checked the `default` value
+
 ### Build Layout
 - Build output is centralized under `UnrealKit/Output/` instead of per-project `bin/` and `obj/` directories: `Output/Bin/<project>/<configuration>/<framework>/` and `Output/Obj/<project>/<configuration>/<framework>/`. Set via `BaseOutputPath` / `BaseIntermediateOutputPath` in `UnrealKit/Directory.Build.props`
 - WPF XAML compilation temp projects (`UnrealKit.Desktop_<hash>_wpftmp`) now share the main project's intermediate directory, so they no longer accumulate one-off `obj` directories

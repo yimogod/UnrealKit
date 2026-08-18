@@ -15,7 +15,7 @@
 顶层动词：`project`、`adb`、`app`、`commandline`、`capture`、`parse`、`export`、`analyze`。
 
 ```text
-unrealkit project create <dir> --name <name>
+unrealkit project create <dir> --name <name> [--platform <platform>]...
 unrealkit project info <project.ukit> [--format json]
 unrealkit project validate <project.ukit>
 
@@ -24,17 +24,17 @@ unrealkit adb devices [--adb-path <path>]
 unrealkit adb connect <host:port> [--adb-path <path>]
 unrealkit adb disconnect <host:port> [--adb-path <path>]
 
-unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]
+unrealkit app start --project <project.ukit> [--device <serial>] [--platform <platform>] [--adb-path <path>]
 
-unrealkit commandline push --project <project.ukit> --device <serial>
+unrealkit commandline push --project <project.ukit> [--device <serial>] [--platform <platform>]
                            [--preset <name>] [--custom <args>] [--remote-path <path>] [--adb-path <path>]
-unrealkit commandline delete --project <project.ukit> --device <serial>
+unrealkit commandline delete --project <project.ukit> [--device <serial>] [--platform <platform>]
                              [--remote-path <path>] [--adb-path <path>]
 
-unrealkit capture run --project <project.ukit> --device <serial|auto>
+unrealkit capture run --project <project.ukit> [--device <serial|auto>] [--platform <platform>]
                       [--tag <tag>] [--skip-saved] [--format text|json] [--adb-path <path>]
-unrealkit capture import --project <project.ukit> --source <directory>
-                         [--platform <platform>] [--tag <tag>] [--capture-id <id>]
+unrealkit capture import --project <project.ukit> --source <directory> --platform <platform>
+                         [--tag <tag>] [--capture-id <id>]
 unrealkit capture list <...>
 unrealkit capture info <...>
 
@@ -72,8 +72,16 @@ unrealkit analyze trend --project <project.ukit>
 ## 参数约定
 
 - `--project` 接受 `.ukit` 文件路径，不接受工程目录。
-- `--device` 接受 ADB 序列号；`capture run` 额外接受 `auto`，且仅在恰好一台设备在线时成立，否则报错而非任选。Win64 工程只有本机一台设备（`localhost`），传入其它值报错而不是忽略。
-- `--platform` 接受 `Android` / `Win64`（大小写不敏感）。不传时取工程配置的目标平台，不无条件按 `Android` 处理；传入无法识别的值报错并列出合法取值。
+- `--device` 接受设备标识（Android 为 ADB 序列号，Win64 为 `localhost`），也接受 `auto`。不传或传 `auto` 时仅在恰好一台设备可用时成立，否则报错并列出候选，不任选一台。同一标识在多个平台上都存在时要求用 `--platform` 消歧。
+- `--platform` 接受 `Android` / `Win64`（大小写不敏感），用于限定本次操作的平台；传入无法识别的值报错并列出合法取值。
+
+  平台是**每次操作的显式选择**，不取自工程配置——同一工程可以同时配置多个平台（见 `Doc/工程格式与配置.md`）。各命令的缺省行为：
+
+  - 需要设备的命令（`capture run`、`app start`、`app console`、`commandline push|delete`）：不传 `--platform` 时跨全部平台枚举设备，由所选设备决定平台。传了则只枚举该平台，避免为用不到的平台去起 `adb`。
+  - `capture import` 的 `--platform` **必填**：导入没有设备可据以判断平台，而归档目录按平台分区，替用户挑一个会把数据归到错误的平台下。
+  - `capture list` / `parse capture-list` 的 `--platform` 是过滤器，不传表示不过滤。
+  - `project create` 的 `--platform` 可重复或逗号分隔，声明工程要配置哪些平台；不传则两个平台都写入默认配置。
+- 设备所在平台在工程中未配置时报错并列出已配置平台，不回退到其他平台的配置。
 - `--adb-path` 为最高优先级的 adb 来源，解析顺序见 `Doc/设备操作与文件安全.md`。
 - `--format` 默认为 `text`；`json` 输出必须是单个可解析的 JSON 文档，不与人类可读日志混排。
 - 输出文件的扩展名决定格式，规则见 `Doc/解析导出与诊断.md`。

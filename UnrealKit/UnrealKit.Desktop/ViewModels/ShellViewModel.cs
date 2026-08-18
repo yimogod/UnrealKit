@@ -45,7 +45,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _adbPath = string.Empty;
     private string _memInfoInputPath = string.Empty;
     private string _memInfoProcessDescription = "Select a meminfo text file to begin offline parsing.";
-    private string _platform = PlatformNames.Android;
+    private bool _androidEnabled;
+    private bool _win64Enabled;
     private string _win64Executable = string.Empty;
     private string _win64WorkingDirectory = string.Empty;
     private string _memInfoParsedAt = string.Empty;
@@ -223,17 +224,25 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string RemoteCommandLinePath { get => _remoteCommandLinePath; set { if (SetField(ref _remoteCommandLinePath, value)) UpdateLaunchParameterPreview(); } }
     public string CaptureTag { get => _captureTag; set { if (SetField(ref _captureTag, value)) UpdateCaptureArchivePreview(); } }
     public string CaptureArchivePreview { get => _captureArchivePreview; private set => SetField(ref _captureArchivePreview, value); }
-    public string PackageName { get => _packageName; set => SetField(ref _packageName, value); }
     public string UnrealProjectName { get => _unrealProjectName; set => SetField(ref _unrealProjectName, value); }
+
+    // 各平台配置并列可编辑，不按「当前平台」切换可见性：多平台工程需要一次填完全部平台。
+    // AndroidEnabled / Win64Enabled 表示该平台是否在本工程启用，取消勾选即清除该平台配置。
+    public bool AndroidEnabled { get => _androidEnabled; set => SetField(ref _androidEnabled, value); }
+    public string PackageName { get => _packageName; set => SetField(ref _packageName, value); }
     public string Activity { get => _activity; set => SetField(ref _activity, value); }
     public string DeviceSavedRootTemplate { get => _deviceSavedRootTemplate; set => SetField(ref _deviceSavedRootTemplate, value); }
     public string AdbPath { get => _adbPath; set => SetField(ref _adbPath, value); }
 
-    public string Platform { get => _platform; set { if (SetField(ref _platform, value)) { OnPropertyChanged(nameof(IsAndroid)); OnPropertyChanged(nameof(IsWin64)); } } }
-    public bool IsAndroid => _platform == PlatformNames.Android;
-    public bool IsWin64 => _platform == PlatformNames.Win64;
+    public bool Win64Enabled { get => _win64Enabled; set => SetField(ref _win64Enabled, value); }
     public string Win64Executable { get => _win64Executable; set => SetField(ref _win64Executable, value); }
     public string Win64WorkingDirectory { get => _win64WorkingDirectory; set => SetField(ref _win64WorkingDirectory, value); }
+
+    /// <summary>
+    /// 当前操作的平台，由所选设备决定。没有选中设备时为空——
+    /// 平台不再是一项配置，因此没有「默认平台」可以显示。
+    /// </summary>
+    public string Platform => SelectedDevice?.Platform ?? string.Empty;
     public string MemInfoInputPath { get => _memInfoInputPath; set { if (SetField(ref _memInfoInputPath, value)) RaiseCommandStates(); } }
     public string MemInfoProcessDescription { get => _memInfoProcessDescription; private set => SetField(ref _memInfoProcessDescription, value); }
     public string MemInfoParsedAt { get => _memInfoParsedAt; private set => SetField(ref _memInfoParsedAt, value); }
@@ -285,8 +294,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         {
             if (!SetField(ref _selectedDevice, value)) return;
             OnPropertyChanged(nameof(SelectedDeviceDescription));
+            // 当前平台由所选设备派生，换设备就可能换平台。
+            OnPropertyChanged(nameof(Platform));
             UpdateCaptureArchivePreview();
             UpdateLaunchOperationSummary();
+            UpdateLaunchParameterPreview();
             RaiseCommandStates();
         }
     }
@@ -417,6 +429,38 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             .CreateForDevice(device, _project?.Settings);
 
     /// <summary>
+    /// 为指定设备构造启动参数服务。必须按设备平台构造设备服务——
+    /// 固定用 AdbDeviceService 会让 Win64 设备的操作走 adb 并按 Android 路径规则解析。
+    /// </summary>
+    private LaunchParameterService CreateLaunchParameterService(IDevice device) =>
+        new(CreateDeviceServiceForDevice(device));
+
+    /// <summary>
+    /// 当前所选设备平台的落地值。未选设备或该平台未配置时返回 null，
+    /// 供预览类逻辑显示原因而不是抛出。
+    /// </summary>
+    private PlatformTarget? TryResolveSelectedTarget(out string? error)
+    {
+        error = null;
+        if (_project is null || SelectedDevice is null)
+        {
+            error = "请先打开工程并选择设备。";
+            return null;
+        }
+
+        try
+        {
+            var platform = PlatformNames.Parse(SelectedDevice.Platform, nameof(SelectedDevice));
+            return _project.Settings.ResolveTarget(platform, $"设备 '{SelectedDevice.Id}' 属于 {SelectedDevice.Platform} 平台。");
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+        {
+            error = exception.Message;
+            return null;
+        }
+    }
+
+    /// <summary>
     /// 构造带控制台服务的 CaptureService，使配置的采集前后指令序列真正执行。
     /// 省略控制台服务会让序列被静默跳过，导致 GUI 与 CLI 行为不一致。
     /// </summary>
@@ -463,19 +507,30 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             LaunchParameterPresets.Add(option);
         }
 
-        RemoteCommandLinePath = new LaunchParameterService(new AdbDeviceService(CreateAdbService())).GetRemotePath(project.Settings);
+        // 远端路径随平台而变，打开工程时还没有选中设备，因此留空由用户选设备后填充。
+        // 此处按某个平台预填会在多平台工程里给出另一平台的路径。
+        RemoteCommandLinePath = string.Empty;
         CaptureTag = project.Settings.DefaultCaptureTag;
         ConsoleSequencePresets.Clear();
         foreach (var preset in project.Settings.ConsoleSequences) ConsoleSequencePresets.Add(preset);
         ConsoleSequenceName = ConsoleSequencePresets.Count > 0 ? ConsoleSequencePresets[0].Name : string.Empty;
-        PackageName = project.Settings.PackageName;
         UnrealProjectName = project.Settings.UnrealProjectName;
-        Activity = project.Settings.Activity;
-        DeviceSavedRootTemplate = project.Settings.DeviceSavedRootTemplate;
-        AdbPath = project.Settings.AdbPath;
-        Platform = PlatformNames.ToName(project.Settings.Platform);
-        Win64Executable = project.Settings.Win64Executable ?? string.Empty;
-        Win64WorkingDirectory = project.Settings.Win64WorkingDirectory ?? string.Empty;
+
+        // 未启用的平台仍展示其默认值，让用户勾选后就能直接编辑，
+        // 而不是先勾选、保存、再重开才看到字段。
+        var android = project.Settings.Android;
+        AndroidEnabled = android is not null;
+        var androidValues = android ?? AndroidPlatformProfile.CreateDefaults();
+        PackageName = androidValues.PackageName;
+        Activity = androidValues.Activity;
+        DeviceSavedRootTemplate = androidValues.SavedRootTemplate;
+        AdbPath = androidValues.AdbPath;
+
+        var win64 = project.Settings.Win64;
+        Win64Enabled = win64 is not null;
+        var win64Values = win64 ?? Win64PlatformProfile.CreateDefaults();
+        Win64Executable = win64Values.Executable;
+        Win64WorkingDirectory = win64Values.WorkingDirectory;
         OnPropertyChanged(nameof(ProjectTitle));
         UpdateLaunchParameterPreview();
         UpdateLaunchOperationSummary();
@@ -485,20 +540,26 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private Task SaveProjectSettingsAsync() => RunAsync("正在保存项目默认配置…", async progress =>
     {
-        var platform = PlatformNames.Parse(Platform, nameof(Platform));
-        var win64Executable = Win64Executable.Trim();
-        var win64WorkingDirectory = Win64WorkingDirectory.Trim();
+        // 未启用的平台写 null，即从工程配置中移除该平台，而不是留一份空值配置——
+        // 空值配置会让「未配置该平台」的报错永远不触发，改为在采集时报路径错误。
         var settings = _project!.Settings with
         {
-            PackageName = PackageName.Trim(),
             UnrealProjectName = UnrealProjectName.Trim(),
-            Activity = Activity.Trim(),
-            DeviceSavedRootTemplate = DeviceSavedRootTemplate.Trim(),
-            AdbPath = AdbPath.Trim(),
             DefaultCaptureTag = CaptureTag.Trim(),
-            Platform = platform,
-            Win64Executable = win64Executable.Length == 0 ? null : win64Executable,
-            Win64WorkingDirectory = win64WorkingDirectory.Length == 0 ? null : win64WorkingDirectory
+            Android = AndroidEnabled
+                ? new AndroidPlatformProfile(
+                    PackageName: PackageName.Trim(),
+                    Activity: Activity.Trim(),
+                    GameRootTemplate: _project.Settings.Android?.GameRootTemplate
+                        ?? AndroidPlatformProfile.DefaultGameRootTemplate,
+                    SavedRootTemplate: DeviceSavedRootTemplate.Trim(),
+                    AdbPath: AdbPath.Trim())
+                : null,
+            Win64 = Win64Enabled
+                ? new Win64PlatformProfile(
+                    Executable: Win64Executable.Trim(),
+                    WorkingDirectory: Win64WorkingDirectory.Trim())
+                : null
         };
         SetCurrentProject(await _projectService.UpdateSettingsAsync(_project, settings, progress, OperationCancellationToken));
         StatusMessage = "项目默认配置已保存。";
@@ -514,9 +575,18 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         try
         {
-            var service = new LaunchParameterService(new AdbDeviceService(CreateAdbService()));
-            var content = service.BuildContent(_project.Settings, GetSelectedPresetNames(), CustomLaunchArguments);
-            var remotePath = service.GetRemotePath(_project.Settings, RemoteCommandLinePath);
+            // 参数内容与平台无关，先算出来：即使还没选设备也能预览将要写入的内容。
+            var content = new LaunchParameterService(new AdbDeviceService(CreateAdbService()))
+                .BuildContent(_project.Settings, GetSelectedPresetNames(), CustomLaunchArguments);
+            if (SelectedDevice is null)
+            {
+                LaunchParameterPreview = $"目标路径：选择设备后确定{Environment.NewLine}{Environment.NewLine}{content}";
+                UpdateLaunchOperationSummary();
+                return;
+            }
+
+            var remotePath = CreateLaunchParameterService(SelectedDevice)
+                .GetRemotePath(_project.Settings, RemoteCommandLinePath);
             LaunchParameterPreview = $"目标路径：{remotePath}{Environment.NewLine}{Environment.NewLine}{content}";
             UpdateLaunchOperationSummary(remotePath);
         }
@@ -531,7 +601,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private Task PushLaunchParametersAsync() => RunAsync("正在推送 uecommandline.txt…", async progress =>
     {
-        var result = await new LaunchParameterService(new AdbDeviceService(CreateAdbService())).PushAsync(
+        var result = await CreateLaunchParameterService(SelectedDevice!).PushAsync(
             _project!,
             new LaunchParameterRequest(SelectedDevice!.Id, GetSelectedPresetNames(), CustomLaunchArguments, RemoteCommandLinePath),
             progress,
@@ -542,21 +612,27 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private Task DeleteLaunchParametersAsync() => RunAsync("正在删除 uecommandline.txt…", async progress =>
     {
-        var remotePath = new LaunchParameterService(new AdbDeviceService(CreateAdbService())).GetRemotePath(_project!.Settings, RemoteCommandLinePath);
-        var target = new LaunchOperationTarget(SelectedDevice!.Id, _project.Settings.PackageName, _project.Settings.Activity, remotePath);
+        var service = CreateLaunchParameterService(SelectedDevice!);
+        var remotePath = service.GetRemotePath(_project!.Settings, RemoteCommandLinePath);
+        var platformTarget = _project.Settings.ResolveTarget(
+            PlatformNames.Parse(SelectedDevice!.Platform, nameof(SelectedDevice)));
+        var target = new LaunchOperationTarget(
+            SelectedDevice!.Id, platformTarget.LaunchTarget, platformTarget.LaunchActivity ?? "-", remotePath);
         if (!await _confirmationService.ConfirmDeleteLaunchParametersAsync(target))
         {
             StatusMessage = "已取消删除设备启动参数。";
             return;
         }
-        await new LaunchParameterService(new AdbDeviceService(CreateAdbService())).DeleteAsync(_project, SelectedDevice!.Id, RemoteCommandLinePath, progress, OperationCancellationToken);
+        await service.DeleteAsync(_project, SelectedDevice!.Id, RemoteCommandLinePath, progress, OperationCancellationToken);
         StatusMessage = $"已删除设备上的启动参数：{remotePath}";
     });
 
     private Task StartApplicationAsync() => RunAsync("正在启动应用…", async progress =>
     {
-        await new LaunchParameterService(new AdbDeviceService(CreateAdbService())).StartApplicationAsync(_project!, SelectedDevice!.Id, progress, OperationCancellationToken);
-        StatusMessage = $"已发送应用启动请求：{_project!.Settings.PackageName}/{_project.Settings.Activity}";
+        await CreateLaunchParameterService(SelectedDevice!).StartApplicationAsync(_project!, SelectedDevice!.Id, progress, OperationCancellationToken);
+        var target = _project!.Settings.ResolveTarget(
+            PlatformNames.Parse(SelectedDevice!.Platform, nameof(SelectedDevice)));
+        StatusMessage = $"已发送应用启动请求：{target.LaunchTarget}{(target.LaunchActivity is { Length: > 0 } activity ? $"/{activity}" : string.Empty)}";
     });
 
     private void UpdateCaptureArchivePreview()
@@ -693,10 +769,18 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         try
         {
-            var resolvedPath = remotePath ?? new LaunchParameterService(new AdbDeviceService(CreateAdbService())).GetRemotePath(_project.Settings, RemoteCommandLinePath);
-            LaunchOperationSummary = $"设备：{SelectedDevice.Id}{Environment.NewLine}" +
-                                   $"包名：{_project.Settings.PackageName}{Environment.NewLine}" +
-                                   $"Activity：{_project.Settings.Activity}{Environment.NewLine}" +
+            var target = TryResolveSelectedTarget(out var error);
+            if (target is null)
+            {
+                LaunchOperationSummary = error ?? "无法确定操作目标。";
+                return;
+            }
+
+            var resolvedPath = remotePath
+                ?? CreateLaunchParameterService(SelectedDevice).GetRemotePath(_project.Settings, RemoteCommandLinePath);
+            LaunchOperationSummary = $"设备：{SelectedDevice.Id}（{target.PlatformName}）{Environment.NewLine}" +
+                                   $"启动目标：{target.LaunchTarget}{Environment.NewLine}" +
+                                   (target.LaunchActivity is { Length: > 0 } activity ? $"Activity：{activity}{Environment.NewLine}" : string.Empty) +
                                    $"远端路径：{resolvedPath}";
         }
         catch (Exception exception)
@@ -1293,7 +1377,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             var result = await consoleService.SendAsync(
                 _selectedDevice.Id,
                 ConsoleCommand.Create(_consoleCommandText),
-                _project?.Settings.PackageName,
+                TryResolveSelectedTarget(out _)?.ProcessIdentity,
                 cancellationToken: OperationCancellationToken);
 
             ConsoleOutput = result.Succeeded
@@ -1340,7 +1424,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             else { ConsoleSequenceOutput = "No sequence selected and no inline commands provided."; return; }
 
             ConsoleSequenceOutput = $"Running sequence: {sequence.Name} ({sequence.Steps.Count} steps)...{Environment.NewLine}";
-            var request = new SequenceExecutionRequest(sequence, _selectedDevice.Id, _project?.Settings.PackageName);
+            var request = new SequenceExecutionRequest(sequence, _selectedDevice.Id, TryResolveSelectedTarget(out _)?.ProcessIdentity);
             var result = await consoleService.RunSequenceAsync(request);
 
             var sb = new System.Text.StringBuilder();
