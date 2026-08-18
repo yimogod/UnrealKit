@@ -245,6 +245,7 @@ public sealed class DesktopShellViewModelTests
         public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.ForceStopApplicationAsync(serialNumber, packageName, progress, cancellationToken);
         public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.ForwardTcpAsync(serialNumber, hostPort, devicePort, progress, cancellationToken);
         public IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, CancellationToken cancellationToken = default) => inner.StreamLogcatAsync(serialNumber, filter, cancellationToken);
+        public Task<IReadOnlyList<DeviceIpAddress>> GetIpAddressesAsync(string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.GetIpAddressesAsync(serialNumber, progress, cancellationToken);
     }
 
     private sealed class RecordingAdbService : IAdbService
@@ -270,5 +271,6 @@ public sealed class DesktopShellViewModelTests
         public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
         public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public async IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await System.Threading.Tasks.Task.CompletedTask; yield break; }
+        public Task<IReadOnlyList<DeviceIpAddress>> GetIpAddressesAsync(string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<DeviceIpAddress>>([]);
     }
 }

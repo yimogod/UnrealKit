@@ -20,6 +20,7 @@ internal static class AdbCommands
             "devices" when commandArguments.Length == 1 => await ListDevicesAsync(service),
             "connect" when commandArguments.Length == 2 => await ConnectAsync(service, commandArguments[1]),
             "disconnect" when commandArguments.Length == 2 => await DisconnectAsync(service, commandArguments[1]),
+            "ip" when commandArguments.Length == 2 => await ShowIpAddressesAsync(service, commandArguments[1]),
             _ => FailUsage()
         };
     }
@@ -42,6 +43,30 @@ internal static class AdbCommands
         return 0;
     }
 
+    // 逐个接口列出，不挑一个「主」地址：哪个是想要的取决于用途（同网段调试用 WiFi，USB 网络共享用 rndis），
+    // 由使用者判断比工具替其猜测可靠。
+    private static async Task<int> ShowIpAddressesAsync(IAdbService service, string serialNumber)
+    {
+        try
+        {
+            var addresses = await service.GetIpAddressesAsync(serialNumber);
+            foreach (var address in addresses)
+            {
+                Console.WriteLine($"{address.InterfaceName}\t{address.Kind}\t{FormatAddress(address)}");
+            }
+
+            return 0;
+        }
+        catch (AdbDeviceAddressUnavailableException exception)
+        {
+            Console.Error.WriteLine(exception.Message);
+            return 1;
+        }
+    }
+
+    private static string FormatAddress(DeviceIpAddress address) =>
+        address.PrefixLength is null ? address.Address : $"{address.Address}/{address.PrefixLength}";
+
     private static async Task<int> ConnectAsync(IAdbService service, string endpoint)
     {
         await service.ConnectAsync(endpoint);
@@ -56,7 +81,7 @@ internal static class AdbCommands
 
     private static int FailUsage()
     {
-        Console.Error.WriteLine("Usage: unrealkit adb <version|devices|connect|disconnect> ... [--adb-path <path>]");
+        Console.Error.WriteLine("Usage: unrealkit adb <version|devices|connect|disconnect|ip> ... [--adb-path <path>]");
         return 2;
     }
 }

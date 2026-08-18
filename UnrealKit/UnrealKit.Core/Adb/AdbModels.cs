@@ -60,6 +60,28 @@ public sealed class AdbCommandException : Exception
 }
 
 /// <summary>
+/// 设备上查不到任何可用 IPv4 地址。携带尝试过的命令，供用户判断是设备真的没联网还是查询本身没成功。
+/// </summary>
+public sealed class AdbDeviceAddressUnavailableException : InvalidOperationException
+{
+    public AdbDeviceAddressUnavailableException(string serialNumber, IReadOnlyList<string> attemptedCommands)
+        : base(BuildMessage(serialNumber, attemptedCommands))
+    {
+        SerialNumber = serialNumber;
+        AttemptedCommands = attemptedCommands;
+    }
+
+    public string SerialNumber { get; }
+
+    /// <summary>已执行过的查询命令，按尝试顺序。</summary>
+    public IReadOnlyList<string> AttemptedCommands { get; }
+
+    private static string BuildMessage(string serialNumber, IReadOnlyList<string> attemptedCommands) =>
+        $"设备 {serialNumber} 上未查到 IPv4 地址。已尝试：{string.Join("；", attemptedCommands)}。" +
+        "设备可能未连接任何网络，或固件裁剪了 ip 命令。";
+}
+
+/// <summary>
 /// ADB 设备选择异常
 /// </summary>
 public sealed class AdbDeviceSelectionException : InvalidOperationException

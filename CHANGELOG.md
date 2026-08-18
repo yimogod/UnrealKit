@@ -4,6 +4,13 @@ All notable changes to UnrealKit.
 
 ## [Unreleased]
 
+### Device IP Addresses
+- `IAdbService.GetIpAddressesAsync` returns a device's IPv4 addresses per interface (`DeviceIpAddress`, classified by `DeviceNetworkInterfaceKind`: WiFi / Cellular / UsbTethering / Vpn / Other). A device can hold several addresses at once, so the result is a list — callers pick by interface kind instead of the service guessing which one is wanted
+- Kept out of `ListDevicesAsync`: it costs a real device shell call and fails on offline or unauthorized devices, which would make device-list refresh slower and add a failure point. `AdbDevice` is unchanged
+- Queries `ip -f inet addr` first (gives interface name and prefix length), falling back to `ip route`'s `src` address (no prefix length) on firmware where the former is unavailable. `getprop dhcp.wlan0.ipaddress` is deliberately not used — it is frequently empty on current Android and would silently return a wrong answer. Loopback is excluded
+- When neither command yields an address, `AdbDeviceAddressUnavailableException` lists the commands attempted, so "device is on no network" stays distinguishable from "the query never ran"
+- New `unrealkit adb ip <serial> [--adb-path <path>]` prints one line per interface
+
 ### Multi-Platform Projects (breaking)
 
 One project can now be configured for several platforms at once. Previously `ProjectSettings.Platform` served two conflicting roles — which platform's fields are in effect, and which platform this operation targets. The second is a session choice, so keeping it in the versioned project config forced users to edit (and commit) the config every time they switched between Android and Win64 on the same UE project.

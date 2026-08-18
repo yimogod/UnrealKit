@@ -76,6 +76,143 @@ public sealed class AdbServiceTests
         await Assert.ThrowsAsync<ArgumentException>(() => service.PushFileAsync("R58M123ABC", "input.txt", "C:\\temp\\input.txt"));
     }
 
+    [Fact]
+    public void ParseAddresses_ClassifiesInterfacesAndSkipsLoopback()
+    {
+        const string output = """
+            1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+                inet 127.0.0.1/8 scope host lo
+            25: wlan0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 3000
+                inet 192.168.1.23/24 brd 192.168.1.255 scope global wlan0
+            30: rmnet_data0@if12: <UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UNKNOWN group default qlen 1000
+                inet 10.148.22.7/30 scope global rmnet_data0
+            33: rndis0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+                inet 192.168.42.129/24 brd 192.168.42.255 scope global rndis0
+            """;
+
+        var addresses = AdbNetworkParser.ParseAddresses(output);
+
+        Assert.Collection(
+            addresses,
+            address =>
+            {
+                Assert.Equal("wlan0", address.InterfaceName);
+                Assert.Equal("192.168.1.23", address.Address);
+                Assert.Equal(24, address.PrefixLength);
+                Assert.Equal(DeviceNetworkInterfaceKind.WiFi, address.Kind);
+            },
+            address =>
+            {
+                // 头行是 rmnet_data0@if12，@ 后的对端索引不属于接口名。
+                Assert.Equal("rmnet_data0", address.InterfaceName);
+                Assert.Equal(DeviceNetworkInterfaceKind.Cellular, address.Kind);
+            },
+            address =>
+            {
+                Assert.Equal("rndis0", address.InterfaceName);
+                Assert.Equal(DeviceNetworkInterfaceKind.UsbTethering, address.Kind);
+            });
+    }
+
+    [Fact]
+    public void ParseAddresses_IgnoresMalformedAndNonIpv4Lines()
+    {
+        const string output = """
+            25: wlan0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500
+                inet6 fe80::1234/64 scope link
+                inet 192.168.1.999/24 scope global wlan0
+                inet 192.168.1.23/99 scope global wlan0
+                inet
+            garbage line without structure
+            """;
+
+        var addresses = AdbNetworkParser.ParseAddresses(output);
+
+        // 超范围的地址、非法前缀长度、截断行、IPv6 都不产生条目，也不抛异常——
+        // 单行畸形不应让整台设备的查询失败。
+        Assert.Empty(addresses);
+    }
+
+    [Fact]
+    public void ParseRouteSourceAddresses_TakesSourceAddressWithoutPrefixAndDeduplicates()
+    {
+        const string output = """
+            default via 192.168.1.1 dev wlan0 table 1021 proto static
+            192.168.1.0/24 dev wlan0 proto kernel scope link src 192.168.1.23
+            192.168.1.0/24 dev wlan0 table 1021 proto static scope link src 192.168.1.23
+            10.148.22.4/30 dev rmnet_data0 proto kernel scope link src 10.148.22.7
+            local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+            """;
+
+        var addresses = AdbNetworkParser.ParseRouteSourceAddresses(output);
+
+        Assert.Collection(
+            addresses,
+            address =>
+            {
+                Assert.Equal("wlan0", address.InterfaceName);
+                Assert.Equal("192.168.1.23", address.Address);
+                Assert.Null(address.PrefixLength);
+            },
+            address => Assert.Equal("rmnet_data0", address.InterfaceName));
+    }
+
+    [Fact]
+    public async Task GetIpAddressesAsync_UsesIpAddrAndPassesSerialInArgumentList()
+    {
+        const string output = """
+            25: wlan0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500
+                inet 192.168.1.23/24 brd 192.168.1.255 scope global wlan0
+            """;
+        var runner = new ScriptedProcessRunner(new ProcessExecutionResult(0, output, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        var service = new AdbService(runner, "adb");
+
+        var addresses = await service.GetIpAddressesAsync("R58M123ABC");
+
+        Assert.Equal("192.168.1.23", Assert.Single(addresses).Address);
+        Assert.Equal(["-s", "R58M123ABC", "shell", "ip", "-f", "inet", "addr"], Assert.Single(runner.Requests).Arguments);
+    }
+
+    [Fact]
+    public async Task GetIpAddressesAsync_FallsBackToIpRouteWhenAddrCommandFails()
+    {
+        var runner = new ScriptedProcessRunner(
+            new ProcessExecutionResult(1, string.Empty, "ip: not found", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+            new ProcessExecutionResult(0, "192.168.1.0/24 dev wlan0 proto kernel scope link src 192.168.1.23", string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        var service = new AdbService(runner, "adb");
+
+        var addresses = await service.GetIpAddressesAsync("R58M123ABC");
+
+        Assert.Equal("192.168.1.23", Assert.Single(addresses).Address);
+        Assert.Equal(["-s", "R58M123ABC", "shell", "ip", "route"], runner.Requests[1].Arguments);
+    }
+
+    [Fact]
+    public async Task GetIpAddressesAsync_ThrowsListingAttemptedCommandsWhenNoAddressFound()
+    {
+        // 两条命令都成功执行但只有回环地址，等价于「设备未联网」。
+        var runner = new ScriptedProcessRunner(
+            new ProcessExecutionResult(0, "1: lo: <LOOPBACK,UP>\n    inet 127.0.0.1/8 scope host lo", string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+            new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        var service = new AdbService(runner, "adb");
+
+        var exception = await Assert.ThrowsAsync<AdbDeviceAddressUnavailableException>(
+            () => service.GetIpAddressesAsync("R58M123ABC"));
+
+        Assert.Equal("R58M123ABC", exception.SerialNumber);
+        Assert.Equal(2, exception.AttemptedCommands.Count);
+        Assert.Contains("ip -f inet addr", exception.AttemptedCommands[0], StringComparison.Ordinal);
+        Assert.Contains("ip route", exception.AttemptedCommands[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetIpAddressesAsync_RejectsMissingSerialNumber()
+    {
+        var service = new AdbService(new RecordingProcessRunner(ProcessExecutionResultForSuccess()), "adb");
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetIpAddressesAsync(" "));
+    }
+
     private static ProcessExecutionResult ProcessExecutionResultForSuccess() => new(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
 
     private sealed class RecordingProcessRunner(ProcessExecutionResult result) : IProcessRunner
@@ -86,6 +223,20 @@ public sealed class AdbServiceTests
         {
             Request = request;
             return Task.FromResult(result);
+        }
+    }
+
+    /// <summary>按调用顺序返回预设结果，用于验证多命令探测序列。</summary>
+    private sealed class ScriptedProcessRunner(params ProcessExecutionResult[] results) : IProcessRunner
+    {
+        private int _callCount;
+
+        public List<ProcessExecutionRequest> Requests { get; } = [];
+
+        public Task<ProcessExecutionResult> RunAsync(ProcessExecutionRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return Task.FromResult(results[Math.Min(_callCount++, results.Length - 1)]);
         }
     }
 }

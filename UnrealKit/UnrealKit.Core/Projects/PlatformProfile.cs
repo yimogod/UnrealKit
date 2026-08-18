@@ -83,7 +83,7 @@ public sealed record AndroidPlatformProfile(
 {
     /// <summary>设备端游戏根目录模板的默认值，与旧工具的 UE Saved 路径规则一致。</summary>
     public const string DefaultGameRootTemplate =
-        "/sdcard/Android/data/{PackageName}/files/UE4Game/{UnrealProjectName}/{UnrealProjectName}";
+        "/sdcard/Android/data/{PackageName}/files/UnrealGame/{UnrealProjectName}/{UnrealProjectName}";
 
     /// <summary>设备端 Saved 目录模板的默认值。</summary>
     public const string DefaultSavedRootTemplate = $"{DefaultGameRootTemplate}/Saved";

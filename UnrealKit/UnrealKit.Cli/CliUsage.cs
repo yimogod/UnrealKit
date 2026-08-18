@@ -14,6 +14,7 @@ internal static class CliUsage
         Console.WriteLine("  unrealkit adb devices [--adb-path <path>]");
         Console.WriteLine("  unrealkit adb connect <host:port> [--adb-path <path>]");
         Console.WriteLine("  unrealkit adb disconnect <host:port> [--adb-path <path>]");
+        Console.WriteLine("  unrealkit adb ip <serial> [--adb-path <path>]");
         Console.WriteLine("  unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]");
         Console.WriteLine("  unrealkit app console send --project <project.ukit> --device <serial> --cmd <command> [--adb-path <path>]");
         Console.WriteLine("  unrealkit app console run --project <project.ukit> --device <serial> [--sequence <name>] [--cmds <inline>] [--adb-path <path>]");

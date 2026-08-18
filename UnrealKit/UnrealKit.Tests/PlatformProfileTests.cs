@@ -14,8 +14,8 @@ public sealed class PlatformProfileTests
         Assert.Equal(TargetPlatform.Android, target.Platform);
         Assert.Equal(DevicePathStyle.Unix, target.PathStyle);
         Assert.Equal("com.example.game", target.ProcessIdentity);
-        Assert.Equal("/sdcard/Android/data/com.example.game/files/UE4Game/Sample/Sample", target.GameRootPath);
-        Assert.Equal("/sdcard/Android/data/com.example.game/files/UE4Game/Sample/Sample/Saved", target.SavedRootPath);
+        Assert.Equal("/sdcard/Android/data/com.example.game/files/UnrealGame/Sample/Sample", target.GameRootPath);
+        Assert.Equal("/sdcard/Android/data/com.example.game/files/UnrealGame/Sample/Sample/Saved", target.SavedRootPath);
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public sealed class PlatformProfileTests
 
         // 在 Windows 主机上用 Path.Combine 拼 Android 路径会写入反斜杠，设备端无法识别。
         Assert.Equal(
-            "/sdcard/Android/data/com.example.game/files/UE4Game/Sample/Sample/uecommandline.txt",
+            "/sdcard/Android/data/com.example.game/files/UnrealGame/Sample/Sample/uecommandline.txt",
             androidTarget.CombineDevicePath(androidTarget.GameRootPath, "uecommandline.txt"));
         Assert.Equal(
             @"C:\Builds\MyGame\MyGame\uecommandline.txt",

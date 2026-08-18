@@ -23,6 +23,7 @@ unrealkit adb version [--adb-path <path>]
 unrealkit adb devices [--adb-path <path>]
 unrealkit adb connect <host:port> [--adb-path <path>]
 unrealkit adb disconnect <host:port> [--adb-path <path>]
+unrealkit adb ip <serial> [--adb-path <path>]
 
 unrealkit app start --project <project.ukit> [--device <serial>] [--platform <platform>] [--adb-path <path>]
 

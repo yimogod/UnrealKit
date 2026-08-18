@@ -40,6 +40,22 @@ public interface IAdbService
     Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 查询设备当前的 IPv4 地址，按接口逐项返回。
+    /// </summary>
+    /// <remarks>
+    /// 这是一次真实的设备 shell 调用，比列举设备慢，且设备离线或未授权时会失败，
+    /// 因此不并入 <see cref="ListDevicesAsync"/>——设备列表刷新不应为此变慢或多一个失败点。
+    /// 一台设备可能同时有 WiFi、蜂窝、USB 网络共享和 VPN 地址，故返回列表而非单值，
+    /// 由调用方按 <see cref="DeviceNetworkInterfaceKind"/> 决定取哪一个。
+    /// 一个地址都没有时抛出 <see cref="AdbDeviceAddressUnavailableException"/>，不返回空列表——
+    /// 「没连任何网络」和「查询没跑起来」必须可区分。
+    /// </remarks>
+    Task<IReadOnlyList<DeviceIpAddress>> GetIpAddressesAsync(
+        string serialNumber,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 强制停止设备上的应用。
     /// </summary>
     Task<ProcessExecutionResult> ForceStopApplicationAsync(

@@ -155,6 +155,58 @@ public sealed class AdbService : IAdbService
     }
 
     /// <summary>
+    /// 查询设备当前的 IPv4 地址
+    /// </summary>
+    /// <remarks>
+    /// 先用 <c>ip -f inet addr</c>，它同时给出接口名与前缀长度；该命令在部分裁剪过的固件上不可用，
+    /// 此时退到 <c>ip route</c> 取 <c>src</c> 地址（没有前缀长度）。
+    /// 两条都失败时抛 <see cref="AdbDeviceAddressUnavailableException"/> 并列出尝试过的命令。
+    /// 不用 <c>getprop dhcp.wlan0.ipaddress</c>：新版 Android 上该属性经常为空，作为主路径会静默返回错误答案。
+    /// </remarks>
+    public async Task<IReadOnlyList<DeviceIpAddress>> GetIpAddressesAsync(
+        string serialNumber,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSerialNumber(serialNumber);
+
+        var attempts = new List<string>();
+
+        var addresses = await TryQueryAsync(
+            ["shell", "ip", "-f", "inet", "addr"],
+            AdbNetworkParser.ParseAddresses);
+        if (addresses.Count > 0)
+        {
+            return addresses;
+        }
+
+        addresses = await TryQueryAsync(
+            ["shell", "ip", "route"],
+            AdbNetworkParser.ParseRouteSourceAddresses);
+        if (addresses.Count > 0)
+        {
+            return addresses;
+        }
+
+        throw new AdbDeviceAddressUnavailableException(serialNumber, attempts);
+
+        async Task<IReadOnlyList<DeviceIpAddress>> TryQueryAsync(
+            string[] arguments,
+            Func<string, IReadOnlyList<DeviceIpAddress>> parse)
+        {
+            attempts.Add($"adb -s {serialNumber} {string.Join(' ', arguments)}");
+            var result = await RunAllowingFailureAsync(
+                ["-s", serialNumber, .. arguments],
+                progress,
+                cancellationToken);
+
+            // 命令不存在或权限不足都表现为非零退出码，此时交给下一条命令，
+            // 不在这里抛——单条命令失败不等于设备没有地址。
+            return result.Succeeded ? parse(result.StandardOutput) : [];
+        }
+    }
+
+    /// <summary>
     /// 流式传输 logcat 日志
     /// </summary>
     public async IAsyncEnumerable<string> StreamLogcatAsync(
@@ -234,6 +286,13 @@ public sealed class AdbService : IAdbService
         var command = string.Join(' ', arguments);
         throw new AdbCommandException($"ADB 命令失败，退出码 {result.ExitCode}: {_adbPath} {command}", result);
     }
+
+    /// <summary>
+    /// 运行 ADB 命令并原样返回结果，非零退出码不抛异常。
+    /// 供「多条命令依次探测、单条失败可接受」的场景使用；调用方必须自己检查 <see cref="ProcessExecutionResult.Succeeded"/>。
+    /// </summary>
+    private Task<ProcessExecutionResult> RunAllowingFailureAsync(IReadOnlyList<string> arguments, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) =>
+        _processRunner.RunAsync(new ProcessExecutionRequest(_adbPath, arguments, Output: _output), progress, cancellationToken);
 
     /// <summary>
     /// 验证 ADB 设备序列号
