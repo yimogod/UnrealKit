@@ -1,4 +1,5 @@
 using UnrealKit.Core.Adb;
+using UnrealKit.Core.Devices;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
@@ -371,6 +372,61 @@ public sealed class DesktopShellViewModelTests
         viewModel.SelectedDevice = viewModel.Devices.First(device => device.Platform == "Win64");
 
         Assert.DoesNotContain("192.168.1.23", viewModel.SelectedDeviceIpSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Devices_ShowConfiguredAliasAlongsideDeviceId()
+    {
+        // 设备 id 与别名各占一列：id 是所有操作的依据，别名只用于辨认，
+        // 因此配了别名也不能把 id 换掉。
+        var adb = new RecordingAdbService();
+        var project = CreateProject() with
+        {
+            Settings = CreateProject().Settings with
+            {
+                DeviceAliases = DeviceAliasMap.Create(new Dictionary<string, string> { ["R58M123ABC"] = "测试机A" })
+            }
+        };
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true))
+        {
+            ProjectFilePath = project.ProjectFilePath
+        };
+
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+        await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+
+        var android = viewModel.Devices.First(device => device.Platform == "Android");
+        Assert.Equal("R58M123ABC", android.Id);
+        Assert.Equal("测试机A", android.Alias);
+        Assert.True(android.HasAlias);
+
+        // 没配别名的设备别名列为空，不回填型号或 id 冒充别名。
+        var win64 = viewModel.Devices.First(device => device.Platform == "Win64");
+        Assert.Null(win64.Alias);
+        Assert.False(win64.HasAlias);
+        Assert.Equal(win64.Name, win64.DisplayLabel);
+
+        viewModel.SelectedDevice = android;
+        Assert.Contains("R58M123ABC", viewModel.SelectedDeviceDescription, StringComparison.Ordinal);
+        Assert.Contains("测试机A", viewModel.SelectedDeviceDescription, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Devices_WithoutConfiguredAliases_ListDevicesWithoutAlias()
+    {
+        // 未配置别名的工程设备列表照常可用：别名是附加信息，不是列出设备的前提。
+        var adb = new RecordingAdbService();
+        var project = CreateProject();
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true))
+        {
+            ProjectFilePath = project.ProjectFilePath
+        };
+
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+        await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+
+        Assert.NotEmpty(viewModel.Devices);
+        Assert.All(viewModel.Devices, device => Assert.False(device.HasAlias));
     }
 
     private static async Task<ShellViewModel> CreateViewModelWithSelectedAndroidDeviceAsync(RecordingAdbService adb)

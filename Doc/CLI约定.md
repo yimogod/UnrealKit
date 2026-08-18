@@ -19,6 +19,8 @@ unrealkit project create <dir> --name <name> [--platform <platform>]...
 unrealkit project info <project.ukit> [--format json]
 unrealkit project validate <project.ukit>
 
+unrealkit devices [--project <project.ukit>] [--adb-path <path>]
+
 unrealkit adb version [--adb-path <path>]
 unrealkit adb devices [--adb-path <path>]
 unrealkit adb connect <host:port> [--adb-path <path>]
@@ -84,6 +86,7 @@ unrealkit analyze trend --project <project.ukit>
   - `project create` 的 `--platform` 可重复或逗号分隔，声明工程要配置哪些平台；不传则两个平台都写入默认配置。
 - 设备所在平台在工程中未配置时报错并列出已配置平台，不回退到其他平台的配置。
 - `--adb-path` 为最高优先级的 adb 来源，解析顺序见 `Doc/设备操作与文件安全.md`。
+- `devices` 的 `--project` 可选，只用于取设备别名（配置见 `Doc/工程格式与配置.md`）：不传就只列设备本身，不去猜一个工程——猜错的工程会显示另一批设备的别名。配了别名的设备在行尾多一列别名，没配的不补占位符。别名不参与设备选择，`--device` 仍只接受设备 id。
 - `--format` 默认为 `text`；`json` 输出必须是单个可解析的 JSON 文档，不与人类可读日志混排。
 - 输出文件的扩展名决定格式，规则见 `Doc/解析导出与诊断.md`。
 

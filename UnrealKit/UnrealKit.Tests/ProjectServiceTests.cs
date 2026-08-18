@@ -231,6 +231,66 @@ public sealed class ProjectServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateSettingsAsync_PersistsDeviceAliases()
+    {
+        var projectDirectory = Path.Combine(_temporaryDirectory, "AliasProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "AliasProject"));
+        var settings = created.Project.Settings with
+        {
+            DeviceAliases = DeviceAliasMap.Create(new Dictionary<string, string>
+            {
+                ["R58M123ABC"] = "测试机A-红米K60",
+                ["192.168.1.100:5555"] = "测试机B-无线"
+            })
+        };
+
+        await service.UpdateSettingsAsync(created.Project, settings);
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal("测试机A-红米K60", reopened.Settings.TryGetDeviceAlias("R58M123ABC"));
+        // Wi-Fi 序列号含 `:`，INI 以首个 `=` 为分隔符，因此键不会被 `:` 截断。
+        Assert.Equal("测试机B-无线", reopened.Settings.TryGetDeviceAlias("192.168.1.100:5555"));
+    }
+
+    [Fact]
+    public async Task OpenProjectAsync_DeviceAliasLookupIsCaseInsensitiveAndAbsentAliasIsNull()
+    {
+        // ADB 序列号大小写不敏感（--device 匹配也是），别名查找与之一致，
+        // 否则同一台设备在不同大小写下会显示成「没配别名」。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "AliasCaseProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "AliasCaseProject"));
+        await File.AppendAllTextAsync(created.Project.ConfigFilePath,
+            Environment.NewLine
+            + "[UnrealKit.DeviceAliases]" + Environment.NewLine
+            + "r58m123abc=测试机A" + Environment.NewLine
+            // 空值条目：INI 把 `Key=` 存为空串，不能变成一个空别名。
+            + "EMPTYALIAS=" + Environment.NewLine);
+
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal("测试机A", reopened.Settings.TryGetDeviceAlias("R58M123ABC"));
+        Assert.Null(reopened.Settings.TryGetDeviceAlias("EMPTYALIAS"));
+        Assert.Null(reopened.Settings.TryGetDeviceAlias("UNKNOWN-SERIAL"));
+        Assert.Equal(1, reopened.Settings.Aliases.Count);
+    }
+
+    [Fact]
+    public async Task OpenProjectAsync_NoAliasSection_YieldsEmptyMap()
+    {
+        // 没配过别名的工程照常可用：别名缺失不是错误，也不该是 null 让调用方判空。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "NoAliasProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "NoAliasProject"));
+
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal(0, reopened.Settings.Aliases.Count);
+        Assert.Null(reopened.Settings.TryGetDeviceAlias("R58M123ABC"));
+    }
+
+    [Fact]
     public async Task OpenProjectAsync_EmptyRemoteControlValues_FallBackToDefaults()
     {
         var projectDirectory = Path.Combine(_temporaryDirectory, "EmptyRemoteControlProject");

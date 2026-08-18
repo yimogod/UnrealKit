@@ -9,7 +9,7 @@ internal static class CliUsage
         Console.WriteLine("  unrealkit project create <directory> --name <name> [--platform Android|Win64]");
         Console.WriteLine("  unrealkit project info <project.ukit> [--format json]");
         Console.WriteLine("  unrealkit project validate <project.ukit>");
-        Console.WriteLine("  unrealkit devices");
+        Console.WriteLine("  unrealkit devices [--project <project.ukit>] [--adb-path <path>]");
         Console.WriteLine("  unrealkit adb version [--adb-path <path>]");
         Console.WriteLine("  unrealkit adb devices [--adb-path <path>]");
         Console.WriteLine("  unrealkit adb connect <host:port> [--adb-path <path>]");

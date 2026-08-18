@@ -14,38 +14,43 @@
         </DockPanel>
         <StackPanel Grid.Row="1" Margin="0,10,0,14">
             <TextBlock Text="明确选择一台状态为 device 的设备；多设备时不会自动选择第一台。" TextWrapping="Wrap" />
+            <TextBlock Text="别名在工程 Config/DefaultGame.ini 的 [UnrealKit.DeviceAliases] 下按「设备 id=别名」配置，仅用于辨认设备，不参与设备选择。"
+                       Style="{StaticResource HintTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
             <DockPanel Margin="0,12,0,0" LastChildFill="True">
                 <Button Content="Wi-Fi 连接" Command="{Binding ConnectWirelessDeviceCommand}" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
                 <TextBox Text="{Binding WirelessEndpoint, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" ToolTip="例如：192.168.1.100:5555" />
             </DockPanel>
         </StackPanel>
-        <ListBox Grid.Row="2" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" BorderBrush="#FFE2E6EA" BorderThickness="1">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <Grid Margin="8,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2*" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="2*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="{Binding Id}" Style="{StaticResource EmphasisTextStyle}" />
-                        <TextBlock Grid.Column="1">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Text" Value="offline"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAvailable}" Value="True">
-                                            <Setter Property="Text" Value="device"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                        <TextBlock Grid.Column="2" Text="{Binding Name}" />
-                    </Grid>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+        <!-- 用 DataGrid 而非「表头 Grid + ListBox 行模板」：后者的列宽定义要在表头和行模板里
+             各写一份，改一列必须同步改两处，漏改就是静默错位；且行模板的 Grid 受
+             ListBoxItem.HorizontalContentAlignment 默认值 Left 影响，星号列只按内容宽度分配，
+             与表头对不上。列头排序与拖拽调宽也一并由 DataGrid 提供，与其他页面表格一致。 -->
+        <DataGrid Grid.Row="2" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}"
+                  AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                  HeadersVisibility="Column" SelectionMode="Single" GridLinesVisibility="Horizontal">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="设备 id" Binding="{Binding Id}" Width="2*">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource EmphasisTextStyle}">
+                            <Setter Property="ToolTip" Value="设备 id（Android 为 ADB 序列号），所有操作以它为准。" />
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+                <!-- StatusText 由 Core 给出，GUI 不再自行把布尔值翻译成 device/offline。 -->
+                <DataGridTextColumn Header="状态" Binding="{Binding StatusText}" Width="*" />
+                <DataGridTextColumn Header="型号" Binding="{Binding Name}" Width="2*" />
+                <!-- 未配置别名时整列留空，而不是回填型号或 id：
+                     填上占位内容会让「没配别名」看起来像是别名就叫这个。 -->
+                <DataGridTextColumn Header="别名" Binding="{Binding Alias}" Width="2*">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource EmphasisTextStyle}">
+                            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                            <Setter Property="ToolTip" Value="{Binding Alias}" />
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+            </DataGrid.Columns>
+        </DataGrid>
         <StackPanel Grid.Row="3" Margin="0,14,0,0">
             <DockPanel LastChildFill="True">
                 <Button Content="获取 IP" Command="{Binding ShowDeviceIpAddressesCommand}" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right"

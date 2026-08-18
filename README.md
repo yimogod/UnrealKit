@@ -5,7 +5,7 @@ UnrealKit is a desktop tool for Unreal Engine Android performance data capture a
 ## Features
 
 - **Project Management** — Create and manage `.ukit` projects (UTF-8 INI format) with UE-style `Config/DefaultGame.ini` defaults.
-- **Device Management** — Enumerate, connect (Wi-Fi), and select Android devices via ADB.
+- **Device Management** — Enumerate, connect (Wi-Fi), and select Android devices via ADB. Device lists show the device id, with an optional per-device alias configured in `[UnrealKit.DeviceAliases]`.
 - **Launch Parameters** — Push presets (LLM, OpenGL, Vulkan, Trace, No Update) or custom commands to `uecommandline.txt`.
 - **Capture** — Real-time capture of `dumpsys meminfo` and UE Saved data, archived to `Content/<Platform>/<Tag>/<Date>/<CaptureId>/`.
 - **Parsing** — Offline parsing of Android meminfo, UE memreport, and static camera performance logs with structured diagnostics.
@@ -55,6 +55,7 @@ UnrealKit/
 unrealkit project create <dir> --name <name>
 unrealkit project info <project.ukit> [--format json]
 unrealkit project validate <project.ukit>
+unrealkit devices [--project <project.ukit>] [--adb-path <path>]
 unrealkit adb version [--adb-path <path>]
 unrealkit adb devices [--adb-path <path>]
 unrealkit adb connect <host:port> [--adb-path <path>]

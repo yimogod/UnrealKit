@@ -65,6 +65,72 @@ public sealed record ConsoleSequencePreset(string Name, string StepsDefinition, 
 public sealed record LaunchParameterPreset(string Name, string Arguments, string Description, bool IsComposable);
 
 /// <summary>
+/// 设备别名表：设备标识 → 人类可读别名。
+///
+/// 键是设备标识（Android 为 ADB 序列号，Win64 为 <c>localhost</c>），与
+/// <see cref="Devices.IDevice.Id"/> 同一取值，因此别名可以在任何列出设备的地方按 Id 查到，
+/// 不需要额外一次设备查询。ADB 序列号大小写不敏感（<c>DeviceResolver</c> 的
+/// <c>--device</c> 匹配也是），别名查找与之一致。
+///
+/// 别名是纯展示信息：任何操作仍以设备标识为准，别名不参与设备选择，
+/// 否则同一别名配到两台设备就会变成一次隐式选择。
+/// </summary>
+public sealed record DeviceAliasMap
+{
+    public static DeviceAliasMap Empty { get; } = new(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+
+    private readonly IReadOnlyDictionary<string, string> _aliases;
+
+    private DeviceAliasMap(IReadOnlyDictionary<string, string> aliases) => _aliases = aliases;
+
+    /// <summary>
+    /// 由配置条目构造。键或值为空白的条目被丢弃——INI 中的 <c>Key=</c> 是空串而不是缺失，
+    /// 留下它会让设备显示一个空别名，看起来像「配过但名字是空的」。
+    /// </summary>
+    public static DeviceAliasMap Create(IEnumerable<KeyValuePair<string, string>> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (deviceId, alias) in entries)
+        {
+            if (string.IsNullOrWhiteSpace(deviceId) || string.IsNullOrWhiteSpace(alias))
+            {
+                continue;
+            }
+
+            aliases[deviceId.Trim()] = alias.Trim();
+        }
+
+        return aliases.Count == 0 ? Empty : new DeviceAliasMap(aliases);
+    }
+
+    /// <summary>已配置的别名条目，按设备标识排序，供写回配置与展示。</summary>
+    public IEnumerable<KeyValuePair<string, string>> Entries =>
+        _aliases.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase);
+
+    public int Count => _aliases.Count;
+
+    /// <summary>
+    /// 取设备别名。未配置返回 null——调用方据此显示原始标识，
+    /// 不要用标识本身冒充别名，否则「配过别名」与「没配」在界面上无从区分。
+    /// </summary>
+    public string? TryGet(string deviceId) =>
+        !string.IsNullOrWhiteSpace(deviceId) && _aliases.TryGetValue(deviceId.Trim(), out var alias) ? alias : null;
+
+    /// <summary>
+    /// 记录相等性按内容比较：默认的引用相等会让 <c>ProjectSettings</c> 的
+    /// <c>with</c> 复制在别名未变时也判为不同。
+    /// </summary>
+    public bool Equals(DeviceAliasMap? other) =>
+        other is not null
+        && _aliases.Count == other._aliases.Count
+        && _aliases.All(pair =>
+            other._aliases.TryGetValue(pair.Key, out var alias) && string.Equals(pair.Value, alias, StringComparison.Ordinal));
+
+    public override int GetHashCode() => _aliases.Count;
+}
+
+/// <summary>
 /// 项目设置。平台相关配置放在 <see cref="Android"/> / <see cref="Win64"/> 等 profile 中，
 /// 各平台并存互不排斥——同一工程同时跑多个平台是常态。
 ///
@@ -85,7 +151,8 @@ public sealed record ProjectSettings(
     int RemoteControlHttpPort = 30010,
     string RemoteControlObjectPath = "/Script/Engine.Default__KismetSystemLibrary",
     string RemoteControlFunctionName = "ExecuteConsoleCommand",
-    string RemoteControlCommandParameter = "Command")
+    string RemoteControlCommandParameter = "Command",
+    DeviceAliasMap? DeviceAliases = null)
 {
     /// <summary>
     /// 新建工程时两个平台都给出默认 profile：多平台工程是默认假设，
@@ -102,6 +169,16 @@ public sealed record ProjectSettings(
         PostCaptureSequence: null,
         Android: AndroidPlatformProfile.CreateDefaults(),
         Win64: Win64PlatformProfile.CreateDefaults());
+
+    /// <summary>
+    /// 设备别名表。未配置时是空表而不是 null，调用方不必每处判空。
+    /// </summary>
+    public DeviceAliasMap Aliases => DeviceAliases ?? DeviceAliasMap.Empty;
+
+    /// <summary>
+    /// 取设备别名，未配置返回 null。
+    /// </summary>
+    public string? TryGetDeviceAlias(string deviceId) => Aliases.TryGet(deviceId);
 
     /// <summary>
     /// 取指定平台的配置。返回 null 表示该平台未配置——调用方应报错并列出

@@ -96,7 +96,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _consoleSequenceOutput = "Run a sequence to see results here.";
     private bool _isConsoleSequenceRunning;
     private UkitProject? _project;
-    private IDevice? _selectedDevice;
+    private DeviceDisplayInfo? _selectedDevice;
     private string _selectedDeviceIpSummary = "点击「获取 IP」查询所选设备的地址。";
     private CaptureFileInfo? _selectedCaptureResultFile;
     private CaptureDirectoryInfo? _selectedCaptureResult;
@@ -148,7 +148,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
-    public ObservableCollection<IDevice> Devices { get; } = [];
+    /// <summary>
+    /// 设备列表。元素是带工程别名的展示投影；需要对设备执行操作时取
+    /// <see cref="DeviceDisplayInfo.Device"/>，不要把投影当设备传下去。
+    /// </summary>
+    public ObservableCollection<DeviceDisplayInfo> Devices { get; } = [];
     public ObservableCollection<ConsoleSequencePreset> ConsoleSequencePresets { get; } = [];
     public ObservableCollection<LaunchParameterPresetOption> LaunchParameterPresets { get; } = [];
     public ObservableCollection<MemInfoMetricOption> MemInfoMetrics { get; } = [];
@@ -309,7 +313,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string ProjectTitle => _project is null ? "当前工程：未打开" : $"当前工程：{_project.Descriptor.ProjectName}";
     public bool IsBusy { get => _isBusy; private set { if (SetField(ref _isBusy, value)) RaiseCommandStates(); } }
 
-    public IDevice? SelectedDevice
+    public DeviceDisplayInfo? SelectedDevice
     {
         get => _selectedDevice;
         set
@@ -375,9 +379,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// 所选设备摘要。设备标识始终在最前：后续所有操作以它为准，
+    /// 别名只是便于人辨认，把别名放在标识位置会让日志与界面对不上。
+    /// </summary>
     public string SelectedDeviceDescription => SelectedDevice is null
         ? "尚未选择设备。"
-        : $"{SelectedDevice.Id} · {(SelectedDevice.IsAvailable ? "device" : "offline")} · {SelectedDevice.Name ?? "未知名称"}";
+        : $"{SelectedDevice.Id} · {SelectedDevice.StatusText} · {SelectedDevice.Name}"
+          + (SelectedDevice.HasAlias ? $" · 别名：{SelectedDevice.Alias}" : string.Empty);
 
     /// <summary>
     /// 上次查询到的所选设备 IP。换设备时清空——留着上一台的地址会被读成当前设备的。
@@ -536,7 +545,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
     });
 
-    private async Task<IReadOnlyList<IDevice>> ListDevicesAsync(IProgress<OperationProgress> progress, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<DeviceDisplayInfo>> ListDevicesAsync(IProgress<OperationProgress> progress, CancellationToken cancellationToken)
     {
         var providers = new List<IDeviceProvider> { new Win64DeviceService() };
         try
@@ -554,7 +563,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             AddOperationLog("Error", $"{failure.Platform} device enumeration failed: {failure.Message}");
         }
 
-        return result.Devices;
+        // 未打开工程时别名为空，设备列表照常可用：别名是附加信息，不是列出设备的前提。
+        return DeviceDisplayInfo.CreateAll(result.Devices, _project?.Settings);
     }
 
     private IAdbService CreateAdbService()
@@ -616,7 +626,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         return new CaptureService(deviceService, consoleService);
     }
 
-    private void UpdateDevices(IReadOnlyList<IDevice> devices)
+    private void UpdateDevices(IReadOnlyList<DeviceDisplayInfo> devices)
     {
         Devices.Clear();
         foreach (var device in devices) Devices.Add(device);
@@ -624,7 +634,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         if (available.Length == 1)
         {
             SelectedDevice = available[0];
-            StatusMessage = $"已自动选择唯一可用设备：{available[0].Id}（{available[0].Name}）。";
+            StatusMessage = $"已自动选择唯一可用设备：{available[0].Id}（{available[0].DisplayLabel}）。";
         }
         else
         {
@@ -724,7 +734,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 return;
             }
 
-            var remotePath = CreateLaunchParameterService(SelectedDevice)
+            var remotePath = CreateLaunchParameterService(SelectedDevice.Device)
                 .GetRemotePath(_project.Settings, RemoteCommandLinePath);
             LaunchParameterPreview = $"目标路径：{remotePath}{Environment.NewLine}{Environment.NewLine}{content}";
             UpdateLaunchOperationSummary(remotePath);
@@ -740,7 +750,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private Task PushLaunchParametersAsync() => RunAsync("正在推送 uecommandline.txt…", async progress =>
     {
-        var result = await CreateLaunchParameterService(SelectedDevice!).PushAsync(
+        var result = await CreateLaunchParameterService(SelectedDevice!.Device).PushAsync(
             _project!,
             new LaunchParameterRequest(SelectedDevice!.Id, GetSelectedPresetNames(), CustomLaunchArguments, RemoteCommandLinePath),
             progress,
@@ -751,7 +761,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private Task DeleteLaunchParametersAsync() => RunAsync("正在删除 uecommandline.txt…", async progress =>
     {
-        var service = CreateLaunchParameterService(SelectedDevice!);
+        var service = CreateLaunchParameterService(SelectedDevice!.Device);
         var remotePath = service.GetRemotePath(_project!.Settings, RemoteCommandLinePath);
         var platformTarget = _project.Settings.ResolveTarget(
             PlatformNames.Parse(SelectedDevice!.Platform, nameof(SelectedDevice)));
@@ -768,7 +778,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private Task StartApplicationAsync() => RunAsync("正在启动应用…", async progress =>
     {
-        await CreateLaunchParameterService(SelectedDevice!).StartApplicationAsync(_project!, SelectedDevice!.Id, progress, OperationCancellationToken);
+        await CreateLaunchParameterService(SelectedDevice!.Device).StartApplicationAsync(_project!, SelectedDevice!.Id, progress, OperationCancellationToken);
         var target = _project!.Settings.ResolveTarget(
             PlatformNames.Parse(SelectedDevice!.Platform, nameof(SelectedDevice)));
         StatusMessage = $"已发送应用启动请求：{target.LaunchTarget}{(target.LaunchActivity is { Length: > 0 } activity ? $"/{activity}" : string.Empty)}";
@@ -784,7 +794,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         try
         {
-            var plan = CreateCaptureService(SelectedDevice!).CreatePlan(new CaptureRequest(_project, SelectedDevice, CaptureTag));
+            var plan = CreateCaptureService(SelectedDevice.Device).CreatePlan(new CaptureRequest(_project, SelectedDevice.Device, CaptureTag));
             CaptureArchivePreview = $"归档目录：{plan.CaptureDirectory}{Environment.NewLine}设备 Saved：{plan.DeviceSavedDirectory}";
         }
         catch (Exception exception)
@@ -795,8 +805,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private Task RunCaptureAsync() => RunAsync("正在采集并归档原始数据…", async progress =>
     {
-        var request = new CaptureRequest(_project!, SelectedDevice!, CaptureTag);
-        var result = await CreateCaptureService(SelectedDevice!).CaptureAsync(request, progress, OperationCancellationToken);
+        var request = new CaptureRequest(_project!, SelectedDevice!.Device, CaptureTag);
+        var result = await CreateCaptureService(SelectedDevice.Device).CaptureAsync(request, progress, OperationCancellationToken);
         CaptureArchivePreview = $"归档目录：{result.Plan.CaptureDirectory}{Environment.NewLine}清单：{result.ManifestPath}";
         StatusMessage = $"采集完成：{result.Plan.CaptureDirectory}";
     });
@@ -916,8 +926,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             }
 
             var resolvedPath = remotePath
-                ?? CreateLaunchParameterService(SelectedDevice).GetRemotePath(_project.Settings, RemoteCommandLinePath);
-            LaunchOperationSummary = $"设备：{SelectedDevice.Id}（{target.PlatformName}）{Environment.NewLine}" +
+                ?? CreateLaunchParameterService(SelectedDevice.Device).GetRemotePath(_project.Settings, RemoteCommandLinePath);
+            LaunchOperationSummary = $"设备：{SelectedDevice.Id}{(SelectedDevice.HasAlias ? $"（{SelectedDevice.Alias}）" : string.Empty)}（{target.PlatformName}）{Environment.NewLine}" +
                                    $"启动目标：{target.LaunchTarget}{Environment.NewLine}" +
                                    (target.LaunchActivity is { Length: > 0 } activity ? $"Activity：{activity}{Environment.NewLine}" : string.Empty) +
                                    $"远端路径：{resolvedPath}";
@@ -1506,7 +1516,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         try
         {
             // 单一路径：ConsoleCommandService 依赖 IDeviceService，平台差异由能力探测表达。
-            var consoleService = new ConsoleCommandService(CreateDeviceServiceForDevice(_selectedDevice));
+            var consoleService = new ConsoleCommandService(CreateDeviceServiceForDevice(_selectedDevice.Device));
             if (!consoleService.IsSupported)
             {
                 ConsoleOutput = $"[SKIP] {_selectedDevice.Platform} 平台暂不支持发送 UE 控制台指令。";
@@ -1537,7 +1547,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         if (_selectedDevice is null) return;
 
-        var consoleService = new ConsoleCommandService(CreateDeviceServiceForDevice(_selectedDevice));
+        var consoleService = new ConsoleCommandService(CreateDeviceServiceForDevice(_selectedDevice.Device));
         if (!consoleService.IsSupported)
         {
             ConsoleSequenceOutput = $"[SKIP] {_selectedDevice.Platform} 平台暂不支持执行 UE 控制台指令序列。";

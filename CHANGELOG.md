@@ -4,6 +4,16 @@ All notable changes to UnrealKit.
 
 ## [Unreleased]
 
+### Device Aliases
+- Device lists now show the device id explicitly labelled as such (Android: ADB serial; Win64: `localhost`), plus an optional alias configured per device. Same-model test devices were previously indistinguishable in the list — the id column and the self-reported model were all there was
+- New `[UnrealKit.DeviceAliases]` section in `Config/DefaultGame.ini`, keyed by device id (`6d062c71=小米平板5-测试机A`). The key is the same value as `IDevice.Id` and the CLI's `--device`, so an alias resolves anywhere devices are listed without a second device query. Lookup is case-insensitive, matching `--device` matching. Aliases merge through the layered INI, so `BaseGame.ini` can hold team-wide aliases that a project overrides
+- **Aliases are display-only and never participate in device selection.** Captures, launches, and console commands still resolve by device id, and that is what logs and archives record. Allowing selection by alias would turn "the same alias configured on two devices" into an implicit choice, which `Doc/设备操作与文件安全.md` rules out
+- A device with no configured alias leaves the column empty rather than falling back to its id or model — a placeholder reads as "the alias is literally this"
+- New `ProjectSettings.DeviceAliases` (`DeviceAliasMap`) and `UnrealKit.Core.Devices.DeviceDisplayInfo`. Alias resolution lives in Core so GUI and CLI share one rule; two independent implementations would drift and show the same device under different names in each interface. `DeviceDisplayInfo` deliberately does not implement `IDevice` — it is a display projection, and letting it pose as a device would let captures and commands accept it and bypass the real state from device enumeration. Operations take `DeviceDisplayInfo.Device`
+- Blank entries are dropped on read: INI stores `Key=` as an empty string, which would otherwise surface as a device whose alias is empty
+- `unrealkit devices` gains an optional `--project` — aliases live in project config, so without it the command lists devices alone rather than guessing a project, since the wrong guess would show another set of devices' aliases. It also now genuinely accepts `--adb-path`: the previous implementation read the option but rejected any argument at all before doing so, so it was unreachable
+- The GUI Devices page has labelled 设备 id / 状态 / 型号 / 别名 columns and states where aliases are configured. The selected-device summary and the launch target summary append the alias after the id, never in place of it
+
 ### Reopen Last Project On Startup
 - The GUI reopens the last project on launch. The path comes from a new user-level state file, `%LOCALAPPDATA%\UnrealKit\UserState.ini` (`[UnrealKit.RecentProject] LastProjectFilePath`), written whenever a project is opened or created
 - Kept out of `.ukit` and `Config/DefaultGame.ini`: "which project I had open" is per-user session state, not versioned project config. Also kept out of `ApplicationPaths.AppDir` — the program directory can be read-only or replaced wholesale. New `ApplicationPaths.UserStateDir` and `IRecentProjectStore` / `RecentProjectStore` in `UnrealKit.Core.Runtime`

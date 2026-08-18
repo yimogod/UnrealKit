@@ -13,6 +13,7 @@ public sealed class ProjectService : IProjectService
     private const string SettingsSection = "UnrealKit.ProjectSettings";
     private const string PresetsSection = "UnrealKit.LaunchPresets";
     private const string ConsoleSequencesSection = "UnrealKit.ConsoleSequences";
+    private const string DeviceAliasesSection = "UnrealKit.DeviceAliases";
     private const string BaseGameIniFileName = "BaseGame.ini";
     private readonly IOperationLogger _logger;
 
@@ -214,6 +215,12 @@ public sealed class ProjectService : IProjectService
             document.SetValue(ConsoleSequencesSection, sequence.Name, sequence.StepsDefinition);
         }
 
+        // 别名键是设备标识，可能含 `:`（Wi-Fi 的 ip:port），INI 的分隔符是首个 `=`，因此无需转义。
+        foreach (var (deviceId, alias) in settings.Aliases.Entries)
+        {
+            document.SetValue(DeviceAliasesSection, deviceId, alias);
+        }
+
         if (!string.IsNullOrWhiteSpace(settings.PreCaptureSequence))
             document.SetValue(SettingsSection, "PreCaptureSequence", settings.PreCaptureSequence);
 
@@ -263,7 +270,9 @@ public sealed class ProjectService : IProjectService
             ParseRemoteControlPort(layered.GetValue(SettingsSection, "RemoteControlHttpPort"), defaults.RemoteControlHttpPort),
             RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlObjectPath"), defaults.RemoteControlObjectPath),
             RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlFunctionName"), defaults.RemoteControlFunctionName),
-            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlCommandParameter"), defaults.RemoteControlCommandParameter));
+            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlCommandParameter"), defaults.RemoteControlCommandParameter),
+            // 分层合并：BaseGame.ini 可提供团队共用的设备别名，工程的 DefaultGame.ini 覆盖同一序列号。
+            DeviceAliasMap.Create(layered.GetSection(DeviceAliasesSection)));
     }
 
     private static string RequireValue(IniDocument document, string key)
