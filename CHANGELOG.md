@@ -4,6 +4,13 @@ All notable changes to UnrealKit.
 
 ## [Unreleased]
 
+### Reopen Last Project On Startup
+- The GUI reopens the last project on launch. The path comes from a new user-level state file, `%LOCALAPPDATA%\UnrealKit\UserState.ini` (`[UnrealKit.RecentProject] LastProjectFilePath`), written whenever a project is opened or created
+- Kept out of `.ukit` and `Config/DefaultGame.ini`: "which project I had open" is per-user session state, not versioned project config. Also kept out of `ApplicationPaths.AppDir` — the program directory can be read-only or replaced wholesale. New `ApplicationPaths.UserStateDir` and `IRecentProjectStore` / `RecentProjectStore` in `UnrealKit.Core.Runtime`
+- When the recorded project is missing or fails to open, a dialog shows the full path and the reason, and the shell returns to the "no project open" state so the user creates or opens one from the menu. The record is not cleared and no other project is substituted
+- Failing to write the record degrades to an operation-log entry — the project is already open, so it is not reported as an open failure. An unreadable state file is treated as "no record" rather than blocking startup
+- Restore runs on window `Loaded` (the alert needs a shown owner window) and only on first show, so a project the user switches to afterwards is not overwritten
+
 ### Device IP Addresses
 - `IAdbService.GetIpAddressesAsync` returns a device's IPv4 addresses per interface (`DeviceIpAddress`, classified by `DeviceNetworkInterfaceKind`: WiFi / Cellular / UsbTethering / Vpn / Other). A device can hold several addresses at once, so the result is a list — callers pick by interface kind instead of the service guessing which one is wanted
 - Kept out of `ListDevicesAsync`: it costs a real device shell call and fails on offline or unauthorized devices, which would make device-list refresh slower and add a failure point. `AdbDevice` is unchanged

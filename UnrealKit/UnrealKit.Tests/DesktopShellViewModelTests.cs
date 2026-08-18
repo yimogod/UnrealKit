@@ -2,6 +2,7 @@ using UnrealKit.Core.Adb;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.Runtime;
 using UnrealKit.Desktop.Models;
 using UnrealKit.Desktop.Services;
 using UnrealKit.Desktop.ViewModels;
@@ -168,6 +169,114 @@ public sealed class DesktopShellViewModelTests
             new RecordingConfirmationService(true));
     }
 
+    [Fact]
+    public async Task OpenProject_RecordsProjectAsLastOpened()
+    {
+        var project = CreateProject();
+        var store = new FakeRecentProjectStore();
+        var viewModel = new ShellViewModel(
+            new StaticProjectService(project),
+            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new RecordingConfirmationService(true),
+            store)
+        {
+            ProjectFilePath = project.ProjectFilePath
+        };
+
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+
+        Assert.Equal(project.ProjectFilePath, store.Saved);
+    }
+
+    [Fact]
+    public async Task RestoreLastProject_OpensRecordedProject()
+    {
+        var projectFilePath = Path.Combine(Path.GetTempPath(), $"ukit-restore-{Guid.NewGuid():N}.ukit");
+        await File.WriteAllTextAsync(projectFilePath, "[UnrealKit.Project]\nProjectName=Sample\n");
+        try
+        {
+            var project = CreateProject() with { ProjectFilePath = projectFilePath };
+            var confirmation = new RecordingConfirmationService(true);
+            var viewModel = new ShellViewModel(
+                new StaticProjectService(project),
+                new StaticAdbServiceFactory(new RecordingAdbService()),
+                confirmation,
+                new FakeRecentProjectStore(projectFilePath));
+
+            await viewModel.RestoreLastProjectAsync();
+
+            Assert.Equal(projectFilePath, viewModel.ProjectFilePath);
+            Assert.Contains("已打开工程", viewModel.StatusMessage, StringComparison.Ordinal);
+            Assert.Null(confirmation.UnavailableProjectFilePath);
+        }
+        finally
+        {
+            if (File.Exists(projectFilePath)) File.Delete(projectFilePath);
+        }
+    }
+
+    [Fact]
+    public async Task RestoreLastProject_AlertsWhenRecordedProjectIsMissing()
+    {
+        var missingPath = Path.Combine(Path.GetTempPath(), $"ukit-missing-{Guid.NewGuid():N}.ukit");
+        var confirmation = new RecordingConfirmationService(true);
+        var viewModel = new ShellViewModel(
+            new StaticProjectService(CreateProject()),
+            new StaticAdbServiceFactory(new RecordingAdbService()),
+            confirmation,
+            new FakeRecentProjectStore(missingPath));
+
+        await viewModel.RestoreLastProjectAsync();
+
+        // 提示用户后不留下一个打不开的路径：状态回到「未打开工程」，由用户新建或手动打开。
+        Assert.Equal(missingPath, confirmation.UnavailableProjectFilePath);
+        Assert.Equal("当前工程：未打开", viewModel.ProjectTitle);
+        Assert.Equal(string.Empty, viewModel.ProjectFilePath);
+    }
+
+    [Fact]
+    public async Task RestoreLastProject_AlertsWhenRecordedProjectFailsToOpen()
+    {
+        var projectFilePath = Path.Combine(Path.GetTempPath(), $"ukit-broken-{Guid.NewGuid():N}.ukit");
+        await File.WriteAllTextAsync(projectFilePath, "not a descriptor");
+        try
+        {
+            var confirmation = new RecordingConfirmationService(true);
+            var viewModel = new ShellViewModel(
+                new FailingProjectService("工程描述文件缺少 ProjectName。"),
+                new StaticAdbServiceFactory(new RecordingAdbService()),
+                confirmation,
+                new FakeRecentProjectStore(projectFilePath));
+
+            await viewModel.RestoreLastProjectAsync();
+
+            Assert.Equal(projectFilePath, confirmation.UnavailableProjectFilePath);
+            Assert.Contains("ProjectName", confirmation.UnavailableReason ?? string.Empty, StringComparison.Ordinal);
+            Assert.Equal("当前工程：未打开", viewModel.ProjectTitle);
+        }
+        finally
+        {
+            if (File.Exists(projectFilePath)) File.Delete(projectFilePath);
+        }
+    }
+
+    [Fact]
+    public async Task RestoreLastProject_DoesNothingWithoutRecord()
+    {
+        var confirmation = new RecordingConfirmationService(true);
+        var viewModel = new ShellViewModel(
+            new StaticProjectService(CreateProject()),
+            new StaticAdbServiceFactory(new RecordingAdbService()),
+            confirmation,
+            new FakeRecentProjectStore());
+
+        await viewModel.RestoreLastProjectAsync();
+
+        Assert.Null(confirmation.UnavailableProjectFilePath);
+        Assert.Equal("当前工程：未打开", viewModel.ProjectTitle);
+        Assert.Empty(viewModel.OperationLogs);
+    }
+
     private static string TestDataPath(string folder, string fileName) =>
         Path.Combine(AppContext.BaseDirectory, "TestData", folder, fileName);
 
@@ -295,6 +404,14 @@ public sealed class DesktopShellViewModelTests
         public Task<ProjectValidationResult> ValidateProjectAsync(string projectFilePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(new ProjectValidationResult([]));
     }
 
+    private sealed class FailingProjectService(string message) : IProjectService
+    {
+        public Task<ProjectCreateResult> CreateProjectAsync(CreateProjectRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<UkitProject> OpenProjectAsync(string projectFilePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => throw new InvalidDataException(message);
+        public Task<UkitProject> UpdateSettingsAsync(UkitProject updatedProject, ProjectSettings settings, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ProjectValidationResult> ValidateProjectAsync(string projectFilePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(new ProjectValidationResult([]));
+    }
+
     private sealed class StaticAdbServiceFactory(IAdbService adb) : IDesktopAdbServiceFactory
     {
         public IAdbService Create(ProjectSettings? settings, IProgress<ProcessOutput>? output) => new OutputForwardingAdbService(adb, output);
@@ -308,6 +425,30 @@ public sealed class DesktopShellViewModelTests
         {
             WasAsked = true;
             return Task.FromResult(response);
+        }
+
+        public string? UnavailableProjectFilePath { get; private set; }
+        public string? UnavailableReason { get; private set; }
+
+        public Task NotifyLastProjectUnavailableAsync(string projectFilePath, string reason)
+        {
+            UnavailableProjectFilePath = projectFilePath;
+            UnavailableReason = reason;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeRecentProjectStore(string? lastProjectFilePath = null) : IRecentProjectStore
+    {
+        public string? Saved { get; private set; }
+
+        public Task<string?> TryGetLastProjectFilePathAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(lastProjectFilePath);
+
+        public Task SaveLastProjectFilePathAsync(string projectFilePath, CancellationToken cancellationToken = default)
+        {
+            Saved = projectFilePath;
+            return Task.CompletedTask;
         }
     }
 

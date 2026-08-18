@@ -12,6 +12,7 @@ using UnrealKit.Core.Parsing;
 using UnrealKit.Core.Processes;
 using System.Linq;
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.Runtime;
 using UnrealKit.Core.Analysis;
 using System.Text;
 using UnrealKit.Core.RenderDoc;
@@ -27,6 +28,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly IProjectService _projectService;
     private readonly IDesktopAdbServiceFactory _adbServiceFactory;
     private readonly IUserConfirmationService _confirmationService;
+    private readonly IRecentProjectStore _recentProjectStore;
     // 工程与工程配置已移到菜单栏，导航首项因此是「设备」。
     private string _selectedNavigationItem = "设备";
     private string _statusMessage = "未打开工程。请从菜单栏「工程」打开或创建工程。";
@@ -110,11 +112,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ShellViewModel(
         IProjectService projectService,
         IDesktopAdbServiceFactory adbServiceFactory,
-        IUserConfirmationService confirmationService)
+        IUserConfirmationService confirmationService,
+        IRecentProjectStore? recentProjectStore = null)
     {
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
+        _recentProjectStore = recentProjectStore ?? new RecentProjectStore();
         CreateProjectCommand = new AsyncDelegateCommand(CreateProjectAsync, CanCreateProject);
         OpenProjectCommand = new AsyncDelegateCommand(OpenProjectAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ProjectFilePath));
         RefreshDevicesCommand = new AsyncDelegateCommand(RefreshDevicesAsync, () => !IsBusy);
@@ -395,6 +399,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         var result = await _projectService.CreateProjectAsync(new CreateProjectRequest(NewProjectDirectory, NewProjectName), progress, OperationCancellationToken);
         SetCurrentProject(result.Project);
+        await RememberLastProjectAsync(result.Project.ProjectFilePath);
         StatusMessage = $"已创建工程：{result.Project.ProjectFilePath}";
     });
 
@@ -406,8 +411,73 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         var project = await _projectService.OpenProjectAsync(ProjectFilePath, progress, OperationCancellationToken);
         SetCurrentProject(project);
+        await RememberLastProjectAsync(project.ProjectFilePath);
         StatusMessage = $"已打开工程：{project.ProjectFilePath}";
     });
+
+    /// <summary>
+    /// 启动时恢复上次打开的工程。没有记录就保持「未打开工程」状态；
+    /// 记录指向的工程已不存在或打不开时通知用户，由用户自行新建或手动打开，
+    /// 不静默清空记录也不退到别的工程。
+    /// </summary>
+    public async Task RestoreLastProjectAsync()
+    {
+        string? lastPath;
+        try
+        {
+            lastPath = await _recentProjectStore.TryGetLastProjectFilePathAsync();
+        }
+        catch (Exception exception)
+        {
+            AddOperationLog("Error", $"读取上次打开的工程记录失败：{exception.Message}");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(lastPath))
+        {
+            return;
+        }
+
+        if (!File.Exists(lastPath))
+        {
+            await ReportLastProjectUnavailableAsync(lastPath, "工程文件已不存在，可能被移动、重命名或删除。");
+            return;
+        }
+
+        ProjectFilePath = lastPath;
+        await OpenProjectAsync();
+
+        // RunAsync 把失败转成状态消息，因此用「工程是否真的加载出来」判断结果，
+        // 而不是假定 OpenProjectAsync 返回即成功。
+        if (_project is null)
+        {
+            await ReportLastProjectUnavailableAsync(lastPath, StatusMessage);
+        }
+    }
+
+    private async Task ReportLastProjectUnavailableAsync(string projectFilePath, string reason)
+    {
+        ProjectFilePath = string.Empty;
+        StatusMessage = $"无法打开上次的工程：{projectFilePath}。{reason}";
+        AddOperationLog("Warning", StatusMessage);
+        await _confirmationService.NotifyLastProjectUnavailableAsync(projectFilePath, reason);
+    }
+
+    /// <summary>
+    /// 记录当前工程为「上次打开的工程」。写入失败只降级为一条日志：
+    /// 工程本身已经打开，不该因为记不住而报成打开失败。
+    /// </summary>
+    private async Task RememberLastProjectAsync(string projectFilePath)
+    {
+        try
+        {
+            await _recentProjectStore.SaveLastProjectFilePathAsync(projectFilePath, OperationCancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            AddOperationLog("Error", $"记录上次打开的工程失败：{exception.Message}");
+        }
+    }
 
     private Task RefreshDevicesAsync() => RunAsync("正在刷新 ADB 设备…", async progress =>
     {
@@ -1552,6 +1622,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 internal sealed class RejectingConfirmationService : IUserConfirmationService
 {
     public Task<bool> ConfirmDeleteLaunchParametersAsync(LaunchOperationTarget target) => Task.FromResult(false);
+
+    public Task NotifyLastProjectUnavailableAsync(string projectFilePath, string reason) => Task.CompletedTask;
 }
 
 public sealed class AsyncDelegateCommand(Func<Task> execute, Func<bool> canExecute) : ICommand

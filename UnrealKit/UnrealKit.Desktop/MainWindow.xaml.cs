@@ -13,6 +13,21 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = new ShellViewModel(new ProjectService(), new DesktopAdbServiceFactory(), new WpfUserConfirmationService(this));
+        Loaded += MainWindow_Loaded;
+    }
+
+    /// <summary>
+    /// 启动时恢复上次打开的工程。放在 Loaded 而不是构造函数：
+    /// 工程不可用时要弹提示框，此时主窗口必须已经显示，否则提示框没有可靠的父窗口。
+    /// </summary>
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        // 只在首次显示时恢复，之后用户切换的工程不该被再次覆盖。
+        Loaded -= MainWindow_Loaded;
+        if (DataContext is ShellViewModel viewModel)
+        {
+            await viewModel.RestoreLastProjectAsync();
+        }
     }
 
     /// <summary>

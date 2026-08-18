@@ -32,10 +32,26 @@ public sealed class DesktopAdbServiceFactory(AdbPathResolver? adbPathResolver = 
 public interface IUserConfirmationService
 {
     Task<bool> ConfirmDeleteLaunchParametersAsync(LaunchOperationTarget target);
+
+    /// <summary>
+    /// 告知用户上次打开的工程已不可用。只是通知，不代替用户决定后续动作——
+    /// 新建还是手动打开由用户从菜单栏选择。
+    /// </summary>
+    Task NotifyLastProjectUnavailableAsync(string projectFilePath, string reason);
 }
 
 public sealed class WpfUserConfirmationService(Window owner) : IUserConfirmationService
 {
+    public Task NotifyLastProjectUnavailableAsync(string projectFilePath, string reason)
+    {
+        var message = $"无法打开上次的工程：\n\n" +
+                      $"{projectFilePath}\n\n" +
+                      $"{reason}\n\n" +
+                      "请从菜单栏「Project」新建工程，或手动打开另一个 .ukit 工程。";
+        MessageBox.Show(owner, message, "上次的工程不可用", MessageBoxButton.OK, MessageBoxImage.Warning);
+        return Task.CompletedTask;
+    }
+
     public Task<bool> ConfirmDeleteLaunchParametersAsync(LaunchOperationTarget target)
     {
         var message = $"The following remote file will be deleted:\n\n" +
