@@ -111,6 +111,10 @@ TestResults/
 [Aa]pp[Pp]ackages/
 BundleArtifacts/
 
+# Per-user UI state, not versioned project config
+Config/UserSetting.ini
+Config/EditorSetting.ini
+
 # Local diagnostic and profiling output
 *.log
 *.tmp

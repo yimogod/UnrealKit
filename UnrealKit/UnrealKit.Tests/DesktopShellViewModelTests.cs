@@ -18,7 +18,7 @@ public sealed class DesktopShellViewModelTests
         var adb = new RecordingAdbService();
         var project = CreateProject();
         var confirmation = new RecordingConfirmationService(true);
-        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), confirmation)
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), confirmation, new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
             ProjectFilePath = project.ProjectFilePath,
             CustomLaunchArguments = "-trace=memory"
@@ -50,7 +50,7 @@ public sealed class DesktopShellViewModelTests
     {
         var adb = new RecordingAdbService();
         var project = CreateProject();
-        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true))
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
             ProjectFilePath = project.ProjectFilePath
         };
@@ -83,7 +83,7 @@ public sealed class DesktopShellViewModelTests
     {
         var adb = new RecordingAdbService();
         var project = CreateProject();
-        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true))
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
             ProjectFilePath = project.ProjectFilePath
         };
@@ -167,14 +167,14 @@ public sealed class DesktopShellViewModelTests
         return new ShellViewModel(
             new StaticProjectService(project),
             new StaticAdbServiceFactory(new RecordingAdbService()),
-            new RecordingConfirmationService(true));
+            new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore());
     }
 
     [Fact]
     public async Task OpenProject_RecordsProjectAsLastOpened()
     {
         var project = CreateProject();
-        var store = new FakeUserStateStore();
+        var store = new FakeEditorSettingStore();
         var viewModel = new ShellViewModel(
             new StaticProjectService(project),
             new StaticAdbServiceFactory(new RecordingAdbService()),
@@ -202,7 +202,7 @@ public sealed class DesktopShellViewModelTests
                 new StaticProjectService(project),
                 new StaticAdbServiceFactory(new RecordingAdbService()),
                 confirmation,
-                new FakeUserStateStore(projectFilePath));
+                new FakeEditorSettingStore(projectFilePath));
 
             await viewModel.RestoreLastProjectAsync();
 
@@ -225,7 +225,7 @@ public sealed class DesktopShellViewModelTests
             new StaticProjectService(CreateProject()),
             new StaticAdbServiceFactory(new RecordingAdbService()),
             confirmation,
-            new FakeUserStateStore(missingPath));
+            new FakeEditorSettingStore(missingPath));
 
         await viewModel.RestoreLastProjectAsync();
 
@@ -247,7 +247,7 @@ public sealed class DesktopShellViewModelTests
                 new FailingProjectService("工程描述文件缺少 ProjectName。"),
                 new StaticAdbServiceFactory(new RecordingAdbService()),
                 confirmation,
-                new FakeUserStateStore(projectFilePath));
+                new FakeEditorSettingStore(projectFilePath));
 
             await viewModel.RestoreLastProjectAsync();
 
@@ -269,7 +269,7 @@ public sealed class DesktopShellViewModelTests
             new StaticProjectService(CreateProject()),
             new StaticAdbServiceFactory(new RecordingAdbService()),
             confirmation,
-            new FakeUserStateStore());
+            new FakeEditorSettingStore());
 
         await viewModel.RestoreLastProjectAsync();
 
@@ -287,7 +287,7 @@ public sealed class DesktopShellViewModelTests
         var adb = new RecordingAdbService();
         var project = CreateProject();
         var confirmation = new RecordingConfirmationService(false);
-        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), confirmation)
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), confirmation, new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
             ProjectFilePath = project.ProjectFilePath
         };
@@ -342,7 +342,7 @@ public sealed class DesktopShellViewModelTests
     {
         var adb = new RecordingAdbService();
         var project = CreateProject();
-        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true))
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
             ProjectFilePath = project.ProjectFilePath
         };
@@ -387,7 +387,7 @@ public sealed class DesktopShellViewModelTests
                 DeviceAliases = DeviceAliasMap.Create(new Dictionary<string, string> { ["R58M123ABC"] = "测试机A" })
             }
         };
-        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true))
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
             ProjectFilePath = project.ProjectFilePath
         };
@@ -417,7 +417,7 @@ public sealed class DesktopShellViewModelTests
         // 未配置别名的工程设备列表照常可用：别名是附加信息，不是列出设备的前提。
         var adb = new RecordingAdbService();
         var project = CreateProject();
-        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true))
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
             ProjectFilePath = project.ProjectFilePath
         };
@@ -481,34 +481,89 @@ public sealed class DesktopShellViewModelTests
     }
 
     [Fact]
-    public void PlatformScope_IsPersistedOnChange()
+    public async Task PlatformScope_IsPersistedToOpenProject()
     {
         var project = CreateProject();
-        var store = new FakeUserStateStore();
+        var store = new FakeUserSettingStore();
         var viewModel = new ShellViewModel(
             new StaticProjectService(project),
             new StaticAdbServiceFactory(new RecordingAdbService()),
             new RecordingConfirmationService(true),
-            store);
+            userSettingStore: store)
+        {
+            ProjectFilePath = project.ProjectFilePath
+        };
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
 
         viewModel.PlatformScope = PlatformScope.For(TargetPlatform.Win64);
 
         Assert.Equal(PlatformScope.For(TargetPlatform.Win64), store.SavedScope);
+        Assert.Equal(project.ProjectFilePath, store.SavedForProject?.ProjectFilePath);
     }
 
     [Fact]
-    public async Task RestorePlatformScopeAsync_AppliesStoredScope()
+    public void PlatformScope_IsNotPersistedWithoutOpenProject()
+    {
+        // 未打开工程时无处可记：作用域记在工程的 Config/UserSetting.ini 里。
+        var store = new FakeUserSettingStore();
+        var viewModel = new ShellViewModel(
+            new StaticProjectService(CreateProject()),
+            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new RecordingConfirmationService(true),
+            userSettingStore: store);
+
+        viewModel.PlatformScope = PlatformScope.For(TargetPlatform.Win64);
+
+        Assert.Equal(PlatformScope.For(TargetPlatform.Win64), viewModel.PlatformScope);
+        Assert.Null(store.SavedScope);
+    }
+
+    [Fact]
+    public async Task OpenProject_RestoresScopeRecordedInThatProject()
     {
         var project = CreateProject();
         var viewModel = new ShellViewModel(
             new StaticProjectService(project),
             new StaticAdbServiceFactory(new RecordingAdbService()),
             new RecordingConfirmationService(true),
-            new FakeUserStateStore(platformScope: PlatformScope.For(TargetPlatform.Win64)));
+            userSettingStore: new FakeUserSettingStore(PlatformScope.For(TargetPlatform.Win64)))
+        {
+            ProjectFilePath = project.ProjectFilePath
+        };
 
-        await viewModel.RestorePlatformScopeAsync();
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
 
         Assert.Equal(PlatformScope.For(TargetPlatform.Win64), viewModel.PlatformScope);
+    }
+
+    [Fact]
+    public async Task OpenProject_KeepsCurrentScopeWhenProjectHasNoRecord()
+    {
+        // 没有记录时保留当前选择：把「记录缺失」当成「记录为全部」会重置用户刚选的平台。
+        var project = CreateProject();
+        var viewModel = new ShellViewModel(
+            new StaticProjectService(project),
+            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new RecordingConfirmationService(true),
+            userSettingStore: new FakeUserSettingStore())
+        {
+            ProjectFilePath = project.ProjectFilePath,
+            PlatformScope = PlatformScope.For(TargetPlatform.Android)
+        };
+
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+
+        Assert.Equal(PlatformScope.For(TargetPlatform.Android), viewModel.PlatformScope);
+    }
+
+    [Fact]
+    public void UserSettingFilePath_SitsBesideDefaultGameIniWithoutReplacingIt()
+    {
+        // 作用域不该写进可版本化的 DefaultGame.ini，因此两者同目录但分文件。
+        var project = CreateProject();
+
+        Assert.Equal(Path.Combine(project.ConfigDir, "UserSetting.ini"), project.UserSettingFilePath);
+        Assert.NotEqual(project.ConfigFilePath, project.UserSettingFilePath);
     }
 
     /// <summary>
@@ -520,7 +575,7 @@ public sealed class DesktopShellViewModelTests
         var viewModel = new ShellViewModel(
             new StaticProjectService(project),
             new StaticAdbServiceFactory(new RecordingAdbService()),
-            new RecordingConfirmationService(true))
+            new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
             ProjectFilePath = project.ProjectFilePath
         };
@@ -533,7 +588,7 @@ public sealed class DesktopShellViewModelTests
     private static async Task<ShellViewModel> CreateViewModelWithSelectedAndroidDeviceAsync(RecordingAdbService adb)
     {
         var project = CreateProject();
-        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true))
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
             ProjectFilePath = project.ProjectFilePath
         };
@@ -595,13 +650,9 @@ public sealed class DesktopShellViewModelTests
         }
     }
 
-    private sealed class FakeUserStateStore(
-        string? lastProjectFilePath = null,
-        PlatformScope? platformScope = null) : IUserStateStore
+    private sealed class FakeEditorSettingStore(string? lastProjectFilePath = null) : IEditorSettingStore
     {
         public string? Saved { get; private set; }
-
-        public PlatformScope? SavedScope { get; private set; }
 
         public Task<string?> TryGetLastProjectFilePathAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(lastProjectFilePath);
@@ -611,12 +662,20 @@ public sealed class DesktopShellViewModelTests
             Saved = projectFilePath;
             return Task.CompletedTask;
         }
+    }
 
-        public Task<PlatformScope> GetPlatformScopeAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(platformScope ?? PlatformScope.All);
+    private sealed class FakeUserSettingStore(PlatformScope? platformScope = null) : IUserSettingStore
+    {
+        public PlatformScope? SavedScope { get; private set; }
 
-        public Task SavePlatformScopeAsync(PlatformScope scope, CancellationToken cancellationToken = default)
+        public UkitProject? SavedForProject { get; private set; }
+
+        public Task<PlatformScope?> TryGetPlatformScopeAsync(UkitProject project, CancellationToken cancellationToken = default) =>
+            Task.FromResult(platformScope);
+
+        public Task SavePlatformScopeAsync(UkitProject project, PlatformScope scope, CancellationToken cancellationToken = default)
         {
+            SavedForProject = project;
             SavedScope = scope;
             return Task.CompletedTask;
         }

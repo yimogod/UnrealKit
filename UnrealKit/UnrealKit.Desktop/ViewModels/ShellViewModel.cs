@@ -28,7 +28,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly IProjectService _projectService;
     private readonly IDesktopAdbServiceFactory _adbServiceFactory;
     private readonly IUserConfirmationService _confirmationService;
-    private readonly IUserStateStore _userStateStore;
+    private readonly IEditorSettingStore _editorSettingStore;
+    private readonly IUserSettingStore _userSettingStore;
     // 工程与工程配置已移到菜单栏，导航首项因此是「设备」。
     private string _selectedNavigationItem = "设备";
     private string _statusMessage = "未打开工程。请从菜单栏「工程」打开或创建工程。";
@@ -114,12 +115,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         IProjectService projectService,
         IDesktopAdbServiceFactory adbServiceFactory,
         IUserConfirmationService confirmationService,
-        IUserStateStore? userStateStore = null)
+        IEditorSettingStore? editorSettingStore = null,
+        IUserSettingStore? userSettingStore = null)
     {
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
-        _userStateStore = userStateStore ?? new UserStateStore();
+        _editorSettingStore = editorSettingStore ?? new EditorSettingStore();
+        _userSettingStore = userSettingStore ?? new UserSettingStore();
         CreateProjectCommand = new AsyncDelegateCommand(CreateProjectAsync, CanCreateProject);
         OpenProjectCommand = new AsyncDelegateCommand(OpenProjectAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ProjectFilePath));
         RefreshDevicesCommand = new AsyncDelegateCommand(RefreshDevicesAsync, () => !IsBusy);
@@ -461,6 +464,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         var result = await _projectService.CreateProjectAsync(new CreateProjectRequest(NewProjectDirectory, NewProjectName), progress, OperationCancellationToken);
         SetCurrentProject(result.Project);
+        await RestorePlatformScopeAsync();
         await RememberLastProjectAsync(result.Project.ProjectFilePath);
         StatusMessage = $"已创建工程：{result.Project.ProjectFilePath}";
     });
@@ -473,6 +477,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         var project = await _projectService.OpenProjectAsync(ProjectFilePath, progress, OperationCancellationToken);
         SetCurrentProject(project);
+
+        // 作用域是工程内的用户设置，只有工程打开后才有记录可读，因此在此恢复而不是在启动时。
+        await RestorePlatformScopeAsync();
         await RememberLastProjectAsync(project.ProjectFilePath);
         StatusMessage = $"已打开工程：{project.ProjectFilePath}";
     });
@@ -487,7 +494,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         string? lastPath;
         try
         {
-            lastPath = await _userStateStore.TryGetLastProjectFilePathAsync();
+            lastPath = await _editorSettingStore.TryGetLastProjectFilePathAsync();
         }
         catch (Exception exception)
         {
@@ -533,7 +540,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         try
         {
-            await _userStateStore.SaveLastProjectFilePathAsync(projectFilePath, OperationCancellationToken);
+            await _editorSettingStore.SaveLastProjectFilePathAsync(projectFilePath, OperationCancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -753,14 +760,26 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// 启动时恢复上次的平台作用域。读取失败只降级为一条日志并保持「全部」：
-    /// 记不住上次的选择不该让界面起不来，而「全部」不隐藏任何设备或归档。
+    /// 恢复当前工程记录的平台作用域，在工程打开后调用。作用域是工程内的用户设置，
+    /// 没有打开的工程就没有可读的记录，因此不在启动时独立恢复。
+    ///
+    /// 没有记录时保留当前作用域：把「记录缺失」当成「记录为全部」会在打开工程时
+    /// 重置用户刚选的平台。读取失败只降级为一条日志——记不住上次的选择不该让界面起不来。
     /// </summary>
     public async Task RestorePlatformScopeAsync()
     {
+        var project = _project;
+        if (project is null)
+        {
+            return;
+        }
+
         try
         {
-            var scope = await _userStateStore.GetPlatformScopeAsync();
+            if (await _userSettingStore.TryGetPlatformScopeAsync(project, OperationCancellationToken) is not { } scope)
+            {
+                return;
+            }
 
             // 直接写字段并手工触发刷新，绕开属性 setter 的保存分支：
             // 恢复读到的值再写回去是一次无意义的磁盘写入。
@@ -770,21 +789,28 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 ApplyPlatformScope();
             }
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            AddOperationLog("Error", $"读取上次的平台作用域失败：{exception.Message}");
+            AddOperationLog("Error", $"读取工程的平台作用域失败：{exception.Message}");
         }
     }
 
     /// <summary>
-    /// 记录当前平台作用域。写入失败只降级为一条日志：作用域已在界面上生效，
-    /// 不该因为记不住而报成切换失败。
+    /// 把当前平台作用域记进当前工程。未打开工程时无处可记，直接跳过——
+    /// 作用域此时只是本次会话的临时选择。写入失败只降级为一条日志：
+    /// 作用域已在界面上生效，不该因为记不住而报成切换失败。
     /// </summary>
     private async Task RememberPlatformScopeAsync(PlatformScope scope)
     {
+        var project = _project;
+        if (project is null)
+        {
+            return;
+        }
+
         try
         {
-            await _userStateStore.SavePlatformScopeAsync(scope);
+            await _userSettingStore.SavePlatformScopeAsync(project, scope, OperationCancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

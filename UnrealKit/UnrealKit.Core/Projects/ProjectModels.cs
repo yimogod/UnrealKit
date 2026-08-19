@@ -282,6 +282,12 @@ public sealed record UkitProject(
 
     public string ConfigFilePath => Path.Combine(ConfigDir, "DefaultGame.ini");
 
+    /// <summary>
+    /// 该工程的用户设置文件（平台作用域等界面选择）。与 <see cref="ConfigFilePath"/> 同目录但分文件：
+    /// <c>DefaultGame.ini</c> 是可版本化的工程配置，不该因为「谁上次看的是哪个平台」产生 diff。
+    /// </summary>
+    public string UserSettingFilePath => Path.Combine(ConfigDir, "UserSetting.ini");
+
     public ProjectConfigurationSnapshot CreateConfigurationSnapshot() =>
         new(Descriptor, Settings, DateTimeOffset.UtcNow);
 }
