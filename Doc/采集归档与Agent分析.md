@@ -15,6 +15,14 @@ Content/<Platform>/<Tag>/<YYYY-MM-DD>/<CaptureId>/
 - 已存在的 Capture 默认只读；重新拉取应创建新的 Capture，或由用户明确选择覆盖。
 - 解析后的表格、XLSX、HTML 和中间数据输出到 `Saved/Exports/` 或 `Saved/Reports/`，不得写回或重命名 `Content/` 原件。
 
+### 列出归档
+
+`CaptureAnalysisService.ListCaptureDirectoriesAsync` 的 `platform` 参数为 `null` 时枚举 `Content/` 下的**全部**平台目录，不得回退到某个默认平台——被跳过的平台目录既不显示也不报错，读起来就是「从未采集过」。平台名取自目录名本身，不与 `TargetPlatform` 枚举比对，未纳入枚举的平台目录同样列出。
+
+结果按采集日期倒序，同日期以 `CaptureId` 作为稳定次序：目录枚举顺序由文件系统决定，仅按日期排会让「最近一份」在两次刷新之间跳动。
+
+按 `CaptureId` 定位归档时命中多份必须报错并列出候选路径（跨平台查找使同一 ID 可能出现在多个平台目录下），不取第一个。
+
 ## CaptureManifest
 
 `CaptureManifest`（`UnrealKit.Core.Capture.CaptureModels`）当前记录：

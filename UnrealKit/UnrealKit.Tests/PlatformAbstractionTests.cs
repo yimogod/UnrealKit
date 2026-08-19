@@ -329,3 +329,74 @@ public sealed class AggregateDeviceProviderTests
             Task.FromResult<IReadOnlyList<IDevice>>([]);
     }
 }
+
+public sealed class PlatformScopeTests
+{
+    [Fact]
+    public void All_IncludesEveryPlatformName()
+    {
+        Assert.True(PlatformScope.All.IsAll);
+        Assert.All(PlatformNames.All, name => Assert.True(PlatformScope.All.Includes(name)));
+    }
+
+    [Fact]
+    public void All_IncludesUnknownPlatformName()
+    {
+        // 作用域是过滤器，不承担校验职责：静默丢弃未知平台会让归档目录凭空消失。
+        Assert.True(PlatformScope.All.Includes("PlayStation9"));
+    }
+
+    [Theory]
+    [InlineData(TargetPlatform.Android, "Android", true)]
+    [InlineData(TargetPlatform.Android, "android", true)]
+    [InlineData(TargetPlatform.Android, "Win64", false)]
+    [InlineData(TargetPlatform.Win64, "Win64", true)]
+    [InlineData(TargetPlatform.Win64, "Android", false)]
+    public void For_IncludesOnlyItsOwnPlatform(TargetPlatform platform, string candidate, bool expected)
+    {
+        Assert.Equal(expected, PlatformScope.For(platform).Includes(candidate));
+    }
+
+    [Fact]
+    public void AllOptions_PutsAllFirstAndCoversEveryPlatform()
+    {
+        // 「全部」在最前，且每个平台恰好一项：下拉框缺项等于该平台无法被聚焦。
+        Assert.True(PlatformScope.AllOptions[0].IsAll);
+        Assert.Equal(PlatformNames.All.Count + 1, PlatformScope.AllOptions.Count);
+        Assert.All(PlatformNames.All, name =>
+            Assert.Single(PlatformScope.AllOptions, option => option.Name == name));
+    }
+
+    [Theory]
+    [InlineData("Android")]
+    [InlineData("win64")]
+    [InlineData(PlatformScope.AllName)]
+    [InlineData("  All  ")]
+    public void TryParse_AcceptsScopeNamesCaseInsensitively(string value)
+    {
+        Assert.True(PlatformScope.TryParse(value, out var scope));
+        Assert.NotNull(scope);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("PlayStation9")]
+    [InlineData("99")]
+    public void TryParse_RejectsUnknownValuesAndYieldsAll(string? value)
+    {
+        // 无法识别时给出「全部」而不是某个平台：陈旧记录不该让界面聚焦到
+        // 用户没选过的平台，也不该隐藏任何设备。
+        Assert.False(PlatformScope.TryParse(value, out var scope));
+        Assert.True(scope.IsAll);
+    }
+
+    [Fact]
+    public void Equality_IsByPlatform()
+    {
+        Assert.Equal(PlatformScope.For(TargetPlatform.Win64), PlatformScope.For(TargetPlatform.Win64));
+        Assert.NotEqual(PlatformScope.For(TargetPlatform.Win64), PlatformScope.For(TargetPlatform.Android));
+        Assert.NotEqual(PlatformScope.All, PlatformScope.For(TargetPlatform.Android));
+    }
+}

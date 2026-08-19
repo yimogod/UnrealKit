@@ -8,7 +8,6 @@ namespace UnrealKit.Core.Capture;
 public sealed class CaptureAnalysisService : ICaptureAnalysisService
 {
     private const string MemInfoCategory = "MemInfo";
-    private static readonly string DefaultPlatform = Projects.PlatformNames.Android;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -41,56 +40,69 @@ public sealed class CaptureAnalysisService : ICaptureAnalysisService
         }
 
         var captures = new List<CaptureDirectoryInfo>();
-        var platformDir = platform ?? DefaultPlatform;
-        var platformPath = Path.Combine(root, platformDir);
-        if (!Directory.Exists(platformPath))
-        {
-            return Task.FromResult<IReadOnlyList<CaptureDirectoryInfo>>(Array.Empty<CaptureDirectoryInfo>());
-        }
 
-        foreach (var tagDir in Directory.EnumerateDirectories(platformPath))
+        // platform 为 null 时枚举 Content 下的全部平台目录。此前默认只看 Android，
+        // 于是 Win64 归档在 GUI 采集列表与历史趋势里既不显示也不报错，看起来像是没采过。
+        // 平台名取自目录名本身，不与 TargetPlatform 枚举比对：尚未纳入枚举的平台目录
+        // 同样应当被列出，按枚举过滤会重新引入静默跳过。
+        foreach (var platformPath in Directory.EnumerateDirectories(root))
         {
-            if (tag is not null && !string.Equals(Path.GetFileName(tagDir), tag, StringComparison.OrdinalIgnoreCase))
+            var platformDir = Path.GetFileName(platformPath);
+            if (platform is not null && !string.Equals(platformDir, platform, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            foreach (var dateDir in Directory.EnumerateDirectories(tagDir))
+            foreach (var tagDir in Directory.EnumerateDirectories(platformPath))
             {
-                foreach (var captureDir in Directory.EnumerateDirectories(dateDir))
+                if (tag is not null && !string.Equals(Path.GetFileName(tagDir), tag, StringComparison.OrdinalIgnoreCase))
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var manifestPath = Path.Combine(captureDir, "CaptureManifest.json");
-                    var hasManifest = File.Exists(manifestPath);
-                    var captureId = Path.GetFileName(captureDir);
-                    var dateName = Path.GetFileName(dateDir);
+                    continue;
+                }
 
-                    DateTimeOffset captureDate;
-                    if (!DateTimeOffset.TryParseExact(
-                            dateName, "yyyy-MM-dd",
-                            CultureInfo.InvariantCulture,
-                            DateTimeStyles.None,
-                            out captureDate))
+                cancellationToken.ThrowIfCancellationRequested();
+
+                foreach (var dateDir in Directory.EnumerateDirectories(tagDir))
+                {
+                    foreach (var captureDir in Directory.EnumerateDirectories(dateDir))
                     {
-                        captureDate = DateTimeOffset.MinValue;
-                    }
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var manifestPath = Path.Combine(captureDir, "CaptureManifest.json");
+                        var hasManifest = File.Exists(manifestPath);
+                        var captureId = Path.GetFileName(captureDir);
+                        var dateName = Path.GetFileName(dateDir);
 
-                    captures.Add(new CaptureDirectoryInfo(
-                        captureDir,
-                        Path.GetRelativePath(root, captureDir).Replace(Path.DirectorySeparatorChar, '/'),
-                        captureId,
-                        platformDir,
-                        Path.GetFileName(tagDir),
-                        captureDate,
-                        manifestPath,
-                        hasManifest));
+                        DateTimeOffset captureDate;
+                        if (!DateTimeOffset.TryParseExact(
+                                dateName, "yyyy-MM-dd",
+                                CultureInfo.InvariantCulture,
+                                DateTimeStyles.None,
+                                out captureDate))
+                        {
+                            captureDate = DateTimeOffset.MinValue;
+                        }
+
+                        captures.Add(new CaptureDirectoryInfo(
+                            captureDir,
+                            Path.GetRelativePath(root, captureDir).Replace(Path.DirectorySeparatorChar, '/'),
+                            captureId,
+                            platformDir,
+                            Path.GetFileName(tagDir),
+                            captureDate,
+                            manifestPath,
+                            hasManifest));
+                    }
                 }
             }
         }
 
-        captures.Sort((a, b) => b.CaptureDate.CompareTo(a.CaptureDate));
+        // 同日期的多份归档按 CaptureId 稳定排序：目录枚举顺序由文件系统决定，
+        // 仅按日期排会让「最近一份」在两次刷新间跳动。
+        captures.Sort((a, b) => b.CaptureDate.CompareTo(a.CaptureDate) is var byDate && byDate != 0
+            ? byDate
+            : string.CompareOrdinal(b.CaptureId, a.CaptureId));
         return Task.FromResult<IReadOnlyList<CaptureDirectoryInfo>>(captures);
     }
 

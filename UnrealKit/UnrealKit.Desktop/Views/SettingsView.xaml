@@ -7,6 +7,8 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <TextBlock Text="项目默认配置" Style="{StaticResource SectionTitleTextStyle}" />
+        <TextBlock Text="保存到 Config/DefaultGame.ini。采集和命令行会读取相同项目配置。" Style="{StaticResource HintTextStyle}" Margin="0,12,0,0" />
+        <Button Content="保存" Command="{Binding SaveProjectSettingsCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,16,0,0" />
         <ScrollViewer Grid.Row="1" Margin="0,14,0,0" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <!-- 跨平台配置 -->
@@ -16,10 +18,11 @@
                 <TextBox Text="{Binding CaptureTag, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
 
                 <!-- 各平台配置并列可编辑：同一工程可以同时跑多个平台，
-                     本次操作用哪个平台由设备列表中所选的设备决定，不在此处选择。 -->
+                     本次操作用哪个平台由设备列表中所选的设备决定，不在此处选择。
+                     顶部的平台下拉只过滤列表显示，同样不决定操作平台。 -->
                 <TextBlock Text="平台配置" Style="{StaticResource StackedFieldLabelTextStyle}" />
-                <TextBlock Text="勾选本工程会用到的平台并填写其配置。采集时的平台由所选设备决定。"
-                           Style="{StaticResource HintTextStyle}" Margin="0,2,0,8" />
+                <TextBlock Text="勾选本工程会用到的平台并填写其配置。采集时的平台由所选设备决定；顶部的平台下拉只用于过滤列表显示。"
+                           Style="{StaticResource HintTextStyle}" Margin="0,2,0,8" TextWrapping="Wrap" />
 
                 <GroupBox Margin="0,4,0,0" Padding="10,6,10,10">
                     <GroupBox.Header>
@@ -56,8 +59,7 @@
                     </StackPanel>
                 </GroupBox>
 
-                <TextBlock Text="保存到 Config/DefaultGame.ini。采集和命令行会读取相同项目配置。" Style="{StaticResource HintTextStyle}" Margin="0,12,0,0" />
-                <Button Content="保存项目配置" Command="{Binding SaveProjectSettingsCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,16,0,0" />
+                
             </StackPanel>
         </ScrollViewer>
     </Grid>

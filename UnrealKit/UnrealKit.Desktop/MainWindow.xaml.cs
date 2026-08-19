@@ -17,15 +17,18 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 启动时恢复上次打开的工程。放在 Loaded 而不是构造函数：
+    /// 启动时恢复上次的界面状态。放在 Loaded 而不是构造函数：
     /// 工程不可用时要弹提示框，此时主窗口必须已经显示，否则提示框没有可靠的父窗口。
     /// </summary>
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        // 只在首次显示时恢复，之后用户切换的工程不该被再次覆盖。
+        // 只在首次显示时恢复，之后用户切换的工程与作用域不该被再次覆盖。
         Loaded -= MainWindow_Loaded;
         if (DataContext is ShellViewModel viewModel)
         {
+            // 先恢复作用域再打开工程：反过来会让工程打开后的设备刷新按「全部」执行一遍，
+            // 随后作用域到位又刷一遍，用户看到列表闪一下。
+            await viewModel.RestorePlatformScopeAsync();
             await viewModel.RestoreLastProjectAsync();
         }
     }

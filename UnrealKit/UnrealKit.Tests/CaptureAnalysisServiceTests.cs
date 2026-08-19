@@ -64,6 +64,52 @@ public sealed class CaptureAnalysisServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ListCaptureDirectoriesAsync_WithoutPlatformFilter_ListsEveryPlatform()
+    {
+        // 不传 platform 必须列出全部平台。曾经默认只看 Android，于是 Win64 归档
+        // 在 GUI 采集列表与历史趋势里既不显示也不报错，看起来像是从未采集过。
+        var project = await CreateProjectAsync("AllPlatformsTest");
+        CreateCapture(project, "Android", "Nightly", "2026-08-06", "20260806-120000-dev01");
+        CreateCapture(project, "Win64", "Nightly", "2026-08-06", "20260806-113000-localhost");
+
+        var captures = await new CaptureAnalysisService().ListCaptureDirectoriesAsync(project);
+
+        Assert.Equal(2, captures.Count);
+        Assert.Contains(captures, c => c.Platform == "Android");
+        Assert.Contains(captures, c => c.Platform == "Win64");
+    }
+
+    [Fact]
+    public async Task ListCaptureDirectoriesAsync_FilteredByPlatform_ReturnsMatchingOnly()
+    {
+        var project = await CreateProjectAsync("PlatformFilterTest");
+        CreateCapture(project, "Android", "Nightly", "2026-08-06", "20260806-120000-dev01");
+        CreateCapture(project, "Win64", "Nightly", "2026-08-06", "20260806-113000-localhost");
+
+        var captures = await new CaptureAnalysisService().ListCaptureDirectoriesAsync(project, platform: "Win64");
+
+        Assert.Single(captures);
+        Assert.Equal("Win64", captures[0].Platform);
+    }
+
+    [Fact]
+    public async Task ListCaptureDirectoriesAsync_SameDateAcrossPlatforms_OrdersStably()
+    {
+        // 同日期的多份归档必须稳定排序：目录枚举顺序由文件系统决定，
+        // 仅按日期排会让「最近一份」在两次刷新之间跳动。
+        var project = await CreateProjectAsync("StableOrderTest");
+        CreateCapture(project, "Android", "Nightly", "2026-08-06", "20260806-120000-dev01");
+        CreateCapture(project, "Win64", "Nightly", "2026-08-06", "20260806-113000-localhost");
+
+        var service = new CaptureAnalysisService();
+        var first = await service.ListCaptureDirectoriesAsync(project);
+        var second = await service.ListCaptureDirectoriesAsync(project);
+
+        Assert.Equal(first.Select(c => c.CaptureId), second.Select(c => c.CaptureId));
+        Assert.Equal("20260806-120000-dev01", first[0].CaptureId);
+    }
+
+    [Fact]
     public async Task ListCaptureFilesAsync_ListsFilesInEachCategory()
     {
         var project = await CreateProjectAsync("FileListTest");

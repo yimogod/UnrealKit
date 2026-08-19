@@ -203,6 +203,20 @@
                     
                     <MenuItem Header="Log" Click="OpenOperationLog_Click" Style="{StaticResource BrandMenuItemStyle}" />
                 </Menu>
+
+                <!--
+                    平台作用域放在品牌栏而非某个页面内: 它同时约束设备列表、采集归档列表
+                    和历史趋势，放进任一页面都会让另外两页需要各自再选一次平台.
+                    这是视图过滤器，不是「当前平台」配置——操作用哪个平台仍由所选设备决定.
+                -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="平台" Foreground="#FFD8E0EC" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ComboBox ItemsSource="{Binding PlatformScopeOptions}"
+                              SelectedItem="{Binding PlatformScope}"
+                              DisplayMemberPath="Name"
+                              MinWidth="110" Padding="8,3" VerticalContentAlignment="Center"
+                              ToolTip="限定设备列表、采集归档与历史趋势只显示该平台。选「All」显示全部平台。" />
+                </StackPanel>
             </DockPanel>
         </Border>
 

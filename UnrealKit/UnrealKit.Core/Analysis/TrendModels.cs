@@ -8,7 +8,7 @@ namespace UnrealKit.Core.Analysis;
 /// </summary>
 /// <param name="Project">Project whose <c>Content/</c> archive is scanned.</param>
 /// <param name="Source">Report type to read from each capture. Both the type and the file are explicit, never inferred.</param>
-/// <param name="Platform">Optional platform directory filter. Defaults to the capture listing default.</param>
+/// <param name="Platform">Optional platform directory filter. Null scans every platform directory.</param>
 /// <param name="Tag">Optional capture tag filter.</param>
 /// <param name="DeviceSerialNumber">Optional device filter, matched against the capture manifest.</param>
 /// <param name="From">Optional inclusive lower bound on capture date.</param>

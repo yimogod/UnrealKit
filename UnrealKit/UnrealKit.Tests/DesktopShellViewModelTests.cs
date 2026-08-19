@@ -174,7 +174,7 @@ public sealed class DesktopShellViewModelTests
     public async Task OpenProject_RecordsProjectAsLastOpened()
     {
         var project = CreateProject();
-        var store = new FakeRecentProjectStore();
+        var store = new FakeUserStateStore();
         var viewModel = new ShellViewModel(
             new StaticProjectService(project),
             new StaticAdbServiceFactory(new RecordingAdbService()),
@@ -202,7 +202,7 @@ public sealed class DesktopShellViewModelTests
                 new StaticProjectService(project),
                 new StaticAdbServiceFactory(new RecordingAdbService()),
                 confirmation,
-                new FakeRecentProjectStore(projectFilePath));
+                new FakeUserStateStore(projectFilePath));
 
             await viewModel.RestoreLastProjectAsync();
 
@@ -225,7 +225,7 @@ public sealed class DesktopShellViewModelTests
             new StaticProjectService(CreateProject()),
             new StaticAdbServiceFactory(new RecordingAdbService()),
             confirmation,
-            new FakeRecentProjectStore(missingPath));
+            new FakeUserStateStore(missingPath));
 
         await viewModel.RestoreLastProjectAsync();
 
@@ -247,7 +247,7 @@ public sealed class DesktopShellViewModelTests
                 new FailingProjectService("工程描述文件缺少 ProjectName。"),
                 new StaticAdbServiceFactory(new RecordingAdbService()),
                 confirmation,
-                new FakeRecentProjectStore(projectFilePath));
+                new FakeUserStateStore(projectFilePath));
 
             await viewModel.RestoreLastProjectAsync();
 
@@ -269,7 +269,7 @@ public sealed class DesktopShellViewModelTests
             new StaticProjectService(CreateProject()),
             new StaticAdbServiceFactory(new RecordingAdbService()),
             confirmation,
-            new FakeRecentProjectStore());
+            new FakeUserStateStore());
 
         await viewModel.RestoreLastProjectAsync();
 
@@ -429,6 +429,107 @@ public sealed class DesktopShellViewModelTests
         Assert.All(viewModel.Devices, device => Assert.False(device.HasAlias));
     }
 
+    [Fact]
+    public async Task PlatformScope_DefaultsToAll_AndListsEveryPlatform()
+    {
+        // 默认不过滤：隐式默认某个平台会让另一个平台的设备静默消失。
+        var viewModel = await CreateRefreshedViewModelAsync();
+
+        Assert.True(viewModel.PlatformScope.IsAll);
+        Assert.Contains(viewModel.ScopedDevices, device => device.Platform == "Android");
+        Assert.Contains(viewModel.ScopedDevices, device => device.Platform == "Win64");
+        Assert.Equal(viewModel.Devices.Count, viewModel.ScopedDevices.Count);
+    }
+
+    [Fact]
+    public async Task PlatformScope_FiltersScopedDevicesButKeepsFullList()
+    {
+        // Devices 保留全量、ScopedDevices 过滤：两者都需要，
+        // 才能区分「该平台没有设备」与「有设备但被作用域挡住」。
+        var viewModel = await CreateRefreshedViewModelAsync();
+
+        viewModel.PlatformScope = PlatformScope.For(TargetPlatform.Win64);
+
+        Assert.All(viewModel.ScopedDevices, device => Assert.Equal("Win64", device.Platform));
+        Assert.Contains(viewModel.Devices, device => device.Platform == "Android");
+        Assert.Contains("Win64", viewModel.PlatformScopeDescription, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PlatformScope_ClearsSelectedDeviceThatFallsOutsideScope()
+    {
+        // 已选设备落到作用域外必须清空：留着它会让后续操作打到用户以为已排除的平台。
+        var viewModel = await CreateRefreshedViewModelAsync();
+        viewModel.SelectedDevice = viewModel.Devices.First(device => device.Platform == "Android");
+
+        viewModel.PlatformScope = PlatformScope.For(TargetPlatform.Win64);
+
+        Assert.NotEqual("Android", viewModel.SelectedDevice?.Platform);
+    }
+
+    [Fact]
+    public async Task PlatformScope_KeepsSelectedDeviceThatStaysInScope()
+    {
+        // 已选设备仍在作用域内时保持选中：换作用域不该打断正在进行的工作。
+        var viewModel = await CreateRefreshedViewModelAsync();
+        var android = viewModel.Devices.First(device => device.Platform == "Android");
+        viewModel.SelectedDevice = android;
+
+        viewModel.PlatformScope = PlatformScope.For(TargetPlatform.Android);
+
+        Assert.Same(android, viewModel.SelectedDevice);
+    }
+
+    [Fact]
+    public void PlatformScope_IsPersistedOnChange()
+    {
+        var project = CreateProject();
+        var store = new FakeUserStateStore();
+        var viewModel = new ShellViewModel(
+            new StaticProjectService(project),
+            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new RecordingConfirmationService(true),
+            store);
+
+        viewModel.PlatformScope = PlatformScope.For(TargetPlatform.Win64);
+
+        Assert.Equal(PlatformScope.For(TargetPlatform.Win64), store.SavedScope);
+    }
+
+    [Fact]
+    public async Task RestorePlatformScopeAsync_AppliesStoredScope()
+    {
+        var project = CreateProject();
+        var viewModel = new ShellViewModel(
+            new StaticProjectService(project),
+            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new RecordingConfirmationService(true),
+            new FakeUserStateStore(platformScope: PlatformScope.For(TargetPlatform.Win64)));
+
+        await viewModel.RestorePlatformScopeAsync();
+
+        Assert.Equal(PlatformScope.For(TargetPlatform.Win64), viewModel.PlatformScope);
+    }
+
+    /// <summary>
+    /// 打开工程并刷新一次设备，得到同时含 Android 与 Win64 的设备列表。
+    /// </summary>
+    private static async Task<ShellViewModel> CreateRefreshedViewModelAsync()
+    {
+        var project = CreateProject();
+        var viewModel = new ShellViewModel(
+            new StaticProjectService(project),
+            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new RecordingConfirmationService(true))
+        {
+            ProjectFilePath = project.ProjectFilePath
+        };
+
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+        await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+        return viewModel;
+    }
+
     private static async Task<ShellViewModel> CreateViewModelWithSelectedAndroidDeviceAsync(RecordingAdbService adb)
     {
         var project = CreateProject();
@@ -494,9 +595,13 @@ public sealed class DesktopShellViewModelTests
         }
     }
 
-    private sealed class FakeRecentProjectStore(string? lastProjectFilePath = null) : IRecentProjectStore
+    private sealed class FakeUserStateStore(
+        string? lastProjectFilePath = null,
+        PlatformScope? platformScope = null) : IUserStateStore
     {
         public string? Saved { get; private set; }
+
+        public PlatformScope? SavedScope { get; private set; }
 
         public Task<string?> TryGetLastProjectFilePathAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(lastProjectFilePath);
@@ -504,6 +609,15 @@ public sealed class DesktopShellViewModelTests
         public Task SaveLastProjectFilePathAsync(string projectFilePath, CancellationToken cancellationToken = default)
         {
             Saved = projectFilePath;
+            return Task.CompletedTask;
+        }
+
+        public Task<PlatformScope> GetPlatformScopeAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(platformScope ?? PlatformScope.All);
+
+        public Task SavePlatformScopeAsync(PlatformScope scope, CancellationToken cancellationToken = default)
+        {
+            SavedScope = scope;
             return Task.CompletedTask;
         }
     }

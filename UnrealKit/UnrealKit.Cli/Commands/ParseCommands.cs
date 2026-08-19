@@ -158,11 +158,18 @@ internal static class ParseCommands
             return Path.GetFullPath(captureIdOrPath);
         }
 
+        // 跨全部平台查找，因此同一 ID 可能在多个平台目录下出现；命中多份时报错并
+        // 列出候选，不取第一个——与 analyze diff 的解析规则一致。
         var captures = await service.ListCaptureDirectoriesAsync(project, platform: null, tag: null);
-        var match = captures.FirstOrDefault(c => string.Equals(c.CaptureId, captureIdOrPath, StringComparison.Ordinal));
-        return match is null
-            ? throw new ArgumentException($"Capture not found: {captureIdOrPath}. Use 'unrealkit parse capture-list --project <project.ukit>' to list available captures.")
-            : match.FullPath;
+        var matches = captures.Where(c => string.Equals(c.CaptureId, captureIdOrPath, StringComparison.Ordinal)).ToArray();
+        return matches.Length switch
+        {
+            1 => matches[0].FullPath,
+            0 => throw new ArgumentException($"Capture not found: {captureIdOrPath}. Use 'unrealkit parse capture-list --project <project.ukit>' to list available captures."),
+            _ => throw new ArgumentException(
+                $"Capture ID '{captureIdOrPath}' matches {matches.Length} archives. Pass the capture directory path instead: " +
+                string.Join(", ", matches.Select(match => match.RelativePath)))
+        };
     }
 
     private static int FailUsage()

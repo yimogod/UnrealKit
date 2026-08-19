@@ -10,10 +10,17 @@
         </Grid.RowDefinitions>
         <DockPanel>
             <Button Content="刷新设备" Command="{Binding RefreshDevicesCommand}" Padding="14,7" DockPanel.Dock="Right" />
-            <TextBlock Text="ADB 设备" Style="{StaticResource SectionTitleTextStyle}" VerticalAlignment="Center" />
+            <!-- 标题不写「ADB 设备」：这份列表是跨平台聚合的，Win64 本机始终在列，
+                 只提 ADB 会让本机那一行看起来像是误入的 adb 设备。 -->
+            <TextBlock Text="设备" Style="{StaticResource SectionTitleTextStyle}" VerticalAlignment="Center" />
         </DockPanel>
         <StackPanel Grid.Row="1" Margin="0,10,0,14">
             <TextBlock Text="明确选择一台状态为 device 的设备；多设备时不会自动选择第一台。" TextWrapping="Wrap" />
+            <TextBlock Text="列表包含 Win64 本机（设备 id 为 localhost）与已连接的 Android ADB 设备，平台列标明每行属于哪个平台。"
+                       Style="{StaticResource HintTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
+            <!-- 作用域挡住设备时把原因显示出来，否则「列表变短」会被读成设备掉线。 -->
+            <TextBlock Text="{Binding PlatformScopeDescription}" Style="{StaticResource HintTextStyle}"
+                       TextWrapping="Wrap" Margin="0,4,0,0" />
             <TextBlock Text="别名在工程 Config/DefaultGame.ini 的 [UnrealKit.DeviceAliases] 下按「设备 id=别名」配置，仅用于辨认设备，不参与设备选择。"
                        Style="{StaticResource HintTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
             <DockPanel Margin="0,12,0,0" LastChildFill="True">
@@ -25,7 +32,8 @@
              各写一份，改一列必须同步改两处，漏改就是静默错位；且行模板的 Grid 受
              ListBoxItem.HorizontalContentAlignment 默认值 Left 影响，星号列只按内容宽度分配，
              与表头对不上。列头排序与拖拽调宽也一并由 DataGrid 提供，与其他页面表格一致。 -->
-        <DataGrid Grid.Row="2" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}"
+        <!-- 绑 ScopedDevices 而非 Devices: 后者保留未过滤的全量，用于说明作用域隐藏了多少台。 -->
+        <DataGrid Grid.Row="2" ItemsSource="{Binding ScopedDevices}" SelectedItem="{Binding SelectedDevice}"
                   AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                   HeadersVisibility="Column" SelectionMode="Single" GridLinesVisibility="Horizontal">
             <DataGrid.Columns>
@@ -33,6 +41,15 @@
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock" BasedOn="{StaticResource EmphasisTextStyle}">
                             <Setter Property="ToolTip" Value="设备 id（Android 为 ADB 序列号），所有操作以它为准。" />
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+                <!-- 平台列不可省：同一份列表里既有 Win64 本机也有 Android 设备，
+                     缺这一列就只能靠 id 恰好是 localhost 去猜，配了别名后更认不出来。 -->
+                <DataGridTextColumn Header="平台" Binding="{Binding Platform}" Width="*">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="ToolTip" Value="该设备所属平台，决定后续采集与启动走本机进程还是 ADB。" />
                         </Style>
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>

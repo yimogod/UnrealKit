@@ -4,6 +4,23 @@ All notable changes to UnrealKit.
 
 ## [Unreleased]
 
+### Platform Scope
+
+A single analysis session targets one platform — this run looks at the Windows build, the next at Android. The GUI now has one place to say which, and the device list, capture archive list, and history trend all narrow to it.
+
+- New platform selector in the GUI title bar, next to the Project and Log menus. It covers all three lists at once; putting it inside any one page would force the other two to ask again. Defaults to `All`, which filters nothing
+- **The scope is a view filter, not a "current platform" setting.** Which platform an operation runs against is still derived from the selected device (`ProjectSettings.ResolveTarget`), exactly as before. `.ukit` v2 removed the `Platform` field for a reason — a config value and a selected device would be two contradicting sources of truth, and whichever won would be wrong in the other's terms. New `UnrealKit.Core.Projects.PlatformScope`; no `.ukit` or `DefaultGame.ini` field is added
+- Scope persists across sessions in the existing user-level state file (`[UnrealKit.Scope] Platform` in `%LOCALAPPDATA%\UnrealKit\UserState.ini`). An unrecognized or stale value falls back to `All` rather than focusing a platform the user never picked. `IRecentProjectStore` / `RecentProjectStore` are renamed to `IUserStateStore` / `UserStateStore` now that they hold more than the recent project; the file format and the `[UnrealKit.RecentProject]` section are unchanged
+- Device enumeration narrows with the scope, matching the CLI's `--platform`: scoping to Win64 no longer starts `adb`, so a missing `adb` stops being a failure reason for local operations
+- `ShellViewModel.Devices` keeps the unfiltered list and the new `ScopedDevices` is what the grid binds. Both are needed to tell "no devices on this platform" apart from "devices exist but the scope hides them", and the Devices page states which case it is instead of letting a shorter list read as a disconnection
+- A selected device that falls outside a newly chosen scope is cleared; one that stays inside keeps its selection. Auto-selecting the single available device still happens, but now only within the scope — the scope is the user's explicit choice, so it is not the implicit selection `Doc/设备操作与文件安全.md` rules out
+
+### Win64 Captures Were Invisible In Analysis Lists (bug fix)
+- `CaptureAnalysisService.ListCaptureDirectoriesAsync` defaulted to the `Android` platform directory when no platform was passed, and every caller passed nothing: the GUI capture list and history trend, `unrealkit parse capture-list`, and `unrealkit analyze diff`. **Win64 archives under `Content/Win64/` were silently skipped** — neither listed nor reported, which reads as "never captured". Null now scans every platform directory
+- Same-date archives are ordered by capture id as a tiebreak. Directory enumeration order comes from the filesystem, so sorting by date alone let "the most recent one" move between refreshes
+- `unrealkit parse --capture <id>` now reports ambiguity instead of taking the first match, matching what `analyze diff` already did. Searching every platform makes one id resolvable to several archives, and picking one silently is the implicit choice invariant #4 forbids
+- The GUI capture list states the total and the scope when it truncates at 200 entries; silently showing the first 200 made a missing archive read as "not captured"
+
 ### Device Aliases
 - Device lists now show the device id explicitly labelled as such (Android: ADB serial; Win64: `localhost`), plus an optional alias configured per device. Same-model test devices were previously indistinguishable in the list — the id column and the self-reported model were all there was
 - New `[UnrealKit.DeviceAliases]` section in `Config/DefaultGame.ini`, keyed by device id (`6d062c71=小米平板5-测试机A`). The key is the same value as `IDevice.Id` and the CLI's `--device`, so an alias resolves anywhere devices are listed without a second device query. Lookup is case-insensitive, matching `--device` matching. Aliases merge through the layered INI, so `BaseGame.ini` can hold team-wide aliases that a project overrides
@@ -16,7 +33,7 @@ All notable changes to UnrealKit.
 
 ### Reopen Last Project On Startup
 - The GUI reopens the last project on launch. The path comes from a new user-level state file, `%LOCALAPPDATA%\UnrealKit\UserState.ini` (`[UnrealKit.RecentProject] LastProjectFilePath`), written whenever a project is opened or created
-- Kept out of `.ukit` and `Config/DefaultGame.ini`: "which project I had open" is per-user session state, not versioned project config. Also kept out of `ApplicationPaths.AppDir` — the program directory can be read-only or replaced wholesale. New `ApplicationPaths.UserStateDir` and `IRecentProjectStore` / `RecentProjectStore` in `UnrealKit.Core.Runtime`
+- Kept out of `.ukit` and `Config/DefaultGame.ini`: "which project I had open" is per-user session state, not versioned project config. Also kept out of `ApplicationPaths.AppDir` — the program directory can be read-only or replaced wholesale. New `ApplicationPaths.UserStateDir` and `IUserStateStore` / `UserStateStore` in `UnrealKit.Core.Runtime`
 - When the recorded project is missing or fails to open, a dialog shows the full path and the reason, and the shell returns to the "no project open" state so the user creates or opens one from the menu. The record is not cleared and no other project is substituted
 - Failing to write the record degrades to an operation-log entry — the project is already open, so it is not reported as an open failure. An unreadable state file is treated as "no record" rather than blocking startup
 - Restore runs on window `Loaded` (the alert needs a shown owner window) and only on first show, so a project the user switches to afterwards is not overwritten

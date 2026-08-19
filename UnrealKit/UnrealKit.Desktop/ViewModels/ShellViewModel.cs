@@ -28,7 +28,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly IProjectService _projectService;
     private readonly IDesktopAdbServiceFactory _adbServiceFactory;
     private readonly IUserConfirmationService _confirmationService;
-    private readonly IRecentProjectStore _recentProjectStore;
+    private readonly IUserStateStore _userStateStore;
     // 工程与工程配置已移到菜单栏，导航首项因此是「设备」。
     private string _selectedNavigationItem = "设备";
     private string _statusMessage = "未打开工程。请从菜单栏「工程」打开或创建工程。";
@@ -96,6 +96,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _consoleSequenceOutput = "Run a sequence to see results here.";
     private bool _isConsoleSequenceRunning;
     private UkitProject? _project;
+    private PlatformScope _platformScope = PlatformScope.All;
     private DeviceDisplayInfo? _selectedDevice;
     private string _selectedDeviceIpSummary = "点击「获取 IP」查询所选设备的地址。";
     private CaptureFileInfo? _selectedCaptureResultFile;
@@ -113,12 +114,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         IProjectService projectService,
         IDesktopAdbServiceFactory adbServiceFactory,
         IUserConfirmationService confirmationService,
-        IRecentProjectStore? recentProjectStore = null)
+        IUserStateStore? userStateStore = null)
     {
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
-        _recentProjectStore = recentProjectStore ?? new RecentProjectStore();
+        _userStateStore = userStateStore ?? new UserStateStore();
         CreateProjectCommand = new AsyncDelegateCommand(CreateProjectAsync, CanCreateProject);
         OpenProjectCommand = new AsyncDelegateCommand(OpenProjectAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ProjectFilePath));
         RefreshDevicesCommand = new AsyncDelegateCommand(RefreshDevicesAsync, () => !IsBusy);
@@ -149,10 +150,17 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
     /// <summary>
-    /// 设备列表。元素是带工程别名的展示投影；需要对设备执行操作时取
-    /// <see cref="DeviceDisplayInfo.Device"/>，不要把投影当设备传下去。
+    /// 枚举到的全部设备，不受平台作用域影响。元素是带工程别名的展示投影；
+    /// 需要对设备执行操作时取 <see cref="DeviceDisplayInfo.Device"/>，
+    /// 不要把投影当设备传下去。
+    ///
+    /// 界面绑定 <see cref="ScopedDevices"/>；这里保留未过滤的全量，
+    /// 才能区分「该平台没有设备」与「有设备但被作用域挡住了」。
     /// </summary>
     public ObservableCollection<DeviceDisplayInfo> Devices { get; } = [];
+
+    /// <summary>当前平台作用域内的设备，供设备列表绑定。</summary>
+    public ObservableCollection<DeviceDisplayInfo> ScopedDevices { get; } = [];
     public ObservableCollection<ConsoleSequencePreset> ConsoleSequencePresets { get; } = [];
     public ObservableCollection<LaunchParameterPresetOption> LaunchParameterPresets { get; } = [];
     public ObservableCollection<MemInfoMetricOption> MemInfoMetrics { get; } = [];
@@ -160,6 +168,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<MemInfoNamedEntryOption> MemInfoDalvikEntries { get; } = [];
     public ObservableCollection<MemInfoNamedEntryOption> MemInfoObjectEntries { get; } = [];
     public ObservableCollection<MemInfoDiagnosticOption> MemInfoDiagnostics { get; } = [];
+    /// <summary>平台作用域下拉的可选项，「全部」在最前。</summary>
+    public IReadOnlyList<PlatformScope> PlatformScopeOptions { get; } = PlatformScope.AllOptions;
     public ObservableCollection<CaptureDirectoryInfo> CaptureResults { get; } = [];
     public ObservableCollection<CaptureFileInfo> CaptureResultFiles { get; } = [];
     public ObservableCollection<MemInfoMetricOption> CaptureResultMetrics { get; } = [];
@@ -214,7 +224,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     public string PageDescription => SelectedNavigationItem switch
     {
-        "设备" => "刷新 ADB 设备并明确选择目标设备；不会依赖默认第一台设备。",
+        "设备" => "刷新设备列表（Win64 本机与 ADB 设备）并明确选择目标设备；不会依赖默认第一台设备。",
         "启动参数" => "选择预设并预览 uecommandline.txt，然后推送到已明确选择的设备。",
         "控制台" => "向运行中的 UE Android 应用发送控制台指令，支持序列编排和 logcat 条件执行。",
         "采集归档" => "将采集数据归档到新的 Content Capture，避免覆盖历史数据。",
@@ -313,6 +323,47 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string ProjectTitle => _project is null ? "当前工程：未打开" : $"当前工程：{_project.Descriptor.ProjectName}";
     public bool IsBusy { get => _isBusy; private set { if (SetField(ref _isBusy, value)) RaiseCommandStates(); } }
 
+    /// <summary>
+    /// 本次分析聚焦的平台。这是视图过滤器，决定设备列表与归档列表显示什么；
+    /// 操作用哪个平台仍由 <see cref="SelectedDevice"/> 派生，作用域不参与该判定。
+    /// 详见 <see cref="Core.Projects.PlatformScope"/>。
+    /// </summary>
+    public PlatformScope PlatformScope
+    {
+        get => _platformScope;
+        set
+        {
+            // 下拉框在初始化阶段可能推来 null；回落到「全部」而不是留下 null，
+            // 后者会让 Includes 判断处处需要判空。
+            var scope = value ?? PlatformScope.All;
+            if (!SetField(ref _platformScope, scope)) return;
+
+            OnPropertyChanged(nameof(PlatformScopeDescription));
+            ApplyPlatformScope();
+            _ = RememberPlatformScopeAsync(scope);
+        }
+    }
+
+    /// <summary>
+    /// 作用域现状说明。过滤掉了设备就说明数量，让「列表短了」有可见的原因，
+    /// 而不是看起来像设备掉线了。
+    /// </summary>
+    public string PlatformScopeDescription
+    {
+        get
+        {
+            if (PlatformScope.IsAll)
+            {
+                return "显示全部平台。";
+            }
+
+            var hidden = Devices.Count - ScopedDevices.Count;
+            return hidden > 0
+                ? $"仅显示 {PlatformScope.Name}，已隐藏其他平台的 {hidden} 台设备。"
+                : $"仅显示 {PlatformScope.Name}。";
+        }
+    }
+
     public DeviceDisplayInfo? SelectedDevice
     {
         get => _selectedDevice;
@@ -382,10 +433,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     /// <summary>
     /// 所选设备摘要。设备标识始终在最前：后续所有操作以它为准，
     /// 别名只是便于人辨认，把别名放在标识位置会让日志与界面对不上。
+    /// 带上平台：同一份列表里 Win64 本机与 Android 设备并存，
+    /// 摘要里不写平台就无法确认「接下来的操作走本机进程还是 ADB」。
     /// </summary>
     public string SelectedDeviceDescription => SelectedDevice is null
         ? "尚未选择设备。"
-        : $"{SelectedDevice.Id} · {SelectedDevice.StatusText} · {SelectedDevice.Name}"
+        : $"{SelectedDevice.Id} · {SelectedDevice.Platform} · {SelectedDevice.StatusText} · {SelectedDevice.Name}"
           + (SelectedDevice.HasAlias ? $" · 别名：{SelectedDevice.Alias}" : string.Empty);
 
     /// <summary>
@@ -434,7 +487,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         string? lastPath;
         try
         {
-            lastPath = await _recentProjectStore.TryGetLastProjectFilePathAsync();
+            lastPath = await _userStateStore.TryGetLastProjectFilePathAsync();
         }
         catch (Exception exception)
         {
@@ -480,7 +533,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         try
         {
-            await _recentProjectStore.SaveLastProjectFilePathAsync(projectFilePath, OperationCancellationToken);
+            await _userStateStore.SaveLastProjectFilePathAsync(projectFilePath, OperationCancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -488,7 +541,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
     }
 
-    private Task RefreshDevicesAsync() => RunAsync("正在刷新 ADB 设备…", async progress =>
+    private Task RefreshDevicesAsync() => RunAsync("正在刷新设备列表…", async progress =>
     {
         var devices = await ListDevicesAsync(progress, OperationCancellationToken);
         UpdateDevices(devices);
@@ -547,14 +600,24 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private async Task<IReadOnlyList<DeviceDisplayInfo>> ListDevicesAsync(IProgress<OperationProgress> progress, CancellationToken cancellationToken)
     {
-        var providers = new List<IDeviceProvider> { new Win64DeviceService() };
-        try
+        // 作用域限定了平台就只枚举该平台，与 CLI 的 --platform 一致：跨平台枚举会为一个
+        // 用不到的平台去起 adb，把「adb 未安装」变成 Win64 操作的失败原因。
+        var providers = new List<IDeviceProvider>();
+        if (PlatformScope.Includes(PlatformNames.Win64))
         {
-            providers.Add(new AdbDeviceService(CreateAdbService()));
+            providers.Add(new Win64DeviceService());
         }
-        catch (AdbPathResolutionException exception)
+
+        if (PlatformScope.Includes(PlatformNames.Android))
         {
-            providers.Add(new UnavailableDeviceProvider(TargetPlatform.Android, exception.Message));
+            try
+            {
+                providers.Add(new AdbDeviceService(CreateAdbService()));
+            }
+            catch (AdbPathResolutionException exception)
+            {
+                providers.Add(new UnavailableDeviceProvider(TargetPlatform.Android, exception.Message));
+            }
         }
 
         var result = await new AggregateDeviceProvider(providers).ListDevicesAsync(progress, cancellationToken);
@@ -630,7 +693,32 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         Devices.Clear();
         foreach (var device in devices) Devices.Add(device);
-        var available = devices.Where(device => device.IsAvailable).ToArray();
+        ApplyPlatformScope();
+    }
+
+    /// <summary>
+    /// 按当前作用域重建 <see cref="ScopedDevices"/> 并重选设备。
+    ///
+    /// 「唯一可用设备自动选中」只在作用域内成立：作用域是用户的显式选择，
+    /// 在其中唯一的设备不构成不变式 #4 所指的隐式选择。跨作用域时若已选设备
+    /// 落在作用域外必须清空——留着它会让后续操作打到用户以为已经排除的平台。
+    /// </summary>
+    private void ApplyPlatformScope()
+    {
+        var scoped = Devices.Where(device => PlatformScope.Includes(device.Platform)).ToArray();
+        ScopedDevices.Clear();
+        foreach (var device in scoped) ScopedDevices.Add(device);
+
+        var previous = SelectedDevice;
+        var available = scoped.Where(device => device.IsAvailable).ToArray();
+
+        // 已选设备仍在作用域内时保持选中：换作用域不该打断正在进行的工作。
+        if (previous is not null && scoped.Contains(previous))
+        {
+            OnPropertyChanged(nameof(PlatformScopeDescription));
+            return;
+        }
+
         if (available.Length == 1)
         {
             SelectedDevice = available[0];
@@ -639,9 +727,68 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         else
         {
             SelectedDevice = null;
-            StatusMessage = devices.Count == 0
-                ? "未发现任何设备。请检查 ADB 连接。"
-                : $"发现 {devices.Count} 台设备，请从列表中明确选择目标设备。";
+            StatusMessage = DescribeDeviceSelectionState(scoped.Length);
+        }
+
+        OnPropertyChanged(nameof(PlatformScopeDescription));
+    }
+
+    /// <summary>
+    /// 设备列表现状说明。作用域挡住设备时明说，不让它看起来像设备掉线。
+    /// </summary>
+    private string DescribeDeviceSelectionState(int scopedCount)
+    {
+        if (scopedCount > 0)
+        {
+            return $"发现 {scopedCount} 台设备，请从列表中明确选择目标设备。";
+        }
+
+        if (Devices.Count > 0)
+        {
+            return $"作用域 {PlatformScope.Name} 内没有设备；共枚举到 {Devices.Count} 台其他平台的设备。" +
+                   "如需操作它们，请把顶部平台切到「全部」或对应平台。";
+        }
+
+        return "未发现任何设备。请检查 ADB 连接。";
+    }
+
+    /// <summary>
+    /// 启动时恢复上次的平台作用域。读取失败只降级为一条日志并保持「全部」：
+    /// 记不住上次的选择不该让界面起不来，而「全部」不隐藏任何设备或归档。
+    /// </summary>
+    public async Task RestorePlatformScopeAsync()
+    {
+        try
+        {
+            var scope = await _userStateStore.GetPlatformScopeAsync();
+
+            // 直接写字段并手工触发刷新，绕开属性 setter 的保存分支：
+            // 恢复读到的值再写回去是一次无意义的磁盘写入。
+            if (SetField(ref _platformScope, scope, nameof(PlatformScope)))
+            {
+                OnPropertyChanged(nameof(PlatformScopeDescription));
+                ApplyPlatformScope();
+            }
+        }
+        catch (Exception exception)
+        {
+            AddOperationLog("Error", $"读取上次的平台作用域失败：{exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 记录当前平台作用域。写入失败只降级为一条日志：作用域已在界面上生效，
+    /// 不该因为记不住而报成切换失败。
+    /// </summary>
+    private async Task RememberPlatformScopeAsync(PlatformScope scope)
+    {
+        try
+        {
+            await _userStateStore.SavePlatformScopeAsync(scope);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            AddOperationLog("Error", $"记录平台作用域失败：{exception.Message}");
         }
     }
     private void SetCurrentProject(UkitProject project)
@@ -649,6 +796,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _project = project;
         ProjectFilePath = project.ProjectFilePath;
         Devices.Clear();
+        ScopedDevices.Clear();
         SelectedDevice = null;
         LaunchParameterPresets.Clear();
         foreach (var preset in project.Settings.LaunchParameterPresets)
@@ -995,15 +1143,25 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         try
         {
             var service = new CaptureAnalysisService();
-            var captures = await service.ListCaptureDirectoriesAsync(_project);
+
+            // 作用域为「全部」时传 null，由服务列出全部平台目录。
+            var captures = await service.ListCaptureDirectoriesAsync(
+                _project, PlatformScope.IsAll ? null : PlatformScope.Name);
             CaptureResults.Clear();
-            foreach (var capture in captures.Take(200))
+
+            // 截断必须明说：静默只显示前 200 条会让「归档不在列表里」被读成「没采过」。
+            const int displayLimit = 200;
+            foreach (var capture in captures.Take(displayLimit))
             {
                 CaptureResults.Add(capture);
             }
 
             SelectedCaptureResult = null;
-            CaptureResultsCount = $"找到 {CaptureResults.Count} 个 Capture。";
+            var scopeNote = PlatformScope.IsAll ? string.Empty : $"（仅 {PlatformScope.Name}）";
+            var truncatedNote = captures.Count > displayLimit
+                ? $"，共 {captures.Count} 个，仅显示最近 {displayLimit} 个"
+                : string.Empty;
+            CaptureResultsCount = $"找到 {CaptureResults.Count} 个 Capture{scopeNote}{truncatedNote}。";
             StatusMessage = CaptureResultsCount;
         }
         catch (Exception exception)
@@ -1303,7 +1461,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         DateTimeOffset? from = DateTimeOffset.TryParse(TrendFrom, out var f) ? f : null;
         DateTimeOffset? to = DateTimeOffset.TryParse(TrendTo, out var t) ? t : null;
 
+        // 趋势跨平台没有意义：Android 与 Win64 的内存指标量级与口径都不同，
+        // 混在一条序列里的走势不可解读。作用域为「全部」时仍不强行选平台，
+        // 由结果里的 Platform 列呈现事实，让用户看到需要收窄作用域。
         var request = new TrendRequest(_project, source,
+            Platform: PlatformScope.IsAll ? null : PlatformScope.Name,
             Tag: string.IsNullOrWhiteSpace(TrendTag) ? null : TrendTag.Trim(),
             From: from, To: to,
             MetricFilter: metricFilter);
