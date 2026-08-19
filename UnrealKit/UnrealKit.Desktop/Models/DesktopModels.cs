@@ -37,6 +37,7 @@ public sealed class LaunchParameterPresetOption(LaunchParameterPreset preset) : 
     public string Name => preset.Name;
     public string Arguments => preset.Arguments;
     public string Description => preset.Description;
+    public string DisplayText => preset.DisplayText;
     public bool IsComposable => preset.IsComposable;
     public bool IsSelected
     {

@@ -36,8 +36,81 @@ public sealed class LaunchParameterService : ILaunchParameterService
             throw new ArgumentException("A non-composable launch parameter preset must be used alone.", nameof(presetNames));
         }
 
-        return string.Join(Environment.NewLine, presets.Select(preset => preset.Arguments).Append(customArguments ?? string.Empty).Where(argument => !string.IsNullOrWhiteSpace(argument)).Select(argument => argument.Trim()));
+        // 预设参数参与合并去重；自定义参数按用户要求原样追加，不参与合并。
+        var lines = MergeArguments(presets.Select(preset => preset.Arguments)).ToList();
+        if (!string.IsNullOrWhiteSpace(customArguments))
+        {
+            lines.Add(customArguments.Trim());
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
+
+    /// <summary>
+    /// 合并多个预设的参数块，每个 token 一行，按首次出现顺序输出。
+    ///
+    /// 无 <c>=</c> 的开关（如 <c>-llm</c>）按名去重，重复出现只保留首个；
+    /// 有 <c>=</c> 的开关（如 <c>-trace=...</c>）对 <c>=</c> 后逗号分隔的值做并集去重。
+    /// 合并是无状态的——每次都由当前选中集合重算，取消某项选择后其 token 自然从结果中消失。
+    /// </summary>
+    private static IReadOnlyList<string> MergeArguments(IEnumerable<string> argumentBlocks)
+    {
+        var output = new List<string>();
+        // 无 = 的开关：按名去重。
+        var seenSwitches = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // 有 = 的开关：key（= 前）→ output 中的占位下标；合并后的值按序保存。
+        var valueSlot = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var valueOrder = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var valueSeen = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var token in argumentBlocks.SelectMany(SplitArguments))
+        {
+            var separator = token.IndexOf('=');
+            if (separator < 0)
+            {
+                if (seenSwitches.Add(token))
+                {
+                    output.Add(token);
+                }
+
+                continue;
+            }
+
+            var key = token[..separator];
+            if (!valueSlot.TryGetValue(key, out var slot))
+            {
+                slot = output.Count;
+                valueSlot.Add(key, slot);
+                output.Add(key); // 占位，随后写入合并后的值。
+            }
+
+            if (!valueOrder.TryGetValue(key, out var order))
+            {
+                order = [];
+                valueOrder.Add(key, order);
+                valueSeen.Add(key, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            }
+
+            var seen = valueSeen[key];
+            foreach (var value in SplitCommaValues(token[(separator + 1)..]))
+            {
+                if (seen.Add(value))
+                {
+                    order.Add(value);
+                }
+            }
+
+            output[slot] = $"{key}={string.Join(",", order)}";
+        }
+
+        return output;
+    }
+
+    private static IEnumerable<string> SplitArguments(string block) =>
+        block.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static IEnumerable<string> SplitCommaValues(string valuePart) =>
+        valuePart.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     /// <summary>
     /// 启动参数文件在设备上的路径。平台取自本服务所绑定的设备服务，

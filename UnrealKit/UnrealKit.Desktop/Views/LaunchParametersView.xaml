@@ -14,9 +14,21 @@
         </Grid.RowDefinitions>
         <TextBlock Text="启动参数预设" Style="{StaticResource SectionTitleTextStyle}" />
         <TextBlock Grid.Column="1" Text="uecommandline.txt 预览" Style="{StaticResource SectionTitleTextStyle}" Margin="20,0,0,0" />
-        <StackPanel Grid.Row="1" Margin="0,12,12,0">
+        <!-- 用 Grid 而非 StackPanel 承载左列：StackPanel 给子元素无限高度，
+             ListBox 会长到内容全高，自带的滚动条永远不触发，预设一多就被裁掉。
+             这里让列表占据 * 行，高度受页面约束，滚动条才会按需出现。 -->
+        <Grid Grid.Row="1" Margin="0,12,12,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" MinHeight="120" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <TextBlock Text="选择预设。不可组合的预设只能单独使用；无效组合会在预览中显示原因。" Style="{StaticResource HintTextStyle}" Margin="0,0,0,10" />
-            <ListBox ItemsSource="{Binding LaunchParameterPresets}" BorderBrush="#FFE2E6EA" BorderThickness="1" MinHeight="170">
+            <ListBox Grid.Row="1" ItemsSource="{Binding LaunchParameterPresets}" BorderBrush="#FFE2E6EA" BorderThickness="1"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Grid Margin="6">
@@ -26,19 +38,23 @@
                             </Grid.ColumnDefinitions>
                             <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" Margin="0,3,8,0" />
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="{Binding Name}" Style="{StaticResource EmphasisTextStyle}" />
-                                <TextBlock Text="{Binding Description}" Style="{StaticResource HintTextStyle}" />
-                                <TextBlock Text="{Binding Arguments}" Style="{StaticResource HintTextStyle}" FontFamily="Consolas" />
+                                <!-- Name 与 Description 同一行：Name 半粗、Description 弱化灰色，视觉上一眼可区分，
+                                     同时比各自占一行省出垂直空间，同一屏能列出更多预设。 -->
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Left" Text="{Binding Name}" Style="{StaticResource EmphasisTextStyle}" Margin="0,0,8,0" />
+                                    <TextBlock Text="{Binding Description}" Style="{StaticResource HintTextStyle}" />
+                                </DockPanel>
+                                <TextBlock Text="{Binding DisplayText}" Style="{StaticResource HintTextStyle}" FontFamily="Consolas" Margin="0,2,0,0" />
                             </StackPanel>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
-            <TextBlock Text="自定义参数" Style="{StaticResource StackedFieldLabelTextStyle}" />
-            <TextBox Text="{Binding CustomLaunchArguments, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="64" Padding="8,6" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" />
-            <TextBlock Text="远端 uecommandline.txt 路径" Style="{StaticResource StackedFieldLabelTextStyle}" />
-            <TextBox Text="{Binding RemoteCommandLinePath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-        </StackPanel>
+            <TextBlock Grid.Row="2" Text="自定义参数" Style="{StaticResource StackedFieldLabelTextStyle}" />
+            <TextBox Grid.Row="3" Text="{Binding CustomLaunchArguments, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="64" Padding="8,6" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" />
+            <TextBlock Grid.Row="4" Text="远端 uecommandline.txt 路径" Style="{StaticResource StackedFieldLabelTextStyle}" />
+            <TextBox Grid.Row="5" Text="{Binding RemoteCommandLinePath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+        </Grid>
         <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding LaunchParameterPreview, Mode=OneWay}" IsReadOnly="True" Margin="8,12,0,0" Padding="8" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
         <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,18,0,0">
             <Button Content="推送到已选设备" Command="{Binding PushLaunchParametersCommand}" Padding="14,7" Margin="0,0,10,0" />

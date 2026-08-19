@@ -62,7 +62,15 @@ public sealed record ConsoleSequencePreset(string Name, string StepsDefinition, 
 /// <summary>
 /// 启动参数预设
 /// </summary>
-public sealed record LaunchParameterPreset(string Name, string Arguments, string Description, bool IsComposable);
+public sealed record LaunchParameterPreset(string Name, string Arguments, string Description, bool IsComposable, string? DisplayArguments = null)
+{
+    /// <summary>
+    /// 列表展示用的参数文本：<see cref="DisplayArguments"/> 有效（非空白）时显示它，
+    /// 否则退回完整 <see cref="Arguments"/>。长参数（如 trace 通道列表）用短文案占位，
+    /// 完整内容仍见预览面板与 <see cref="Launch.LaunchParameterService.BuildContent"/>。
+    /// </summary>
+    public string DisplayText => string.IsNullOrWhiteSpace(DisplayArguments) ? Arguments : DisplayArguments;
+}
 
 /// <summary>
 /// 设备别名表：设备标识 → 人类可读别名。
@@ -233,21 +241,21 @@ public static class LaunchParameterPresetDefaults
 {
     private const string traceBase = "-statnamedevents -tracefile -trace=cpu,frame,log,bookmark,task,counter,stats";
 
-    private const string traceClient_Default = $"{traceBase},gpu,screenshot,region,file,loadtime,assetloadtime,rdg,audio,audiomixer ";
+    private const string traceClient_Default = $"{traceBase},gpu,screenshot,region,file,loadtime,assetloadtime,rdg,audio,audiomixer";
     private const string traceClient_All =     $"{traceBase},gpu,screenshot,region,file,loadtime,assetloadtime,rdg,audio,audiomixer,memory,net -NetTrace=1";
     private const string traceClient_Network = $"{traceBase},net -statnamedevents ";
     private const string traceClient_Memory =  $"{traceBase},memory,metadata,assetmetadata -llm -llmcsv";
 
     public static IReadOnlyList<LaunchParameterPreset> All { get; } =
     [
-        new("LLM", "-llm", "Enable Unreal Low Level Memory Tracker.", true),
-        new("LLM_CSV", "-llmcsv", "Enable LLM CSV output.", true),
-        new("OpenGL", "-OpenGLES", "Use the OpenGL ES renderer.", false),
-        new("Vulkan", "-vulkan", "Use the Vulkan renderer.", false),
-        new("TraceClient_Default", traceClient_Default, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
-        new("TraceClient_All", traceClient_All, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
-        new("TraceClient_Network", traceClient_Network, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
-        new("TraceClient_Memory", traceClient_Memory, "Configure project-compatible Trace arguments in DefaultGame.ini.", false)
+        new("Mem.LLM", "-llm", "启动llm.", true),
+        new("Mem.LLM_CSV", "-llmcsv", "启动llm csv.", true),
+        new("Render.OpenGL", "-OpenGLES", "使用OpenGL渲染.", false),
+        new("Render.Vulkan", "-vulkan", "使用Vulkan渲染.", false),
+        new("Trace.Client_All", traceClient_All, "trace default, 网络, 内存.", true, "-trace=...,default,memory,net -NetTrace=1"),
+        new("Trace.Client_Default", traceClient_Default, "默认trace(cpu,gpu,load).", true, "-statnamedevents -tracefile -trace=cpu,gpu,..."),
+        new("Trace.Client_Network", traceClient_Network, "网络trace.", true, "-trace=...,net"),
+        new("Trace.Client_Memory", traceClient_Memory, "内存trace.", true, "-trace=...,memory -llm -llmcsv")
     ];
 }
 

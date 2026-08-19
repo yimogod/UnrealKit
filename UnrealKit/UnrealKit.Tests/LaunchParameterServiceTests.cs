@@ -15,9 +15,61 @@ public sealed class LaunchParameterServiceTests
         var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));
         var settings = ProjectSettings.CreateDefaults("Sample");
 
-        var content = service.BuildContent(settings, ["LLM", "LLM CSV"], "-log");
+        var content = service.BuildContent(settings, ["Mem.LLM", "Mem.LLM_CSV"], "-log");
 
         Assert.Equal($"-llm{Environment.NewLine}-llmcsv{Environment.NewLine}-log", content);
+    }
+
+    [Fact]
+    public void BuildContent_MergesTracePresetsAndDedupesSwitchAndValues()
+    {
+        var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));
+        var settings = ProjectSettings.CreateDefaults("Sample");
+
+        var content = service.BuildContent(settings, ["Trace.Client_Default", "Trace.Client_Memory"]);
+
+        var expected = string.Join(Environment.NewLine,
+        [
+            "-statnamedevents",
+            "-tracefile",
+            "-trace=cpu,frame,log,bookmark,task,counter,stats,gpu,screenshot,region,file,loadtime,assetloadtime,rdg,audio,audiomixer,memory,metadata,assetmetadata",
+            "-llm",
+            "-llmcsv"
+        ]);
+        Assert.Equal(expected, content);
+    }
+
+    [Fact]
+    public void BuildContent_DedupesRepeatedSwitchWithinPreset()
+    {
+        var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));
+        var settings = ProjectSettings.CreateDefaults("Sample");
+
+        // Trace.Client_Network 的预设里 -statnamedevents 出现两次，且 -trace 尾部带空白。
+        var content = service.BuildContent(settings, ["Trace.Client_Network"]);
+
+        var expected = string.Join(Environment.NewLine,
+        [
+            "-statnamedevents",
+            "-tracefile",
+            "-trace=cpu,frame,log,bookmark,task,counter,stats,net"
+        ]);
+        Assert.Equal(expected, content);
+    }
+
+    [Fact]
+    public void BuildContent_RecomputesWhenPresetUnselected()
+    {
+        var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));
+        var settings = ProjectSettings.CreateDefaults("Sample");
+
+        var both = service.BuildContent(settings, ["Trace.Client_Default", "Trace.Client_Memory"]);
+        var memoryOnly = service.BuildContent(settings, ["Trace.Client_Memory"]);
+
+        Assert.Contains("memory,metadata,assetmetadata", both);
+        Assert.Contains("memory,metadata,assetmetadata", memoryOnly);
+        // 取消 Default 后，其独有的 gpu 通道不再出现。
+        Assert.DoesNotContain("gpu,", memoryOnly);
     }
 
     [Fact]
@@ -25,7 +77,23 @@ public sealed class LaunchParameterServiceTests
     {
         var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));
 
-        Assert.Throws<ArgumentException>(() => service.BuildContent(ProjectSettings.CreateDefaults("Sample"), ["OpenGL", "LLM"]));
+        Assert.Throws<ArgumentException>(() => service.BuildContent(ProjectSettings.CreateDefaults("Sample"), ["Render.OpenGL", "Mem.LLM"]));
+    }
+
+    [Fact]
+    public void DisplayText_PrefersDisplayArgumentsWhenProvided()
+    {
+        var preset = new LaunchParameterPreset("Trace", "-statnamedevents -tracefile -trace=cpu,gpu,screenshot", "trace.", true, "-trace=cpu,gpu,...");
+
+        Assert.Equal("-trace=cpu,gpu,...", preset.DisplayText);
+    }
+
+    [Fact]
+    public void DisplayText_FallsBackToArgumentsWhenDisplayArgumentsBlank()
+    {
+        var preset = new LaunchParameterPreset("LLM", "-llm", "启动llm.", true);
+
+        Assert.Equal("-llm", preset.DisplayText);
     }
 
     [Fact]
@@ -35,7 +103,7 @@ public sealed class LaunchParameterServiceTests
         var service = new LaunchParameterService(new AdbDeviceService(adbService));
         var project = CreateProject();
 
-        var result = await service.PushAsync(project, new LaunchParameterRequest("R58M123ABC", ["LLM"]));
+        var result = await service.PushAsync(project, new LaunchParameterRequest("R58M123ABC", ["Mem.LLM"]));
 
         Assert.Equal("-llm", result.Content);
         Assert.Equal("/sdcard/Android/data/com.example.game/files/UnrealGame/Sample/Sample/uecommandline.txt", result.RemotePath);
