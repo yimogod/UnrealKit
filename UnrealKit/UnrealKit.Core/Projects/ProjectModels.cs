@@ -231,17 +231,23 @@ public sealed record ProjectSettings(
 /// </summary>
 public static class LaunchParameterPresetDefaults
 {
+    private const string traceBase = "-statnamedevents -tracefile -trace=cpu,frame,log,bookmark,task,counter,stats";
+
+    private const string traceClient_Default = $"{traceBase},gpu,screenshot,region,file,loadtime,assetloadtime,rdg,audio,audiomixer ";
+    private const string traceClient_All =     $"{traceBase},gpu,screenshot,region,file,loadtime,assetloadtime,rdg,audio,audiomixer,memory,net -NetTrace=1";
+    private const string traceClient_Network = $"{traceBase},net -statnamedevents ";
+    private const string traceClient_Memory =  $"{traceBase},memory,metadata,assetmetadata -llm -llmcsv";
+
     public static IReadOnlyList<LaunchParameterPreset> All { get; } =
     [
         new("LLM", "-llm", "Enable Unreal Low Level Memory Tracker.", true),
-        new("LLM CSV", "-llmcsv", "Enable LLM CSV output.", true),
+        new("LLM_CSV", "-llmcsv", "Enable LLM CSV output.", true),
         new("OpenGL", "-OpenGLES", "Use the OpenGL ES renderer.", false),
         new("Vulkan", "-vulkan", "Use the Vulkan renderer.", false),
-        new("Trace Default", string.Empty, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
-        new("Trace All", string.Empty, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
-        new("Trace Network", string.Empty, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
-        new("Trace Memory", string.Empty, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
-        new("No Update", string.Empty, "Configure the legacy no-update argument in DefaultGame.ini.", false)
+        new("TraceClient_Default", traceClient_Default, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
+        new("TraceClient_All", traceClient_All, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
+        new("TraceClient_Network", traceClient_Network, "Configure project-compatible Trace arguments in DefaultGame.ini.", false),
+        new("TraceClient_Memory", traceClient_Memory, "Configure project-compatible Trace arguments in DefaultGame.ini.", false)
     ];
 }
 
