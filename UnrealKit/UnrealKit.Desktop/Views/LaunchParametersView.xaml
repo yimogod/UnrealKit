@@ -23,8 +23,6 @@
                 <RowDefinition Height="*" MinHeight="120" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <TextBlock Text="选择预设。不可组合的预设只能单独使用；无效组合会在预览中显示原因。" Style="{StaticResource HintTextStyle}" Margin="0,0,0,10" />
             <ListBox Grid.Row="1" ItemsSource="{Binding LaunchParameterPresets}" BorderBrush="#FFE2E6EA" BorderThickness="1"
@@ -52,8 +50,6 @@
             </ListBox>
             <TextBlock Grid.Row="2" Text="自定义参数" Style="{StaticResource StackedFieldLabelTextStyle}" />
             <TextBox Grid.Row="3" Text="{Binding CustomLaunchArguments, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="64" Padding="8,6" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" />
-            <TextBlock Grid.Row="4" Text="远端 uecommandline.txt 路径" Style="{StaticResource StackedFieldLabelTextStyle}" />
-            <TextBox Grid.Row="5" Text="{Binding RemoteCommandLinePath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
         </Grid>
         <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding LaunchParameterPreview, Mode=OneWay}" IsReadOnly="True" Margin="8,12,0,0" Padding="8" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
         <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,18,0,0">

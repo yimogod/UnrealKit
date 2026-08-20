@@ -116,13 +116,11 @@ public sealed class LaunchParameterService : ILaunchParameterService
     /// 启动参数文件在设备上的路径。平台取自本服务所绑定的设备服务，
     /// 因此同一工程针对不同平台的设备会解析出各自正确的路径。
     /// </summary>
-    public string GetRemotePath(ProjectSettings settings, string? remotePathOverride = null)
+    public string GetRemotePath(ProjectSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
         var target = ResolveTarget(settings);
-        return string.IsNullOrWhiteSpace(remotePathOverride)
-            ? target.CombineDevicePath(target.GameRootPath, FileName)
-            : ValidateOverridePath(target, remotePathOverride);
+        return target.CombineDevicePath(target.GameRootPath, FileName);
     }
 
     public async Task<LaunchParameterPushResult> PushAsync(UkitProject project, LaunchParameterRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
@@ -131,7 +129,7 @@ public sealed class LaunchParameterService : ILaunchParameterService
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SerialNumber);
         var content = BuildContent(project.Settings, request.PresetNames, request.CustomArguments);
-        var remotePath = GetRemotePath(project.Settings, request.RemotePathOverride);
+        var remotePath = GetRemotePath(project.Settings);
         var device = ResolveDevice(request.SerialNumber);
 
         // 内容先落到本地临时文件，再交给设备服务投放。Win64 的「推送」就是复制，
@@ -156,11 +154,11 @@ public sealed class LaunchParameterService : ILaunchParameterService
         }
     }
 
-    public Task<ProcessExecutionResult> DeleteAsync(UkitProject project, string serialNumber, string? remotePathOverride = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    public Task<ProcessExecutionResult> DeleteAsync(UkitProject project, string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(serialNumber);
-        var path = GetRemotePath(project.Settings, remotePathOverride);
+        var path = GetRemotePath(project.Settings);
         return _deviceService.DeleteRemoteFileAsync(ResolveDevice(serialNumber), path, progress, cancellationToken);
     }
 
@@ -179,21 +177,6 @@ public sealed class LaunchParameterService : ILaunchParameterService
     /// </summary>
     private PlatformTarget ResolveTarget(ProjectSettings settings) =>
         settings.ResolveTarget(_deviceService.Platform, "投放启动参数需要该平台的配置。");
-
-    /// <summary>
-    /// 校验调用方显式指定的路径。覆盖值绕过了模板展开，因此必须在此确认它符合
-    /// 目标平台的路径风格——相对路径会按当前进程工作目录解析，GUI 与 CLI 下指向不同位置。
-    /// </summary>
-    private static string ValidateOverridePath(PlatformTarget target, string path) => target.PathStyle switch
-    {
-        DevicePathStyle.Unix when !path.StartsWith('/') || path.Contains('\\') || path.Contains('\0') =>
-            throw new ArgumentException($"{target.PlatformName} 启动参数路径必须是绝对 Unix 路径: {path}", nameof(path)),
-        DevicePathStyle.Unix => path,
-        DevicePathStyle.Windows when !Path.IsPathFullyQualified(path) =>
-            throw new ArgumentException($"{target.PlatformName} 启动参数路径必须是绝对路径: {path}", nameof(path)),
-        DevicePathStyle.Windows => Path.GetFullPath(path),
-        _ => throw new ArgumentOutOfRangeException(nameof(target), target.PathStyle, "Unsupported device path style.")
-    };
 
     private IDevice ResolveDevice(string serialNumber) =>
         DeviceReference.Create(serialNumber, _deviceService.Platform);

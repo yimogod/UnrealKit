@@ -38,7 +38,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _newProjectName = string.Empty;
     private string _wirelessEndpoint = string.Empty;
     private string _customLaunchArguments = string.Empty;
-    private string _remoteCommandLinePath = string.Empty;
     private string _captureTag = string.Empty;
     private string _captureArchivePreview = "请先打开工程并选择状态为 device 的设备。";
     private string _packageName = string.Empty;
@@ -245,7 +244,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string NewProjectName { get => _newProjectName; set { if (SetField(ref _newProjectName, value)) RaiseCommandStates(); } }
     public string WirelessEndpoint { get => _wirelessEndpoint; set { if (SetField(ref _wirelessEndpoint, value)) RaiseCommandStates(); } }
     public string CustomLaunchArguments { get => _customLaunchArguments; set { if (SetField(ref _customLaunchArguments, value)) UpdateLaunchParameterPreview(); } }
-    public string RemoteCommandLinePath { get => _remoteCommandLinePath; set { if (SetField(ref _remoteCommandLinePath, value)) UpdateLaunchParameterPreview(); } }
     public string CaptureTag { get => _captureTag; set { if (SetField(ref _captureTag, value)) UpdateCaptureArchivePreview(); } }
     public string CaptureArchivePreview { get => _captureArchivePreview; private set => SetField(ref _captureArchivePreview, value); }
     public string UnrealProjectName { get => _unrealProjectName; set => SetField(ref _unrealProjectName, value); }
@@ -832,9 +830,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             LaunchParameterPresets.Add(option);
         }
 
-        // 远端路径随平台而变，打开工程时还没有选中设备，因此留空由用户选设备后填充。
-        // 此处按某个平台预填会在多平台工程里给出另一平台的路径。
-        RemoteCommandLinePath = string.Empty;
         CaptureTag = project.Settings.DefaultCaptureTag;
         ConsoleSequencePresets.Clear();
         foreach (var preset in project.Settings.ConsoleSequences) ConsoleSequencePresets.Add(preset);
@@ -909,7 +904,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             }
 
             var remotePath = CreateLaunchParameterService(SelectedDevice.Device)
-                .GetRemotePath(_project.Settings, RemoteCommandLinePath);
+                .GetRemotePath(_project.Settings);
             LaunchParameterPreview = $"目标路径：{remotePath}{Environment.NewLine}{Environment.NewLine}{content}";
             UpdateLaunchOperationSummary(remotePath);
         }
@@ -926,7 +921,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         var result = await CreateLaunchParameterService(SelectedDevice!.Device).PushAsync(
             _project!,
-            new LaunchParameterRequest(SelectedDevice!.Id, GetSelectedPresetNames(), CustomLaunchArguments, RemoteCommandLinePath),
+            new LaunchParameterRequest(SelectedDevice!.Id, GetSelectedPresetNames(), CustomLaunchArguments),
             progress,
             OperationCancellationToken);
         StatusMessage = $"已推送启动参数到：{result.RemotePath}";
@@ -936,7 +931,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private Task DeleteLaunchParametersAsync() => RunAsync("正在删除 uecommandline.txt…", async progress =>
     {
         var service = CreateLaunchParameterService(SelectedDevice!.Device);
-        var remotePath = service.GetRemotePath(_project!.Settings, RemoteCommandLinePath);
+        var remotePath = service.GetRemotePath(_project!.Settings);
         var platformTarget = _project.Settings.ResolveTarget(
             PlatformNames.Parse(SelectedDevice!.Platform, nameof(SelectedDevice)));
         var target = new LaunchOperationTarget(
@@ -946,7 +941,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             StatusMessage = "已取消删除设备启动参数。";
             return;
         }
-        await service.DeleteAsync(_project, SelectedDevice!.Id, RemoteCommandLinePath, progress, OperationCancellationToken);
+        await service.DeleteAsync(_project, SelectedDevice!.Id, progress, OperationCancellationToken);
         StatusMessage = $"已删除设备上的启动参数：{remotePath}";
     });
 
@@ -1100,7 +1095,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             }
 
             var resolvedPath = remotePath
-                ?? CreateLaunchParameterService(SelectedDevice.Device).GetRemotePath(_project.Settings, RemoteCommandLinePath);
+                ?? CreateLaunchParameterService(SelectedDevice.Device).GetRemotePath(_project.Settings);
             LaunchOperationSummary = $"设备：{SelectedDevice.Id}{(SelectedDevice.HasAlias ? $"（{SelectedDevice.Alias}）" : string.Empty)}（{target.PlatformName}）{Environment.NewLine}" +
                                    $"启动目标：{target.LaunchTarget}{Environment.NewLine}" +
                                    (target.LaunchActivity is { Length: > 0 } activity ? $"Activity：{activity}{Environment.NewLine}" : string.Empty) +

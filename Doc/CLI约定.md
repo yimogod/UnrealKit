@@ -30,9 +30,9 @@ unrealkit adb ip <serial> [--adb-path <path>]
 unrealkit app start --project <project.ukit> [--device <serial>] [--platform <platform>] [--adb-path <path>]
 
 unrealkit commandline push --project <project.ukit> [--device <serial>] [--platform <platform>]
-                           [--preset <name>] [--custom <args>] [--remote-path <path>] [--adb-path <path>]
+                           [--preset <name>] [--custom <args>] [--adb-path <path>]
 unrealkit commandline delete --project <project.ukit> [--device <serial>] [--platform <platform>]
-                             [--remote-path <path>] [--adb-path <path>]
+                             [--adb-path <path>]
 
 unrealkit capture run --project <project.ukit> [--device <serial|auto>] [--platform <platform>]
                       [--tag <tag>] [--skip-saved] [--format text|json] [--adb-path <path>]

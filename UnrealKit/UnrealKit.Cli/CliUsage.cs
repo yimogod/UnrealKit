@@ -18,8 +18,8 @@ internal static class CliUsage
         Console.WriteLine("  unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]");
         Console.WriteLine("  unrealkit app console send --project <project.ukit> --device <serial> --cmd <command> [--adb-path <path>]");
         Console.WriteLine("  unrealkit app console run --project <project.ukit> --device <serial> [--sequence <name>] [--cmds <inline>] [--adb-path <path>]");
-        Console.WriteLine("  unrealkit commandline push --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--remote-path <path>] [--adb-path <path>]");
-        Console.WriteLine("  unrealkit commandline delete --project <project.ukit> --device <serial> [--remote-path <path>] [--adb-path <path>]");
+        Console.WriteLine("  unrealkit commandline push --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--adb-path <path>]");
+        Console.WriteLine("  unrealkit commandline delete --project <project.ukit> --device <serial> [--adb-path <path>]");
         Console.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial>|auto [--tag <tag>] [--format text|json] [--skip-saved] [--adb-path <path>]");
         Console.WriteLine("  unrealkit capture import --project <project.ukit> --source <directory> [--platform <platform>] [--tag <tag>] [--capture-id <id>]");
         Console.WriteLine("  unrealkit parse meminfo --input <meminfo.txt> [--format text|json]");

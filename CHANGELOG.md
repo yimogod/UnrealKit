@@ -4,6 +4,9 @@ All notable changes to UnrealKit.
 
 ## [Unreleased]
 
+### Launch Parameter Remote Path Is Fixed Per Platform
+- **Breaking:** removed `commandline push/delete --remote-path` and the GUI "远端 uecommandline.txt 路径" field. `uecommandline.txt` always lives at the platform's fixed game root (`{GameRootPath}/uecommandline.txt`), which UE itself decides — Android and Win64 already resolve this from `GameRootTemplate`/`WorkingDirectory`. A free-form override invited a path that diverged from the engine's actual read location, so push/delete silently missed the file the game was reading. `LaunchParameterRequest.RemotePathOverride`, `ILaunchParameterService.GetRemotePath`/`DeleteAsync` override parameters, and `LaunchParameterService.ValidateOverridePath` are removed.
+
 ### Platform Scope
 
 A single analysis session targets one platform — this run looks at the Windows build, the next at Android. The GUI now has one place to say which, and the device list, capture archive list, and history trend all narrow to it.

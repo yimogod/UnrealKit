@@ -19,7 +19,6 @@ internal static class CommandLineCommands
         var resolved = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
         var serialNumber = resolved.DeviceId;
         var service = new LaunchParameterService(resolved.DeviceService);
-        var remotePath = CliOptions.GetOptional(options, "--remote-path");
 
         switch (commandArguments[0].ToLowerInvariant())
         {
@@ -28,8 +27,7 @@ internal static class CommandLineCommands
                 var result = await service.PushAsync(project, new LaunchParameterRequest(
                     serialNumber,
                     CliOptions.GetAll(options, "--preset"),
-                    CliOptions.GetOptional(options, "--custom"),
-                    remotePath));
+                    CliOptions.GetOptional(options, "--custom")));
                 Console.WriteLine($"Pushed uecommandline.txt to {result.RemotePath}");
                 Console.WriteLine("Content:");
                 Console.WriteLine(result.Content);
@@ -37,7 +35,7 @@ internal static class CommandLineCommands
             }
 
             case "delete":
-                await service.DeleteAsync(project, serialNumber, remotePath);
+                await service.DeleteAsync(project, serialNumber);
                 return 0;
 
             default:
@@ -47,7 +45,7 @@ internal static class CommandLineCommands
 
     private static int FailUsage()
     {
-        Console.Error.WriteLine("Usage: unrealkit commandline <push|delete> --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--remote-path <path>] [--adb-path <path>]");
+        Console.Error.WriteLine("Usage: unrealkit commandline <push|delete> --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--adb-path <path>]");
         return 2;
     }
 }
