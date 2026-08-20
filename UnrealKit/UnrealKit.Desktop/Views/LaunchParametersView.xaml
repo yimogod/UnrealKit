@@ -11,7 +11,6 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <TextBlock Text="启动参数预设" Style="{StaticResource SectionTitleTextStyle}" />
         <TextBlock Grid.Column="1" Text="uecommandline.txt 预览" Style="{StaticResource SectionTitleTextStyle}" Margin="20,0,0,0" />
@@ -26,27 +25,22 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <TextBlock Text="选择预设。互斥组内最多选一个；无效组合会在预览中显示原因。" Style="{StaticResource HintTextStyle}" Margin="0,0,0,10" />
+            <TextBlock Text="选择预设。无效组合会在预览中显示原因。" Style="{StaticResource HintTextStyle}" Margin="0,0,0,10" />
             <ListBox Grid.Row="1" ItemsSource="{Binding LaunchParameterPresets}" BorderBrush="#FFE2E6EA" BorderThickness="1"
                      SelectedItem="{Binding SelectedLaunchParameterPreset}"
                      ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <Grid Margin="6">
+                        <Grid Margin="2,5">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" Margin="0,3,8,0" />
+                            <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center" Margin="0,0,8,0" />
                             <DockPanel Grid.Column="1">
                                 <TextBlock DockPanel.Dock="Left" Text="{Binding Name}" Style="{StaticResource EmphasisTextStyle}" Margin="0,0,8,0" />
                                 <TextBlock Text="{Binding Description}" Style="{StaticResource HintTextStyle}" />
                             </DockPanel>
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding GroupLabel}" Style="{StaticResource HintTextStyle}" Margin="0,2,0,0" />
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
@@ -55,7 +49,17 @@
             <TextBlock Grid.Row="3" Text="自定义参数" Style="{StaticResource StackedFieldLabelTextStyle}" />
             <TextBox Grid.Row="4" Text="{Binding CustomLaunchArguments, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="64" Padding="8,6" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" />
         </Grid>
-        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding LaunchParameterPreview, Mode=OneWay}" IsReadOnly="True" Margin="8,12,0,0" Padding="8" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
+        <Grid Grid.Row="1" Grid.Column="1" Margin="8,12,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBox Text="{Binding LaunchParameterPreview, Mode=OneWay}" IsReadOnly="True" Padding="8" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
+            <StackPanel Grid.Row="1" Margin="0,14,0,0">
+                <TextBlock Text="设备已有内容（点击「读取设备参数」从已选设备拉取 uecommandline.txt 原文）" Style="{StaticResource EmphasisTextStyle}" />
+                <TextBox Text="{Binding DeviceLaunchParameterContent, Mode=OneWay}" IsReadOnly="True" Margin="0,6,0,0" Padding="8" MinHeight="72" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
+            </StackPanel>
+        </Grid>
         <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,18,0,0">
             <Button Content="推送到已选设备" Command="{Binding PushLaunchParametersCommand}" Padding="14,7" Margin="0,0,10,0" />
             <Button Content="删除设备参数" Command="{Binding DeleteLaunchParametersCommand}" Padding="14,7" Margin="0,0,10,0" />
@@ -77,14 +81,6 @@
                 <!-- 完整日志见品牌栏的「操作日志」窗口，此处只显示当前阶段。 -->
                 <TextBlock Text="完整 ADB 与操作日志请打开右上角「操作日志」。" Style="{StaticResource HintTextStyle}" Margin="0,8,0,0" />
             </StackPanel>
-        </Grid>
-        <Grid Grid.Row="4" Grid.ColumnSpan="2" Margin="0,14,0,0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <TextBlock Text="设备已有内容（点击「读取设备参数」从已选设备拉取 uecommandline.txt 原文）" Style="{StaticResource EmphasisTextStyle}" />
-            <TextBox Grid.Row="1" Text="{Binding DeviceLaunchParameterContent, Mode=OneWay}" IsReadOnly="True" Margin="0,6,0,0" Padding="8" MinHeight="72" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
         </Grid>
     </Grid>
 </UserControl>
