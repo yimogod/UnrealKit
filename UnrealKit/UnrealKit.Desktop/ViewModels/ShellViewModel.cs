@@ -18,6 +18,7 @@ using System.Text;
 using UnrealKit.Core.RenderDoc;
 using UnrealKit.Core.Console;
 using UnrealKit.Core.Devices;
+using UnrealKit.Core.Download;
 using UnrealKit.Desktop.Models;
 using UnrealKit.Desktop.Services;
 
@@ -95,6 +96,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _consoleSequenceInlineCmds = string.Empty;
     private string _consoleSequenceOutput = "Run a sequence to see results here.";
     private bool _isConsoleSequenceRunning;
+    private string _ftpHost = string.Empty;
+    private string _ftpPort = FtpDownloadSettings.DefaultPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private string _ftpUsername = string.Empty;
+    private string _ftpPassword = string.Empty;
+    private string _androidFtpPath = string.Empty;
+    private string _win64FtpPath = string.Empty;
+    private string _downloadPlatform = PlatformNames.ToName(TargetPlatform.Android);
+    private string _downloadSummary = "请先打开工程并配置 FTP 下载，然后选择平台下载最新构建。";
+    private string _downloadedApkPath = string.Empty;
     private UkitProject? _project;
     private PlatformScope _platformScope = PlatformScope.All;
     private DeviceDisplayInfo? _selectedDevice;
@@ -149,6 +159,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _runConsoleSequenceCommand = new AsyncDelegateCommand(RunConsoleSequenceAsync, () => !IsBusy && _selectedDevice is not null);
         ExportCaptureDataCommand = new AsyncDelegateCommand(ExportCaptureDataAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ExportInputPath) && !string.IsNullOrWhiteSpace(ExportOutputPath));
         _clearOperationLogsCommand = new DelegateCommand(ClearOperationLogs, () => OperationLogs.Count > 0);
+        DownloadCommand = new AsyncDelegateCommand(DownloadLatestAsync, CanDownloadLatest);
+        InstallDownloadedApkCommand = new AsyncDelegateCommand(InstallDownloadedApkAsync, CanInstallDownloadedApk);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -193,6 +205,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string SelectedTrendChartSeries { get => _selectedTrendChartSeries; set { if (SetField(ref _selectedTrendChartSeries, value)) UpdateTrendChart(); } }
     public ObservableCollection<TrendDiagnosticOption> TrendDiagnostics { get; } = [];
     public ObservableCollection<RenderDocDiagnosticOption> RenderDocDiagnostics { get; } = [];
+    public ObservableCollection<DownloadDiagnosticOption> DownloadDiagnostics { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
     public ICommand RefreshDevicesCommand { get; }
@@ -214,6 +227,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand RunTrendCommand { get; }
     public ICommand RunRenderDocCommand { get; }
     public ICommand OpenRenderDocOutputDirCommand { get; }
+    public ICommand DownloadCommand { get; }
+    public ICommand InstallDownloadedApkCommand { get; }
 
     public string SelectedNavigationItem
     {
@@ -236,6 +251,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "静态相机" => "解析静态相机性能日志，查看逐相机指标并生成 HTML 报告。",
         "基线差分" => "明确选择基线与当前两份输入，比较指标回退与改善。",
         "历史趋势" => "按标签和时间范围汇总工程内的历史 Capture，查看指标走势。",
+        "安装包" => "从 FTP 下载最新构建；Android 平台可把下载到的 APK 安装到已选设备。",
         _ => string.Empty
     };
 
@@ -275,6 +291,37 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public bool Win64Enabled { get => _win64Enabled; set => SetField(ref _win64Enabled, value); }
     public string Win64Executable { get => _win64Executable; set => SetField(ref _win64Executable, value); }
     public string Win64WorkingDirectory { get => _win64WorkingDirectory; set => SetField(ref _win64WorkingDirectory, value); }
+
+    /// <summary>
+    /// FTP 主机。跨平台共享，与各平台的 <see cref="AndroidFtpPath"/>/<see cref="Win64FtpPath"/>
+    /// 分开：主机 / 端口 / 凭据是「连哪个服务器」，父目录是「这个平台的构建在哪」。
+    /// </summary>
+    public string FtpHost { get => _ftpHost; set => SetField(ref _ftpHost, value); }
+    public string FtpPort { get => _ftpPort; set => SetField(ref _ftpPort, value); }
+    public string FtpUsername { get => _ftpUsername; set => SetField(ref _ftpUsername, value); }
+
+    /// <summary>
+    /// FTP 密码。敏感信息：仅在密码框展示，日志与状态消息不得打印明文。
+    /// </summary>
+    public string FtpPassword { get => _ftpPassword; set => SetField(ref _ftpPassword, value); }
+
+    /// <summary>Android 平台在 FTP 服务器上的下载父目录。</summary>
+    public string AndroidFtpPath { get => _androidFtpPath; set => SetField(ref _androidFtpPath, value); }
+
+    /// <summary>Win64 平台在 FTP 服务器上的下载父目录。</summary>
+    public string Win64FtpPath { get => _win64FtpPath; set => SetField(ref _win64FtpPath, value); }
+
+    /// <summary>「安装包」页下载目标平台，默认 Android。</summary>
+    public string DownloadPlatform
+    {
+        get => _downloadPlatform;
+        set { if (SetField(ref _downloadPlatform, value)) RaiseCommandStates(); }
+    }
+
+    public string DownloadSummary { get => _downloadSummary; private set => SetField(ref _downloadSummary, value); }
+
+    /// <summary>最近一次下载得到的 APK 本地路径（仅 Android）。</summary>
+    public string DownloadedApkPath { get => _downloadedApkPath; private set { if (SetField(ref _downloadedApkPath, value)) RaiseCommandStates(); } }
 
     /// <summary>
     /// 当前操作的平台，由所选设备决定。没有选中设备时为空——
@@ -319,6 +366,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     public IReadOnlyList<string> DiffSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
     public IReadOnlyList<string> TrendSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
+    public IReadOnlyList<string> DownloadPlatformOptions { get; } = [PlatformNames.ToName(TargetPlatform.Android), PlatformNames.ToName(TargetPlatform.Win64)];
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
     public string LaunchOperationSummary { get => _launchOperationSummary; private set => SetField(ref _launchOperationSummary, value); }
     public string OperationStage { get => _operationStage; private set => SetField(ref _operationStage, value); }
@@ -867,12 +915,26 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         Activity = androidValues.Activity;
         DeviceGameRootTemplate = androidValues.GameRootTemplate;
         AdbPath = androidValues.AdbPath;
+        AndroidFtpPath = androidValues.FtpPath;
 
         var win64 = project.Settings.Win64;
         Win64Enabled = win64 is not null;
         var win64Values = win64 ?? Win64PlatformProfile.CreateDefaults();
         Win64Executable = win64Values.Executable;
         Win64WorkingDirectory = win64Values.WorkingDirectory;
+        Win64FtpPath = win64Values.FtpPath;
+
+        var ftp = project.Settings.FtpSettings;
+        FtpHost = ftp.Host;
+        FtpPort = ftp.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        FtpUsername = ftp.Username;
+        FtpPassword = ftp.Password;
+
+        // 切换工程后，上一个工程的下载结果与 APK 路径不再成立。
+        DownloadDiagnostics.Clear();
+        DownloadSummary = "请选择平台并点击「下载最新」。";
+        DownloadedApkPath = string.Empty;
+
         OnPropertyChanged(nameof(ProjectTitle));
         UpdateLaunchParameterPreview();
         UpdateLaunchOperationSummary();
@@ -893,17 +955,44 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     PackageName: PackageName.Trim(),
                     Activity: Activity.Trim(),
                     GameRootTemplate: DeviceGameRootTemplate.Trim(),
-                    AdbPath: AdbPath.Trim())
+                    AdbPath: AdbPath.Trim(),
+                    FtpPath: AndroidFtpPath.Trim())
                 : null,
             Win64 = Win64Enabled
                 ? new Win64PlatformProfile(
                     Executable: Win64Executable.Trim(),
-                    WorkingDirectory: Win64WorkingDirectory.Trim())
-                : null
+                    WorkingDirectory: Win64WorkingDirectory.Trim(),
+                    FtpPath: Win64FtpPath.Trim())
+                : null,
+            Ftp = new FtpDownloadSettings(
+                Host: FtpHost.Trim(),
+                Port: ParseFtpPortText(FtpPort),
+                Username: FtpUsername.Trim(),
+                Password: FtpPassword)
         };
         SetCurrentProject(await _projectService.UpdateSettingsAsync(_project, settings, progress, OperationCancellationToken));
         StatusMessage = "项目默认配置已保存。";
     });
+
+    /// <summary>
+    /// 把界面上的 FTP 端口文本解析为整数。空文本回退默认端口 21；
+    /// 填了但非法必须报错，不让「端口 2121」悄悄回退到 21。
+    /// </summary>
+    private static int ParseFtpPortText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return FtpDownloadSettings.DefaultPort;
+        }
+
+        if (!int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var port)
+            || port is < 1 or > 65535)
+        {
+            throw new InvalidDataException($"FTP 端口无效: {value}。必须是 1 到 65535 之间的整数。");
+        }
+
+        return port;
+    }
 
     private void UpdateLaunchParameterPreview()
     {
@@ -1600,6 +1689,94 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             new StaticCameraHtmlReportRequest(_lastScpParseResult, outputPath));
         AddOperationLog("Info", $"HTML report saved: {outputPath}");
     }
+
+    private bool CanDownloadLatest() =>
+        !IsBusy && _project is not null && !string.IsNullOrWhiteSpace(DownloadPlatform);
+
+    private bool CanInstallDownloadedApk() =>
+        !IsBusy
+        && SelectedDevice?.IsAvailable == true
+        && PlatformNames.TryParse(DownloadPlatform, out var platform)
+        && platform == TargetPlatform.Android
+        && !string.IsNullOrWhiteSpace(DownloadedApkPath);
+
+    /// <summary>
+    /// 从 FTP 下载所选平台的最新构建。下载落地 <c>Intermediate/Download/&lt;Platform&gt;</c>，
+    /// 不写 Content/——构建产物是可重新获取的缓存，不是采集归档。
+    /// </summary>
+    private Task DownloadLatestAsync() => RunAsync("正在下载最新构建…", async progress =>
+    {
+        var platform = PlatformNames.Parse(DownloadPlatform, nameof(DownloadPlatform));
+        var profile = _project!.Settings.ProfileFor(platform);
+        if (profile is null)
+        {
+            throw new InvalidOperationException(
+                $"工程尚未配置 {PlatformNames.ToName(platform)} 平台。请先在「Setting」中勾选该平台。");
+        }
+
+        var request = new DownloadRequest(
+            platform,
+            _project.Settings.FtpSettings,
+            profile.FtpPath,
+            Path.Combine(_project.IntermediateDir, "Download", PlatformNames.ToName(platform)));
+
+        var result = await new FtpDownloadService(new FluentFtpClientFactory())
+            .DownloadAsync(request, progress, OperationCancellationToken);
+
+        DownloadDiagnostics.Clear();
+        foreach (var diagnostic in result.Diagnostics)
+        {
+            DownloadDiagnostics.Add(new DownloadDiagnosticOption(
+                diagnostic.Severity.ToString(),
+                diagnostic.Code,
+                diagnostic.LineNumber?.ToString() ?? "-",
+                diagnostic.Message));
+        }
+
+        // Android 下载的是 apk 文件，记录其本地路径供「安装到设备」使用；Win64 下载的是目录。
+        DownloadedApkPath = platform == TargetPlatform.Android && result.Succeeded
+            ? result.LocalPath ?? string.Empty
+            : string.Empty;
+
+        DownloadSummary = result.Succeeded
+            ? $"下载完成：{result.SourceSubdir}（{result.FileCount} 个文件）→ {result.LocalPath}"
+            : $"下载失败：{result.SourceSubdir ?? "(无)"}。详见诊断列表。";
+
+        if (result.Succeeded)
+        {
+            StatusMessage = $"下载完成：{result.LocalPath}";
+        }
+    });
+
+    /// <summary>
+    /// 把最近下载到的 APK 安装到所选 Android 设备。安装是破坏性操作，
+    /// 执行前经确认服务展示完整目标设备与本地包路径。
+    /// </summary>
+    private Task InstallDownloadedApkAsync() => RunAsync("正在安装应用…", async progress =>
+    {
+        var device = SelectedDevice!;
+        var deviceService = CreateDeviceServiceForDevice(device.Device);
+        if (deviceService.Platform != TargetPlatform.Android
+            || !deviceService.Supports(DeviceCapability.InstallApplication))
+        {
+            throw new InvalidOperationException($"设备 {device.Id} 不支持安装应用包。");
+        }
+
+        if (!await _confirmationService.ConfirmInstallApplicationAsync(device.Id, DownloadedApkPath))
+        {
+            StatusMessage = "已取消安装。";
+            return;
+        }
+
+        var result = await deviceService.InstallApplicationAsync(device.Device, DownloadedApkPath, progress, OperationCancellationToken);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException($"安装失败（exit {result.ExitCode}）：{result.StandardError}");
+        }
+
+        StatusMessage = $"已安装 {DownloadedApkPath} 到 {device.Id}。";
+    });
+
     private void UpdateTrendChart()
     {
         TrendChartPoints.Clear();
@@ -1817,7 +1994,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
@@ -1839,6 +2016,8 @@ internal sealed class RejectingConfirmationService : IUserConfirmationService
     public Task<bool> ConfirmDeleteLaunchParametersAsync(LaunchOperationTarget target) => Task.FromResult(false);
 
     public Task NotifyLastProjectUnavailableAsync(string projectFilePath, string reason) => Task.CompletedTask;
+
+    public Task<bool> ConfirmInstallApplicationAsync(string deviceId, string localApplicationPath) => Task.FromResult(false);
 }
 
 public sealed class AsyncDelegateCommand(Func<Task> execute, Func<bool> canExecute) : ICommand

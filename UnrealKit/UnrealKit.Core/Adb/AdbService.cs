@@ -128,6 +128,16 @@ public sealed class AdbService : IAdbService
     }
 
     /// <summary>
+    /// 安装本地 APK 到设备
+    /// </summary>
+    public Task<ProcessExecutionResult> InstallApkAsync(string serialNumber, string localApkPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ValidateSerialNumber(serialNumber);
+        ArgumentException.ThrowIfNullOrWhiteSpace(localApkPath);
+        return RunDeviceCommandAsync(serialNumber, ["install", "-r", Path.GetFullPath(localApkPath)], progress, cancellationToken);
+    }
+
+    /// <summary>
     /// 将主机端口转发到设备端口
     /// </summary>
     public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)

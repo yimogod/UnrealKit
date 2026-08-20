@@ -108,4 +108,14 @@ public interface IDeviceService : IDeviceProvider
         string remotePath,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 安装应用包到设备（Android 为安装本地 APK）。平台不支持时抛出
+    /// <see cref="DeviceCapabilityNotSupportedException"/>。
+    /// </summary>
+    Task<ProcessExecutionResult> InstallApplicationAsync(
+        IDevice device,
+        string localApplicationPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
 }

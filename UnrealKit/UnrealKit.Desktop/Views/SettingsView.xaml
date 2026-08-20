@@ -43,6 +43,8 @@
                                    FontFamily="Consolas" TextWrapping="Wrap" />
                         <TextBlock Text="ADB 路径（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
                         <TextBox Text="{Binding AdbPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                        <TextBlock Text="FTP 父目录（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding AndroidFtpPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
                     </StackPanel>
                 </GroupBox>
 
@@ -56,10 +58,32 @@
                         <TextBox Text="{Binding Win64Executable, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
                         <TextBlock Text="工作目录" Style="{StaticResource StackedFieldLabelTextStyle}" />
                         <TextBox Text="{Binding Win64WorkingDirectory, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                        <TextBlock Text="FTP 父目录（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Win64FtpPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
                     </StackPanel>
                 </GroupBox>
 
-                
+                <!-- FTP 下载：主机 / 端口 / 凭据跨平台共享，父目录在各平台分组里配置。 -->
+                <TextBlock Text="FTP 下载" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                <TextBlock Text="主机与凭据供 Android / Win64 共用；各平台的父目录在上方对应分组中填写。密码为敏感信息，仅在此掩码显示，不写入日志。"
+                           Style="{StaticResource HintTextStyle}" Margin="0,2,0,8" TextWrapping="Wrap" />
+                <GroupBox Margin="0,4,0,0" Padding="10,6,10,10">
+                    <StackPanel>
+                        <TextBlock Text="主机" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBox Text="{Binding FtpHost, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                        <TextBlock Text="端口" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding FtpPort, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                        <TextBlock Text="用户名" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding FtpUsername, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                        <TextBlock Text="密码" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <PasswordBox x:Name="FtpPasswordBox"
+                                     PasswordChanged="FtpPasswordBox_PasswordChanged"
+                                     DataContextChanged="FtpPasswordBox_DataContextChanged"
+                                     Padding="8,6" />
+                    </StackPanel>
+                </GroupBox>
+
+
             </StackPanel>
         </ScrollViewer>
     </Grid>

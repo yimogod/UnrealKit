@@ -65,6 +65,15 @@ public interface IAdbService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 安装本地 APK 到设备（<c>adb install -r</c>，允许覆盖同版本重装）。
+    /// </summary>
+    Task<ProcessExecutionResult> InstallApkAsync(
+        string serialNumber,
+        string localApkPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 流式读取设备 logcat 输出，返回可取消的异步行流。
     /// </summary>
     IAsyncEnumerable<string> StreamLogcatAsync(

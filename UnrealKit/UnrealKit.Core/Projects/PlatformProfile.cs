@@ -24,6 +24,9 @@ public abstract record PlatformProfile
     /// <summary>该平台设备端的路径风格。</summary>
     public abstract DevicePathStyle PathStyle { get; }
 
+    /// <summary>该平台在 FTP 服务器上的下载父目录（空串表示未配置）。</summary>
+    public abstract string FtpPath { get; init; }
+
     /// <summary>平台的稳定字符串标识。</summary>
     public string PlatformName => PlatformNames.ToName(Platform);
 
@@ -84,7 +87,8 @@ public sealed record AndroidPlatformProfile(
     string PackageName,
     string Activity,
     string GameRootTemplate,
-    string AdbPath) : PlatformProfile
+    string AdbPath,
+    string FtpPath = "") : PlatformProfile
 {
     /// <summary>设备端游戏根目录模板的默认值，与旧工具的 UE Saved 路径规则一致。</summary>
     public const string DefaultGameRootTemplate =
@@ -98,7 +102,8 @@ public sealed record AndroidPlatformProfile(
         PackageName: string.Empty,
         Activity: string.Empty,
         GameRootTemplate: DefaultGameRootTemplate,
-        AdbPath: string.Empty);
+        AdbPath: string.Empty,
+        FtpPath: string.Empty);
 
     public override PlatformTarget Resolve(string unrealProjectName)
     {
@@ -142,7 +147,8 @@ public sealed record AndroidPlatformProfile(
 /// </summary>
 public sealed record Win64PlatformProfile(
     string Executable,
-    string WorkingDirectory) : PlatformProfile
+    string WorkingDirectory,
+    string FtpPath = "") : PlatformProfile
 {
     public override TargetPlatform Platform => TargetPlatform.Win64;
 
@@ -150,7 +156,8 @@ public sealed record Win64PlatformProfile(
 
     public static Win64PlatformProfile CreateDefaults() => new(
         Executable: string.Empty,
-        WorkingDirectory: string.Empty);
+        WorkingDirectory: string.Empty,
+        FtpPath: string.Empty);
 
     public override PlatformTarget Resolve(string unrealProjectName)
     {

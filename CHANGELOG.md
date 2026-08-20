@@ -4,6 +4,14 @@ All notable changes to UnrealKit.
 
 ## [Unreleased]
 
+### Build Download From FTP
+- New `unrealkit download` CLI verb plus a WPF "安装包" page: pull the latest build for a platform from FTP — the newest subdirectory by natural sort (numeric segments by value, text segments case-insensitive), downloading the single `.apk` (Android) or the whole subdirectory (Win64 exe + resources). `unrealkit download install` installs a local APK to a connected Android device
+- FTP host/port/credentials live in a new shared `[UnrealKit.Ftp]` section (`Host`/`Port`/`Username`/`Password`) on `ProjectSettings.Ftp` (`FtpDownloadSettings`); each platform's parent directory is its own profile's `FtpPath`. Host or FtpPath blank fails before any network I/O, naming the missing field. `Port` empty falls back to `21`; a non-1–65535 value errors instead of silently defaulting
+- New `UnrealKit.Core.Download` namespace: `FtpDownloadService` orchestration isolated behind `IFtpClient`/`IFtpClientFactory`, backed by `FluentFTP` (`AsyncFtpClient`) in `FluentFtpClientAdapter`. Downloads land under `Intermediate/Download/<Platform>/<subdir>/` — the deletable cache, never `Content/`
+- New diagnostic code domain `DWN` (`DWN001` no subdirectory, `DWN002` connect failed, `DWN003` list failed, `DWN004` multiple apks, `DWN005` no apk, `DWN006` download failed). Multiple apks error out listing candidates rather than picking one (implicit-choice invariant)
+- `Password` is sensitive: the GUI masks it with a `PasswordBox` and logs never print it. This is a documented exception to the "no secrets in project config" convention, since credentials in `DefaultGame.ini` were explicitly requested — keep the file out of public repositories
+- `InstallApplication` capability added to `DeviceCapability`/`IDeviceService`; `AdbDeviceService` forwards to `adb -s <serial> install -r <apk>` (parameterized), `Win64DeviceService` reports it unsupported. GUI confirms before installing, showing the full device and package path
+
 ### Launch Parameter Remote Path Is Fixed Per Platform
 - **Breaking:** removed `commandline push/delete --remote-path` and the GUI "远端 uecommandline.txt 路径" field. `uecommandline.txt` always lives at the platform's fixed game root (`{GameRootPath}/uecommandline.txt`), which UE itself decides — Android and Win64 already resolve this from `GameRootTemplate`/`WorkingDirectory`. A free-form override invited a path that diverged from the engine's actual read location, so push/delete silently missed the file the game was reading. `LaunchParameterRequest.RemotePathOverride`, `ILaunchParameterService.GetRemotePath`/`DeleteAsync` override parameters, and `LaunchParameterService.ValidateOverridePath` are removed.
 

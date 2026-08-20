@@ -231,6 +231,54 @@ public sealed class ProjectServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateSettingsAsync_PersistsFtpSettingsAndPlatformFtpPaths()
+    {
+        // FTP 主机 / 端口 / 凭据跨平台共享（[UnrealKit.Ftp]），各平台父目录
+        // 分别落在自己的 profile 的 FtpPath 中。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "FtpProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "FtpProject"));
+        var settings = created.Project.Settings with
+        {
+            Ftp = new FtpDownloadSettings("ftp.example.com", 2121, "build-user", "secret"),
+            Android = AndroidPlatformProfile.CreateDefaults() with { FtpPath = "/builds/android" },
+            Win64 = new Win64PlatformProfile(@"C:\Game\MyGame.exe", @"C:\Game", "/builds/win64")
+        };
+
+        await service.UpdateSettingsAsync(created.Project, settings);
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal("ftp.example.com", reopened.Settings.FtpSettings.Host);
+        Assert.Equal(2121, reopened.Settings.FtpSettings.Port);
+        Assert.Equal("build-user", reopened.Settings.FtpSettings.Username);
+        Assert.Equal("secret", reopened.Settings.FtpSettings.Password);
+        Assert.Equal("/builds/android", reopened.Settings.Android?.FtpPath);
+        Assert.Equal("/builds/win64", reopened.Settings.Win64?.FtpPath);
+    }
+
+    [Fact]
+    public async Task OpenProjectAsync_EmptyFtpPort_FallsBackToDefault()
+    {
+        // INI 把 `Port=` 存为空串而非 null；空串应回退到默认端口 21，而不是报错。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "EmptyFtpPortProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "EmptyFtpPortProject"));
+        var configPath = Path.Combine(projectDirectory, "Config", "DefaultGame.ini");
+        await File.AppendAllTextAsync(configPath,
+            Environment.NewLine
+            + "[UnrealKit.Ftp]" + Environment.NewLine
+            + "Host=ftp.example.com" + Environment.NewLine
+            + "Port=" + Environment.NewLine
+            + "Username=user" + Environment.NewLine
+            + "Password=pass" + Environment.NewLine);
+
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal(FtpDownloadSettings.DefaultPort, reopened.Settings.FtpSettings.Port);
+        Assert.Equal("ftp.example.com", reopened.Settings.FtpSettings.Host);
+    }
+
+    [Fact]
     public async Task UpdateSettingsAsync_PersistsDeviceAliases()
     {
         var projectDirectory = Path.Combine(_temporaryDirectory, "AliasProject");

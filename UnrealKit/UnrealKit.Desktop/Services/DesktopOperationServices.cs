@@ -38,6 +38,12 @@ public interface IUserConfirmationService
     /// 新建还是手动打开由用户从菜单栏选择。
     /// </summary>
     Task NotifyLastProjectUnavailableAsync(string projectFilePath, string reason);
+
+    /// <summary>
+    /// 安装应用包前确认。安装是对设备可见且可能覆盖既有应用的破坏性操作，
+    /// 必须在执行前展示完整的目标设备与本地包路径并征得同意。
+    /// </summary>
+    Task<bool> ConfirmInstallApplicationAsync(string deviceId, string localApplicationPath);
 }
 
 public sealed class WpfUserConfirmationService(Window owner) : IUserConfirmationService
@@ -61,6 +67,16 @@ public sealed class WpfUserConfirmationService(Window owner) : IUserConfirmation
                       $"Remote path: {target.RemoteCommandLinePath}\n\n" +
                       "This operation cannot be undone.";
         var result = MessageBox.Show(owner, message, "Confirm uecommandline.txt deletion", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        return Task.FromResult(result == MessageBoxResult.Yes);
+    }
+
+    public Task<bool> ConfirmInstallApplicationAsync(string deviceId, string localApplicationPath)
+    {
+        var message = $"The following application package will be installed to the selected device:\n\n" +
+                      $"Device: {deviceId}\n" +
+                      $"Package: {localApplicationPath}\n\n" +
+                      "Installing may overwrite the existing application on the device.\nThis operation cannot be undone.";
+        var result = MessageBox.Show(owner, message, "Confirm application installation", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         return Task.FromResult(result == MessageBoxResult.Yes);
     }
 }

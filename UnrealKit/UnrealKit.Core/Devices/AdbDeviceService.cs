@@ -142,6 +142,15 @@ public sealed class AdbDeviceService : IDeviceService
         return RunRequiredAsync(_adb.DeleteRemoteFileAsync(device.Id, remotePath, progress, cancellationToken));
     }
 
+    public Task<ProcessExecutionResult> InstallApplicationAsync(
+        IDevice device,
+        string localApplicationPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunRequiredAsync(_adb.InstallApkAsync(device.Id, localApplicationPath, progress, cancellationToken));
+    }
+
     /// <summary>
     /// 为设备建立 Remote Control 端口转发，同一设备只执行一次。
     /// 失败不记录，下次调用重试。

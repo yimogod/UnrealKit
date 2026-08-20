@@ -28,7 +28,10 @@ public enum DeviceCapability
     PushFile,
 
     /// <summary>删除设备上的文件。</summary>
-    DeleteRemoteFile
+    DeleteRemoteFile,
+
+    /// <summary>安装应用包到设备（Android 为安装 APK）。</summary>
+    InstallApplication
 }
 
 /// <summary>

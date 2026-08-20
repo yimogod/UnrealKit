@@ -12,7 +12,7 @@
 
 ## 命令结构
 
-顶层动词：`project`、`adb`、`app`、`commandline`、`capture`、`parse`、`export`、`analyze`。
+顶层动词：`project`、`adb`、`app`、`commandline`、`capture`、`parse`、`export`、`analyze`、`download`。
 
 ```text
 unrealkit project create <dir> --name <name> [--platform <platform>]...
@@ -68,6 +68,9 @@ unrealkit analyze trend --project <project.ukit>
                         [--from <yyyy-MM-dd>] [--to <yyyy-MM-dd>]
                         [--metrics <name[,name...]>] [--file <filename>]
                         [--output <file.csv|file.tsv|file.xlsx>] [--include-points] [--format text|json]
+
+unrealkit download --project <project.ukit> --platform <Android|Win64> [--format text|json]
+unrealkit download install --project <project.ukit> --device <serial> --apk <path> [--adb-path <path>]
 ```
 
 新增子命令时保持「动词 + 名词」结构，并同步更新 `README.md` 的 CLI 参考与本文。
@@ -106,6 +109,15 @@ unrealkit analyze trend --project <project.ukit>
 - 归档内同类文件不唯一时该次采集被排除（`TRD103`），用 `--file` 指定在每次采集中读取的文件名。这样避免同一条曲线上不同点读的是不同输入。
 - 单次采集解析失败只排除该点（`TRD202`），不使整个区间失败；原始解析码以 Warning 级透传，带 `[CaptureId]` 前缀。
 - `--output` 的扩展名决定格式：`.csv` / `.tsv` 走 `TrendExportService`，`.xlsx` 走 `XlsxTrendExportService`。`--include-points` 追加逐次采集明细，摘要独立可用。
+
+`download` 专有约定：
+
+- `download` 的 `--platform` **必填**：FTP 父目录按平台配置（各 profile 的 `FtpPath`），不替用户猜平台。
+- FTP 主机 / 端口 / 凭据取自工程配置的 `[UnrealKit.Ftp]` 节（见 `Doc/工程格式与配置.md`）；`Host` 或目标平台 `FtpPath` 为空时在进入网络前报错。
+- 下载父目录下取**自然排序最大**的子目录为「最新」；无子目录、连不上、列目录失败、多个 apk、无 apk 分别以 `DWN001`–`DWN005` 诊断返回并给非零退出码。
+- Android 下载最新子目录中唯一的 `.apk`；多个 `.apk` 报错并列出候选，不任取其一（不变式 4）。Win64 下载整个最新子目录（exe + 资源）。
+- 落地目录是 `Intermediate/Download/<Platform>/<子目录>/`，可删除缓存，不写入 `Content/`。
+- `download install` 的 `--device` 与 `--apk` **必填**：APK 路径不隐式猜测。安装是破坏性/对设备可见的操作，`--device` 须为 Android 设备（Win64 不支持 `InstallApplication` 能力，报错）。
 
 ## 退出码
 

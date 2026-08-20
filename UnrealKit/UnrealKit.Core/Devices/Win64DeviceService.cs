@@ -29,11 +29,13 @@ public sealed class Win64DeviceService : IDeviceService
 
     /// <summary>
     /// Win64 通过本机进程操作实现大部分能力；日志流依赖 UE 端通道，尚未实现。
+    /// 安装包是 Android 专属能力，Win64 是解包后直接运行，不支持「安装」。
     /// </summary>
     public bool Supports(DeviceCapability capability) => capability switch
     {
         DeviceCapability.SendConsoleCommand => true,
         DeviceCapability.StreamLog => false,
+        DeviceCapability.InstallApplication => false,
         _ => true
     };
 
@@ -409,6 +411,20 @@ public sealed class Win64DeviceService : IDeviceService
                     DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), ex);
         }
     }
+
+    /// <summary>
+    /// Win64 是解包后直接运行，没有「安装」这一步。调用方应先探测
+    /// <see cref="Supports"/>(<see cref="DeviceCapability.InstallApplication"/>)。
+    /// </summary>
+    public Task<ProcessExecutionResult> InstallApplicationAsync(
+        IDevice device,
+        string localApplicationPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        throw new DeviceCapabilityNotSupportedException(
+            DeviceCapability.InstallApplication,
+            PlatformNames.Win64,
+            "Win64 构建解包后直接运行可执行文件，无需安装。");
 
     private static string BuildMemInfoOutput(string processName, int processId,
         long workingSet, long privateMem, long virtualMem,

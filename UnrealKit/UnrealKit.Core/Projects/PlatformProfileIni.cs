@@ -68,11 +68,13 @@ internal static class PlatformProfileIni
                 document.SetValue(section, "Activity", android.Activity);
                 document.SetValue(section, "GameRootTemplate", android.GameRootTemplate);
                 document.SetValue(section, "AdbPath", android.AdbPath);
+                document.SetValue(section, "FtpPath", android.FtpPath);
                 break;
 
             case Win64PlatformProfile win64:
                 document.SetValue(section, "Executable", win64.Executable);
                 document.SetValue(section, "WorkingDirectory", win64.WorkingDirectory);
+                document.SetValue(section, "FtpPath", win64.FtpPath);
                 break;
 
             default:
@@ -88,7 +90,8 @@ internal static class PlatformProfileIni
             PackageName: value("PackageName", defaults.PackageName),
             Activity: value("Activity", defaults.Activity),
             GameRootTemplate: value("GameRootTemplate", defaults.GameRootTemplate),
-            AdbPath: value("AdbPath", defaults.AdbPath));
+            AdbPath: value("AdbPath", defaults.AdbPath),
+            FtpPath: value("FtpPath", defaults.FtpPath));
     }
 
     private static Win64PlatformProfile ReadWin64(Func<string, string, string> value)
@@ -96,6 +99,7 @@ internal static class PlatformProfileIni
         var defaults = Win64PlatformProfile.CreateDefaults();
         return new Win64PlatformProfile(
             Executable: value("Executable", defaults.Executable),
-            WorkingDirectory: value("WorkingDirectory", defaults.WorkingDirectory));
+            WorkingDirectory: value("WorkingDirectory", defaults.WorkingDirectory),
+            FtpPath: value("FtpPath", defaults.FtpPath));
     }
 }

@@ -1,0 +1,36 @@
+<UserControl x:Class="UnrealKit.Desktop.Views.DownloadView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock Text="安装包下载" Style="{StaticResource SectionTitleTextStyle}" />
+            <TextBlock Text="从 FTP 下载最新构建。Android 下载 .apk 并可安装到已选设备；Win64 下载整个打包目录（exe + 资源）。"
+                       Style="{StaticResource SectionDescriptionTextStyle}" />
+            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                <TextBlock Text="平台" Style="{StaticResource FieldLabelTextStyle}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox ItemsSource="{Binding DownloadPlatformOptions}"
+                          SelectedItem="{Binding DownloadPlatform}"
+                          MinWidth="140" Padding="8,4" VerticalContentAlignment="Center" />
+                <Button Content="下载最新" Command="{Binding DownloadCommand}" Padding="18,8" Margin="16,0,0,0" />
+                <Button Content="安装到设备" Command="{Binding InstallDownloadedApkCommand}" Padding="18,8" Margin="12,0,0,0" />
+            </StackPanel>
+            <TextBlock Text="{Binding DownloadSummary}" Style="{StaticResource ResultSummaryTextStyle}" Margin="0,16,0,0" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding DownloadedApkPath, StringFormat='本地 APK：{0}'}"
+                       Style="{StaticResource HintTextStyle}" Margin="0,8,0,0" FontFamily="Consolas" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer Grid.Row="1" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
+            <DataGrid ItemsSource="{Binding DownloadDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" MinHeight="200">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="90" />
+                    <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="90" />
+                    <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="70" />
+                    <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

@@ -48,6 +48,20 @@ public sealed class AdbServiceTests
     }
 
     [Fact]
+    public async Task InstallApkAsync_PassesExplicitDeviceSerialInArgumentList()
+    {
+        var runner = new RecordingProcessRunner(new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        var service = new AdbService(runner, "custom-adb");
+
+        var result = await service.InstallApkAsync("R58M123ABC", "artifacts/Game.apk");
+
+        Assert.True(result.Succeeded);
+        Assert.NotNull(runner.Request);
+        Assert.Equal("custom-adb", runner.Request.FileName);
+        Assert.Equal(["-s", "R58M123ABC", "install", "-r", Path.GetFullPath("artifacts/Game.apk")], runner.Request.Arguments);
+    }
+
+    [Fact]
     public async Task PushFileAsync_PreservesNonZeroResultInAdbCommandException()
     {
         var expectedResult = new ProcessExecutionResult(1, string.Empty, "adb: error", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);

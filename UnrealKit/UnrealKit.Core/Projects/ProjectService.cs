@@ -14,6 +14,7 @@ public sealed class ProjectService : IProjectService
     private const string PresetsSection = "UnrealKit.LaunchPresets";
     private const string ConsoleSequencesSection = "UnrealKit.ConsoleSequences";
     private const string DeviceAliasesSection = "UnrealKit.DeviceAliases";
+    private const string FtpSection = "UnrealKit.Ftp";
     private const string BaseGameIniFileName = "BaseGame.ini";
     private readonly IOperationLogger _logger;
 
@@ -221,6 +222,11 @@ public sealed class ProjectService : IProjectService
             document.SetValue(DeviceAliasesSection, deviceId, alias);
         }
 
+        document.SetValue(FtpSection, "Host", settings.FtpSettings.Host);
+        document.SetValue(FtpSection, "Port", settings.FtpSettings.Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        document.SetValue(FtpSection, "Username", settings.FtpSettings.Username);
+        document.SetValue(FtpSection, "Password", settings.FtpSettings.Password);
+
         if (!string.IsNullOrWhiteSpace(settings.PreCaptureSequence))
             document.SetValue(SettingsSection, "PreCaptureSequence", settings.PreCaptureSequence);
 
@@ -272,7 +278,8 @@ public sealed class ProjectService : IProjectService
             RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlFunctionName"), defaults.RemoteControlFunctionName),
             RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlCommandParameter"), defaults.RemoteControlCommandParameter),
             // 分层合并：BaseGame.ini 可提供团队共用的设备别名，工程的 DefaultGame.ini 覆盖同一序列号。
-            DeviceAliasMap.Create(layered.GetSection(DeviceAliasesSection)));
+            DeviceAliasMap.Create(layered.GetSection(DeviceAliasesSection)),
+            ReadFtpSettings(layered, defaults.FtpSettings));
     }
 
     private static string RequireValue(IniDocument document, string key)
@@ -379,6 +386,36 @@ public sealed class ProjectService : IProjectService
             || port is < 1 or > 65535)
         {
             throw new InvalidDataException($"RemoteControlHttpPort 配置无效: {value}。必须是 1 到 65535 之间的整数。");
+        }
+
+        return port;
+    }
+
+    /// <summary>
+    /// 读取 FTP 下载配置。主机 / 端口 / 凭据共享自 <c>[UnrealKit.Ftp]</c> 节，
+    /// 与平台无关；各平台的父目录在其 profile 的 <c>FtpPath</c> 中。
+    /// 端口未配置回退默认 21，配置了但非法报错（同 RemoteControlHttpPort）。
+    /// </summary>
+    private static FtpDownloadSettings ReadFtpSettings(LayeredIniDocument layered, FtpDownloadSettings defaults)
+    {
+        var host = layered.GetValue(FtpSection, "Host") ?? defaults.Host;
+        var port = ParseFtpPort(layered.GetValue(FtpSection, "Port"), defaults.Port);
+        var username = layered.GetValue(FtpSection, "Username") ?? defaults.Username;
+        var password = layered.GetValue(FtpSection, "Password") ?? defaults.Password;
+        return new FtpDownloadSettings(host, port, username, password);
+    }
+
+    private static int ParseFtpPort(string? value, int defaultPort)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return defaultPort;
+        }
+
+        if (!int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var port)
+            || port is < 1 or > 65535)
+        {
+            throw new InvalidDataException($"FTP Port 配置无效: {value}。必须是 1 到 65535 之间的整数。");
         }
 
         return port;

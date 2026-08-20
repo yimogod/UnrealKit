@@ -31,6 +31,7 @@ internal static class CliEntryPoint
                 "export" => await ExportCommands.RunAsync(arguments[1..]),
                 "analyze" => await AnalyzeCommands.RunAsync(arguments[1..]),
                 "renderdoc" => await RenderDocCommands.RunAsync(arguments[1..]),
+                "download" => await DownloadCommands.RunAsync(arguments[1..]),
                 _ => FailUnknownCommand()
             };
         }

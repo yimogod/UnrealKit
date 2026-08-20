@@ -131,6 +131,22 @@ public sealed record DeviceAliasMap
 }
 
 /// <summary>
+/// FTP 下载配置。主机 / 端口 / 凭据跨平台共享（一个 FTP 服务器），
+/// 各平台在各自 profile 中只配置自己的 <c>FtpPath</c> 父目录。
+///
+/// <see cref="Password"/> 是敏感信息：界面用密码框掩码，日志与命令行输出不得打印明文。
+/// </summary>
+public sealed record FtpDownloadSettings(string Host, int Port, string Username, string Password)
+{
+    public const int DefaultPort = 21;
+
+    public static FtpDownloadSettings CreateDefaults() => new(string.Empty, DefaultPort, string.Empty, string.Empty);
+
+    /// <summary>是否已配置主机。主机为空即视为未启用 FTP 下载。</summary>
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(Host);
+}
+
+/// <summary>
 /// 项目设置。平台相关配置放在 <see cref="Android"/> / <see cref="Win64"/> 等 profile 中，
 /// 各平台并存互不排斥——同一工程同时跑多个平台是常态。
 ///
@@ -152,7 +168,8 @@ public sealed record ProjectSettings(
     string RemoteControlObjectPath = "/Script/Engine.Default__KismetSystemLibrary",
     string RemoteControlFunctionName = "ExecuteConsoleCommand",
     string RemoteControlCommandParameter = "Command",
-    DeviceAliasMap? DeviceAliases = null)
+    DeviceAliasMap? DeviceAliases = null,
+    FtpDownloadSettings? Ftp = null)
 {
     /// <summary>
     /// 新建工程时两个平台都给出默认 profile：多平台工程是默认假设，
@@ -174,6 +191,11 @@ public sealed record ProjectSettings(
     /// 设备别名表。未配置时是空表而不是 null，调用方不必每处判空。
     /// </summary>
     public DeviceAliasMap Aliases => DeviceAliases ?? DeviceAliasMap.Empty;
+
+    /// <summary>
+    /// FTP 下载配置。未配置时是默认空配置而不是 null，调用方不必每处判空。
+    /// </summary>
+    public FtpDownloadSettings FtpSettings => Ftp ?? FtpDownloadSettings.CreateDefaults();
 
     /// <summary>
     /// 取设备别名，未配置返回 null。

@@ -106,6 +106,14 @@ public sealed class PlatformProfileTests
     }
 
     [Fact]
+    public void AndroidProfile_Defaults_EmptyFtpPath()
+    {
+        // FtpPath 是可空可选项：默认空串，表示该平台未配置 FTP 父目录。
+        Assert.Equal(string.Empty, AndroidPlatformProfile.CreateDefaults().FtpPath);
+        Assert.Equal(string.Empty, Win64PlatformProfile.CreateDefaults().FtpPath);
+    }
+
+    [Fact]
     public void ProfileFor_CoversEveryDeclaredPlatform()
     {
         // 新增平台时若忘记在 ProjectSettings 上补 profile 属性，此测试失败。
