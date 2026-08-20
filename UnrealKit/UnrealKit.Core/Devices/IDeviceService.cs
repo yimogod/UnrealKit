@@ -110,6 +110,16 @@ public interface IDeviceService : IDeviceProvider
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 读取设备上指定文本文件的内容。与查询语义一致：文件不存在等非零退出码不抛异常，
+    /// 原样返回结果，由调用方按 <see cref="ProcessExecutionResult.Succeeded"/> 判断。
+    /// </summary>
+    Task<ProcessExecutionResult> ReadFileAsync(
+        IDevice device,
+        string remotePath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 安装应用包到设备（Android 为安装本地 APK）。平台不支持时抛出
     /// <see cref="DeviceCapabilityNotSupportedException"/>。
     /// </summary>

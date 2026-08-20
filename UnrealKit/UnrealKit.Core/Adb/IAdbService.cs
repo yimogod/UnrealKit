@@ -37,6 +37,13 @@ public interface IAdbService
 
     Task<ProcessExecutionResult> DeleteRemoteFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 读取设备上指定文本文件的内容。文件不存在等非零退出码不抛异常，
+    /// 原样返回结果，由调用方按 <see cref="ProcessExecutionResult.Succeeded"/> 与
+    /// <see cref="ProcessExecutionResult.StandardError"/> 区分「文件不存在」和「读取失败」。
+    /// </summary>
+    Task<ProcessExecutionResult> ReadFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default);
+
     Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>

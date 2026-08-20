@@ -11,6 +11,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <TextBlock Text="启动参数预设" Style="{StaticResource SectionTitleTextStyle}" />
         <TextBlock Grid.Column="1" Text="uecommandline.txt 预览" Style="{StaticResource SectionTitleTextStyle}" Margin="20,0,0,0" />
@@ -58,6 +59,7 @@
         <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,18,0,0">
             <Button Content="推送到已选设备" Command="{Binding PushLaunchParametersCommand}" Padding="14,7" Margin="0,0,10,0" />
             <Button Content="删除设备参数" Command="{Binding DeleteLaunchParametersCommand}" Padding="14,7" Margin="0,0,10,0" />
+            <Button Content="读取设备参数" Command="{Binding ReadLaunchParametersCommand}" Padding="14,7" Margin="0,0,10,0" />
             <Button Content="启动应用" Command="{Binding StartApplicationCommand}" Padding="14,7" />
         </StackPanel>
         <Grid Grid.Row="3" Grid.ColumnSpan="2" Margin="0,14,0,0">
@@ -75,6 +77,14 @@
                 <!-- 完整日志见品牌栏的「操作日志」窗口，此处只显示当前阶段。 -->
                 <TextBlock Text="完整 ADB 与操作日志请打开右上角「操作日志」。" Style="{StaticResource HintTextStyle}" Margin="0,8,0,0" />
             </StackPanel>
+        </Grid>
+        <Grid Grid.Row="4" Grid.ColumnSpan="2" Margin="0,14,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="设备已有内容（点击「读取设备参数」从已选设备拉取 uecommandline.txt 原文）" Style="{StaticResource EmphasisTextStyle}" />
+            <TextBox Grid.Row="1" Text="{Binding DeviceLaunchParameterContent, Mode=OneWay}" IsReadOnly="True" Margin="0,6,0,0" Padding="8" MinHeight="72" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
         </Grid>
     </Grid>
 </UserControl>

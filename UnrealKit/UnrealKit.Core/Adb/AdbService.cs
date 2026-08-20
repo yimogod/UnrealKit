@@ -118,6 +118,21 @@ public sealed class AdbService : IAdbService
     }
 
     /// <summary>
+    /// 读取设备上指定文本文件的内容（adb shell cat）。
+    /// </summary>
+    /// <remarks>
+    /// 用 <see cref="RunAllowingFailureAsync"/> 而非 RunRequiredAsync：文件不存在是
+    /// 「尚未投放启动参数」的正常状态，不应抛异常，而应原样返回非零退出码与
+    /// <c>No such file or directory</c>，由调用方呈现。
+    /// </remarks>
+    public Task<ProcessExecutionResult> ReadFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ValidateSerialNumber(serialNumber);
+        ValidateRemotePath(remotePath);
+        return RunAllowingFailureAsync(["-s", serialNumber, "shell", "cat", "--", remotePath], progress, cancellationToken);
+    }
+
+    /// <summary>
     /// 强制停止指定的应用程序
     /// </summary>
     public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)

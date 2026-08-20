@@ -142,6 +142,17 @@ public sealed class AdbDeviceService : IDeviceService
         return RunRequiredAsync(_adb.DeleteRemoteFileAsync(device.Id, remotePath, progress, cancellationToken));
     }
 
+    public Task<ProcessExecutionResult> ReadFileAsync(
+        IDevice device,
+        string remotePath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        // 读取是查询语义：文件不存在是正常状态，直接透传原始结果，不经过 RunRequiredAsync。
+        ArgumentNullException.ThrowIfNull(device);
+        return _adb.ReadFileAsync(device.Id, remotePath, progress, cancellationToken);
+    }
+
     public Task<ProcessExecutionResult> InstallApplicationAsync(
         IDevice device,
         string localApplicationPath,

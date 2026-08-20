@@ -52,11 +52,13 @@ public sealed class LaunchParameterService : ILaunchParameterService
             lines.Add(customArguments.Trim());
         }
 
-        return string.Join(Environment.NewLine, lines);
+        // uecommandline.txt 是 UE 的命令行参数文件，token 之间用空格分隔，
+        // 不用换行——换行会被 UE 当成参数的一部分而非分隔符。
+        return string.Join(' ', lines);
     }
 
     /// <summary>
-    /// 合并多个预设的参数块，每个 token 一行，按首次出现顺序输出。
+    /// 合并多个预设的参数块，每个 token 用空格分隔，按首次出现顺序输出。
     ///
     /// 无 <c>=</c> 的开关（如 <c>-llm</c>）按名去重，重复出现只保留首个；
     /// 有 <c>=</c> 的开关（如 <c>-trace=...</c>）对 <c>=</c> 后逗号分隔的值做并集去重。
@@ -161,6 +163,21 @@ public sealed class LaunchParameterService : ILaunchParameterService
                 File.Delete(temporaryPath);
             }
         }
+    }
+
+    /// <summary>
+    /// 读取设备上已有的启动参数文件内容。文件不存在不会抛异常——那是「尚未投放」的
+    /// 正常状态——而是原样返回读取结果，由调用方根据 <see cref="ProcessExecutionResult.Succeeded"/>
+    /// 决定显示内容还是提示。
+    /// </summary>
+    public async Task<LaunchParameterReadResult> ReadAsync(UkitProject project, string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentException.ThrowIfNullOrWhiteSpace(serialNumber);
+        var remotePath = GetRemotePath(project.Settings);
+        progress?.Report(new OperationProgress("commandline-read", "Reading", null, null, $"Reading {remotePath}."));
+        var result = await _deviceService.ReadFileAsync(ResolveDevice(serialNumber), remotePath, progress, cancellationToken);
+        return new LaunchParameterReadResult(remotePath, result);
     }
 
     public Task<ProcessExecutionResult> DeleteAsync(UkitProject project, string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)

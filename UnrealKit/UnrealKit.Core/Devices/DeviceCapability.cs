@@ -30,6 +30,9 @@ public enum DeviceCapability
     /// <summary>删除设备上的文件。</summary>
     DeleteRemoteFile,
 
+    /// <summary>读取设备上的文本文件内容。</summary>
+    ReadFile,
+
     /// <summary>安装应用包到设备（Android 为安装 APK）。</summary>
     InstallApplication
 }

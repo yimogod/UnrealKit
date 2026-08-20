@@ -413,6 +413,31 @@ public sealed class Win64DeviceService : IDeviceService
     }
 
     /// <summary>
+    /// Win64 上读取文件即读取本地文件。文件不存在时返回非零退出码而非抛异常，
+    /// 与「尚未投放启动参数」的查询语义保持一致。
+    /// </summary>
+    public Task<ProcessExecutionResult> ReadFileAsync(
+        IDevice device,
+        string remotePath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var path = Path.GetFullPath(remotePath);
+        if (!File.Exists(path))
+        {
+            return Task.FromResult(new ProcessExecutionResult(1, string.Empty, $"File not found: {path}",
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        }
+
+        return Task.FromResult(new ProcessExecutionResult(0, File.ReadAllText(path), string.Empty,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+    }
+
+    /// <summary>
     /// Win64 是解包后直接运行，没有「安装」这一步。调用方应先探测
     /// <see cref="Supports"/>(<see cref="DeviceCapability.InstallApplication"/>)。
     /// </summary>

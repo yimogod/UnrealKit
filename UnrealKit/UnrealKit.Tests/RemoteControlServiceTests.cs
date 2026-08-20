@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using UnrealKit.Core.Processes;
@@ -78,6 +79,28 @@ public sealed class RemoteControlServiceTests
     }
 
     [Fact]
+    public async Task SendConsoleCommandAsync_ConnectionRefused_SurfacesInnerExceptionDetail()
+    {
+        // HttpRequestException.Message 是「An error occurred while sending the request.」这类无信息量的
+        // 通用文案；真正原因（连接被拒绝等）在 InnerException，必须透传到错误信息里。
+        var socketError = new SocketException((int)SocketError.ConnectionRefused);
+        var handler = new ThrowingHttpMessageHandler(new HttpRequestException(
+            "An error occurred while sending the request.", socketError));
+        var service = new RemoteControlService(new HttpClient(handler));
+
+        var exception = await Assert.ThrowsAsync<RemoteControlException>(() =>
+            service.SendConsoleCommandAsync(new RemoteControlCommandRequest(
+                30010,
+                "/Script/Engine.Default__KismetSystemLibrary",
+                "ExecuteConsoleCommand",
+                "Command",
+                "stat fps")));
+
+        Assert.Contains("Remote Control request failed", exception.Message);
+        Assert.Contains(socketError.Message, exception.Message);
+    }
+
+    [Fact]
     public async Task SendConsoleCommandAsync_Timeout_ThrowsRemoteControlExceptionNotTaskCanceled()
     {
         // HttpClient 超时表现为 TaskCanceledException，必须被包成 RemoteControlException，
@@ -126,6 +149,14 @@ public sealed class RemoteControlServiceTests
         {
             await Task.Delay(Timeout.Infinite, cancellationToken);
             return new HttpResponseMessage(HttpStatusCode.OK);
+        }
+    }
+
+    private sealed class ThrowingHttpMessageHandler(Exception exception) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            throw exception;
         }
     }
 

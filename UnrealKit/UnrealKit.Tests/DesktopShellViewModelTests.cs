@@ -49,6 +49,46 @@ public sealed class DesktopShellViewModelTests
     }
 
     [Fact]
+    public async Task ReadLaunchParameters_ShowsDeviceFileContent()
+    {
+        var adb = new RecordingAdbService { ReadFileContent = "-RCWebControlEnable\n-RCWebInterfaceEnable" };
+        var project = CreateProject();
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
+        {
+            ProjectFilePath = project.ProjectFilePath
+        };
+
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+        await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+        viewModel.SelectedDevice = viewModel.Devices.First(d => d.Platform == "Android");
+
+        await ((AsyncDelegateCommand)viewModel.ReadLaunchParametersCommand).ExecuteAsync();
+
+        Assert.Equal("-RCWebControlEnable\n-RCWebInterfaceEnable", viewModel.DeviceLaunchParameterContent);
+        Assert.Equal("R58M123ABC", adb.ReadSerialNumber);
+        Assert.EndsWith("uecommandline.txt", adb.ReadRemotePath);
+    }
+
+    [Fact]
+    public async Task ReadLaunchParameters_MissingFile_ShowsAbsenceMessage()
+    {
+        var adb = new RecordingAdbService { ReadFileMissing = true };
+        var project = CreateProject();
+        var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
+        {
+            ProjectFilePath = project.ProjectFilePath
+        };
+
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+        await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+        viewModel.SelectedDevice = viewModel.Devices.First(d => d.Platform == "Android");
+
+        await ((AsyncDelegateCommand)viewModel.ReadLaunchParametersCommand).ExecuteAsync();
+
+        Assert.Contains("暂无", viewModel.DeviceLaunchParameterContent);
+    }
+
+    [Fact]
     public async Task OperationLogs_CarryTimestampAndCategory_AndClearCommandEmptiesThem()
     {
         var adb = new RecordingAdbService();
@@ -702,6 +742,7 @@ public sealed class DesktopShellViewModelTests
         public async Task<ProcessExecutionResult> PushFileAsync(string serialNumber, string localPath, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { Write("adb push"); return await inner.PushFileAsync(serialNumber, localPath, remotePath, progress, cancellationToken); }
         public Task<ProcessExecutionResult> PullDirectoryAsync(string serialNumber, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.PullDirectoryAsync(serialNumber, remotePath, localDirectory, progress, cancellationToken);
         public async Task<ProcessExecutionResult> DeleteRemoteFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { Write("adb shell rm"); return await inner.DeleteRemoteFileAsync(serialNumber, remotePath, progress, cancellationToken); }
+        public async Task<ProcessExecutionResult> ReadFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { Write("adb shell cat"); return await inner.ReadFileAsync(serialNumber, remotePath, progress, cancellationToken); }
         public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.RunDumpsysAsync(serialNumber, packageName, progress, cancellationToken);
         public Task<ProcessExecutionResult> InstallApkAsync(string serialNumber, string localApkPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.InstallApkAsync(serialNumber, localApkPath, progress, cancellationToken);
         public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.ForceStopApplicationAsync(serialNumber, packageName, progress, cancellationToken);
@@ -731,6 +772,18 @@ public sealed class DesktopShellViewModelTests
         public async Task<ProcessExecutionResult> PushFileAsync(string serialNumber, string localPath, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { PushSerialNumber = serialNumber; PushedContent = await File.ReadAllTextAsync(localPath, cancellationToken); return Success; }
         public Task<ProcessExecutionResult> PullDirectoryAsync(string serialNumber, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> DeleteRemoteFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { DeleteSerialNumber = serialNumber; return Task.FromResult(Success); }
+        public string? ReadSerialNumber { get; private set; }
+        public string? ReadRemotePath { get; private set; }
+        public string ReadFileContent { get; set; } = "-llm";
+        public bool ReadFileMissing { get; set; }
+        public Task<ProcessExecutionResult> ReadFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            ReadSerialNumber = serialNumber;
+            ReadRemotePath = remotePath;
+            return Task.FromResult(ReadFileMissing
+                ? new ProcessExecutionResult(1, string.Empty, "No such file or directory", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+                : new ProcessExecutionResult(0, ReadFileContent, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        }
         public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> InstallApkAsync(string serialNumber, string localApkPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { ForceStopRequest = (serialNumber, packageName); OperationOrder.Add("stop"); return Task.FromResult(new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)); }

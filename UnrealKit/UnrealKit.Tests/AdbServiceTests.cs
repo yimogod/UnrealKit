@@ -75,6 +75,41 @@ public sealed class AdbServiceTests
     }
 
     [Fact]
+    public async Task ReadFileAsync_PassesExplicitDeviceSerialAndCatInArgumentList()
+    {
+        var runner = new RecordingProcessRunner(new ProcessExecutionResult(0, "-RCWebControlEnable", string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        var service = new AdbService(runner, "custom-adb");
+
+        var result = await service.ReadFileAsync("R58M123ABC", "/sdcard/uecommandline.txt");
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("-RCWebControlEnable", result.StandardOutput);
+        Assert.NotNull(runner.Request);
+        Assert.Equal("custom-adb", runner.Request.FileName);
+        Assert.Equal(["-s", "R58M123ABC", "shell", "cat", "--", "/sdcard/uecommandline.txt"], runner.Request.Arguments);
+    }
+
+    [Fact]
+    public async Task ReadFileAsync_MissingFile_ReturnsNonZeroResultWithoutThrowing()
+    {
+        var expectedResult = new ProcessExecutionResult(1, string.Empty, "cat: /sdcard/uecommandline.txt: No such file or directory", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        var service = new AdbService(new RecordingProcessRunner(expectedResult), "adb");
+
+        var result = await service.ReadFileAsync("R58M123ABC", "/sdcard/uecommandline.txt");
+
+        Assert.False(result.Succeeded);
+        Assert.Same(expectedResult, result);
+    }
+
+    [Fact]
+    public async Task ReadFileAsync_RejectsNonUnixRemotePath()
+    {
+        var service = new AdbService(new RecordingProcessRunner(ProcessExecutionResultForSuccess()), "adb");
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ReadFileAsync("R58M123ABC", "C:\\temp\\uecommandline.txt"));
+    }
+
+    [Fact]
     public async Task DeviceCommand_RejectsMissingSerialNumber()
     {
         var service = new AdbService(new RecordingProcessRunner(ProcessExecutionResultForSuccess()), "adb");

@@ -72,7 +72,14 @@ public sealed class RemoteControlService : IRemoteControlService
         }
         catch (HttpRequestException exception)
         {
-            throw BuildFailure($"Remote Control request failed: {exception.Message}", exception, startedAt);
+            // HttpRequestException.Message 几乎总是「An error occurred while sending the request.」，
+            // 真正的原因（连接被拒绝、DNS 失败等）在 InnerException 里，必须透传才能定位。
+            var detail = exception.InnerException?.Message ?? exception.Message;
+            throw BuildFailure(
+                $"Remote Control request failed: {detail}. "
+                    + "请确认 UE 已启动且 Web Remote Control 插件已启用。",
+                exception,
+                startedAt);
         }
 
         using (response)

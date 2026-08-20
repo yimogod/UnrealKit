@@ -63,6 +63,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _memReportParsedAt = string.Empty;
     private string _launchParameterPreview = "请先打开工程以加载启动参数预设。";
     private string _launchOperationSummary = "请先打开工程并选择状态为 device 的设备。";
+    private string _deviceLaunchParameterContent = "尚未读取。点击「读取设备参数」查看手机中已有的 uecommandline.txt 内容。";
     private string _operationStage = "Idle";
     private string _scpLogPath = string.Empty;
     private string _scpScreenshotsDir = string.Empty;
@@ -141,6 +142,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         ShowDeviceIpAddressesCommand = new AsyncDelegateCommand(ShowDeviceIpAddressesAsync, CanQuerySelectedDeviceIp);
         PushLaunchParametersCommand = new AsyncDelegateCommand(PushLaunchParametersAsync, CanOperateOnSelectedDevice);
         DeleteLaunchParametersCommand = new AsyncDelegateCommand(DeleteLaunchParametersAsync, CanOperateOnSelectedDevice);
+        ReadLaunchParametersCommand = new AsyncDelegateCommand(ReadLaunchParametersAsync, CanOperateOnSelectedDevice);
         StartApplicationCommand = new AsyncDelegateCommand(StartApplicationAsync, CanOperateOnSelectedDevice);
         RunCaptureCommand = new AsyncDelegateCommand(RunCaptureAsync, CanOperateOnSelectedDevice);
         CancelOperationCommand = new DelegateCommand(CancelCurrentOperation, () => IsBusy);
@@ -218,6 +220,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand ShowDeviceIpAddressesCommand { get; }
     public ICommand PushLaunchParametersCommand { get; }
     public ICommand DeleteLaunchParametersCommand { get; }
+    public ICommand ReadLaunchParametersCommand { get; }
     public ICommand StartApplicationCommand { get; }
     public ICommand RunCaptureCommand { get; }
     public ICommand CancelOperationCommand { get; }
@@ -411,6 +414,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public IReadOnlyList<string> DownloadPlatformOptions { get; } = [PlatformNames.ToName(TargetPlatform.Android), PlatformNames.ToName(TargetPlatform.Win64)];
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
     public string LaunchOperationSummary { get => _launchOperationSummary; private set => SetField(ref _launchOperationSummary, value); }
+    public string DeviceLaunchParameterContent { get => _deviceLaunchParameterContent; private set => SetField(ref _deviceLaunchParameterContent, value); }
     public string OperationStage { get => _operationStage; private set => SetField(ref _operationStage, value); }
     public string ProjectTitle => _project is null ? "当前工程：未打开" : $"当前工程：{_project.Descriptor.ProjectName}";
     public bool IsBusy { get => _isBusy; private set { if (SetField(ref _isBusy, value)) RaiseCommandStates(); } }
@@ -467,6 +471,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(Platform));
             // IP 属于具体某台设备，换设备后旧值不再成立。
             SelectedDeviceIpSummary = "点击「获取 IP」查询所选设备的地址。";
+            // 设备内容同样属于具体某台设备，换设备后旧内容不再成立。
+            DeviceLaunchParameterContent = "尚未读取。点击「读取设备参数」查看手机中已有的 uecommandline.txt 内容。";
             UpdateCaptureArchivePreview();
             UpdateLaunchOperationSummary();
             UpdateLaunchParameterPreview();
@@ -1100,6 +1106,28 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
         await service.DeleteAsync(_project, SelectedDevice!.Id, progress, OperationCancellationToken);
         StatusMessage = $"已删除设备上的启动参数：{remotePath}";
+    });
+
+    /// <summary>
+    /// 读取设备上已有的 uecommandline.txt 内容，用于核对设备端实际生效的参数
+    /// （例如 Remote Control 开关是否真的落地）。读取是查询语义：文件不存在不抛异常，
+    /// 而是把结果如实显示在「设备内容」框里。
+    /// </summary>
+    private Task ReadLaunchParametersAsync() => RunAsync("正在读取设备上的 uecommandline.txt…", async progress =>
+    {
+        var result = await CreateLaunchParameterService(SelectedDevice!.Device).ReadAsync(
+            _project!, SelectedDevice!.Id, progress, OperationCancellationToken);
+        if (result.ReadResult.Succeeded)
+        {
+            DeviceLaunchParameterContent = result.ReadResult.StandardOutput;
+            StatusMessage = $"已读取设备启动参数：{result.RemotePath}";
+        }
+        else
+        {
+            DeviceLaunchParameterContent = $"设备上暂无该文件（{result.ReadResult.StandardError}）。";
+            StatusMessage = $"设备上无启动参数：{result.RemotePath}";
+            AddOperationLog("Warning", $"设备上无启动参数：{result.RemotePath} · {result.ReadResult.StandardError}");
+        }
     });
 
     private Task StartApplicationAsync() => RunAsync("正在启动应用…", async progress =>

@@ -17,7 +17,7 @@ public sealed class LaunchParameterServiceTests
 
         var content = service.BuildContent(settings, ["Mem.LLM", "Mem.LLM_CSV"], "-log");
 
-        Assert.Equal($"-llm{Environment.NewLine}-llmcsv{Environment.NewLine}-log", content);
+        Assert.Equal("-llm -llmcsv -log", content);
     }
 
     [Fact]
@@ -28,7 +28,7 @@ public sealed class LaunchParameterServiceTests
 
         var content = service.BuildContent(settings, ["Trace.Client_Default", "Trace.Client_Memory"]);
 
-        var expected = string.Join(Environment.NewLine,
+        var expected = string.Join(' ',
         [
             "-statnamedevents",
             "-tracefile",
@@ -48,7 +48,7 @@ public sealed class LaunchParameterServiceTests
         // Trace.Client_Network 的预设里 -statnamedevents 出现两次，且 -trace 尾部带空白。
         var content = service.BuildContent(settings, ["Trace.Client_Network"]);
 
-        var expected = string.Join(Environment.NewLine,
+        var expected = string.Join(' ',
         [
             "-statnamedevents",
             "-tracefile",
@@ -81,7 +81,7 @@ public sealed class LaunchParameterServiceTests
         // RemoteControl 开关与渲染/内存/追踪彼此正交，应可叠加。
         var content = service.BuildContent(settings, ["Profile.RemoteControl", "Mem.LLM"]);
 
-        Assert.Equal(string.Join(Environment.NewLine,
+        Assert.Equal(string.Join(' ',
         [
             "-RCWebControlEnable",
             "-RCWebInterfaceEnable",
@@ -109,7 +109,7 @@ public sealed class LaunchParameterServiceTests
         // 互斥只在组内生效：OpenGL 属于 Render 组，可与组外的 Mem.LLM 叠加。
         var content = service.BuildContent(settings, ["Render.OpenGL", "Mem.LLM"]);
 
-        Assert.Equal(string.Join(Environment.NewLine, ["-OpenGLES", "-llm"]), content);
+        Assert.Equal(string.Join(' ', ["-OpenGLES", "-llm"]), content);
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public sealed class LaunchParameterServiceTests
 
         var content = service.BuildContent(settings, ["Mem.LLM", "Mem.LLM_CSV"]);
 
-        Assert.Equal(string.Join(Environment.NewLine, ["-llm", "-llmcsv"]), content);
+        Assert.Equal(string.Join(' ', ["-llm", "-llmcsv"]), content);
     }
 
     [Fact]
@@ -163,6 +163,35 @@ public sealed class LaunchParameterServiceTests
         Assert.Equal(("R58M123ABC", "com.example.game"), adbService.ForceStopRequest);
     }
 
+    [Fact]
+    public async Task ReadAsync_ReturnsDeviceFileContent()
+    {
+        var adbService = new RecordingAdbService { ReadFileContent = "-RCWebControlEnable\n-RCWebInterfaceEnable" };
+        var service = new LaunchParameterService(new AdbDeviceService(adbService));
+        var project = CreateProject();
+
+        var result = await service.ReadAsync(project, "R58M123ABC");
+
+        Assert.True(result.ReadResult.Succeeded);
+        Assert.Equal("-RCWebControlEnable\n-RCWebInterfaceEnable", result.ReadResult.StandardOutput);
+        Assert.Equal("/sdcard/Android/data/com.example.game/files/UnrealGame/Sample/Sample/uecommandline.txt", result.RemotePath);
+        Assert.Equal("R58M123ABC", adbService.ReadSerialNumber);
+        Assert.Equal(result.RemotePath, adbService.ReadRemotePath);
+    }
+
+    [Fact]
+    public async Task ReadAsync_MissingFile_ReturnsNonZeroResultWithoutThrowing()
+    {
+        var adbService = new RecordingAdbService { ReadFileMissing = true };
+        var service = new LaunchParameterService(new AdbDeviceService(adbService));
+        var project = CreateProject();
+
+        var result = await service.ReadAsync(project, "R58M123ABC");
+
+        Assert.False(result.ReadResult.Succeeded);
+        Assert.Contains("No such file or directory", result.ReadResult.StandardError);
+    }
+
     private static UkitProject CreateProject()
     {
         var settings = ProjectSettings.CreateDefaults("Sample") with
@@ -181,6 +210,10 @@ public sealed class LaunchParameterServiceTests
         public string? PushRemotePath { get; private set; }
         public string? PushedContent { get; private set; }
         public string? DeletedRemotePath { get; private set; }
+        public string? ReadSerialNumber { get; private set; }
+        public string? ReadRemotePath { get; private set; }
+        public string ReadFileContent { get; set; } = "-llm";
+        public bool ReadFileMissing { get; set; }
         public (string SerialNumber, string PackageName, string ActivityName)? StartRequest { get; private set; }
         public (string SerialNumber, string PackageName)? ForceStopRequest { get; private set; }
 
@@ -223,6 +256,15 @@ public sealed class LaunchParameterServiceTests
         {
             DeletedRemotePath = remotePath;
             return Task.FromResult(Success);
+        }
+
+        public Task<ProcessExecutionResult> ReadFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            ReadSerialNumber = serialNumber;
+            ReadRemotePath = remotePath;
+            return Task.FromResult(ReadFileMissing
+                ? new ProcessExecutionResult(1, string.Empty, "No such file or directory", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+                : new ProcessExecutionResult(0, ReadFileContent, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
         }
 
         public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
