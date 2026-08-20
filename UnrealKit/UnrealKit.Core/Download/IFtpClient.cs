@@ -1,4 +1,4 @@
-using UnrealKit.Core.Operations;
+﻿using UnrealKit.Core.Operations;
 using UnrealKit.Core.Projects;
 
 namespace UnrealKit.Core.Download;
@@ -24,5 +24,5 @@ public interface IFtpClient : IAsyncDisposable
 /// </summary>
 public interface IFtpClientFactory
 {
-    IFtpClient Create(FtpDownloadSettings settings);
+    IFtpClient Create(FtpSettings settings);
 }

@@ -1,4 +1,4 @@
-using UnrealKit.Core.Projects;
+﻿using UnrealKit.Core.Projects;
 using UnrealKit.Core.Runtime;
 
 namespace UnrealKit.Tests;
@@ -240,7 +240,7 @@ public sealed class ProjectServiceTests : IDisposable
         var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "FtpProject"));
         var settings = created.Project.Settings with
         {
-            Ftp = new FtpDownloadSettings("ftp.example.com", 2121, "build-user", "secret"),
+            Ftp = new FtpSettings("ftp.example.com", 2121, "build-user", "secret"),
             Android = AndroidPlatformProfile.CreateDefaults() with { FtpPath = "/builds/android" },
             Win64 = new Win64PlatformProfile(@"C:\Game\MyGame.exe", @"C:\Game", "/builds/win64")
         };
@@ -274,7 +274,7 @@ public sealed class ProjectServiceTests : IDisposable
 
         var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
 
-        Assert.Equal(FtpDownloadSettings.DefaultPort, reopened.Settings.FtpSettings.Port);
+        Assert.Equal(FtpSettings.DefaultPort, reopened.Settings.FtpSettings.Port);
         Assert.Equal("ftp.example.com", reopened.Settings.FtpSettings.Host);
     }
 

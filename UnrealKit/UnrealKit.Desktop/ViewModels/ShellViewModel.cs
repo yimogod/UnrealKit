@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -97,7 +97,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _consoleSequenceOutput = "Run a sequence to see results here.";
     private bool _isConsoleSequenceRunning;
     private string _ftpHost = string.Empty;
-    private string _ftpPort = FtpDownloadSettings.DefaultPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private string _ftpPort = FtpSettings.DefaultPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private string _ftpUsername = string.Empty;
     private string _ftpPassword = string.Empty;
     private string _androidFtpPath = string.Empty;
@@ -105,6 +105,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _downloadPlatform = PlatformNames.ToName(TargetPlatform.Android);
     private string _downloadSummary = "请先打开工程并配置 FTP 下载，然后选择平台下载最新构建。";
     private string _downloadedApkPath = string.Empty;
+    private string _downloadedOutputDirectory = string.Empty;
     private UkitProject? _project;
     private PlatformScope _platformScope = PlatformScope.All;
     private DeviceDisplayInfo? _selectedDevice;
@@ -161,6 +162,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _clearOperationLogsCommand = new DelegateCommand(ClearOperationLogs, () => OperationLogs.Count > 0);
         DownloadCommand = new AsyncDelegateCommand(DownloadLatestAsync, CanDownloadLatest);
         InstallDownloadedApkCommand = new AsyncDelegateCommand(InstallDownloadedApkAsync, CanInstallDownloadedApk);
+        OpenDownloadedDirectoryCommand = new AsyncDelegateCommand(
+            OpenDownloadedDirectoryAsync,
+            () => !string.IsNullOrWhiteSpace(DownloadedOutputDirectory) && Directory.Exists(DownloadedOutputDirectory));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -205,7 +209,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string SelectedTrendChartSeries { get => _selectedTrendChartSeries; set { if (SetField(ref _selectedTrendChartSeries, value)) UpdateTrendChart(); } }
     public ObservableCollection<TrendDiagnosticOption> TrendDiagnostics { get; } = [];
     public ObservableCollection<RenderDocDiagnosticOption> RenderDocDiagnostics { get; } = [];
-    public ObservableCollection<DownloadDiagnosticOption> DownloadDiagnostics { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
     public ICommand RefreshDevicesCommand { get; }
@@ -229,6 +232,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand OpenRenderDocOutputDirCommand { get; }
     public ICommand DownloadCommand { get; }
     public ICommand InstallDownloadedApkCommand { get; }
+    public ICommand OpenDownloadedDirectoryCommand { get; }
 
     public string SelectedNavigationItem
     {
@@ -322,6 +326,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     /// <summary>最近一次下载得到的 APK 本地路径（仅 Android）。</summary>
     public string DownloadedApkPath { get => _downloadedApkPath; private set { if (SetField(ref _downloadedApkPath, value)) RaiseCommandStates(); } }
+
+    /// <summary>最近一次成功下载的本地落地目录（Android 为 APK 所在目录，Win64 为整包目录）。</summary>
+    public string DownloadedOutputDirectory
+    {
+        get => _downloadedOutputDirectory;
+        private set { if (SetField(ref _downloadedOutputDirectory, value)) RaiseCommandStates(); }
+    }
 
     /// <summary>
     /// 当前操作的平台，由所选设备决定。没有选中设备时为空——
@@ -931,9 +942,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         FtpPassword = ftp.Password;
 
         // 切换工程后，上一个工程的下载结果与 APK 路径不再成立。
-        DownloadDiagnostics.Clear();
         DownloadSummary = "请选择平台并点击「下载最新」。";
         DownloadedApkPath = string.Empty;
+        DownloadedOutputDirectory = string.Empty;
 
         OnPropertyChanged(nameof(ProjectTitle));
         UpdateLaunchParameterPreview();
@@ -964,7 +975,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     WorkingDirectory: Win64WorkingDirectory.Trim(),
                     FtpPath: Win64FtpPath.Trim())
                 : null,
-            Ftp = new FtpDownloadSettings(
+            Ftp = new FtpSettings(
                 Host: FtpHost.Trim(),
                 Port: ParseFtpPortText(FtpPort),
                 Username: FtpUsername.Trim(),
@@ -982,7 +993,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return FtpDownloadSettings.DefaultPort;
+            return FtpSettings.DefaultPort;
         }
 
         if (!int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var port)
@@ -1701,6 +1712,25 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         && !string.IsNullOrWhiteSpace(DownloadedApkPath);
 
     /// <summary>
+    /// 在资源管理器中打开最近一次下载的本地目录。目录不存在或尚未下载时按钮禁用，
+    /// 因此这里只需做一次防御性判断。
+    /// </summary>
+    private Task OpenDownloadedDirectoryAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(DownloadedOutputDirectory) && Directory.Exists(DownloadedOutputDirectory))
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = DownloadedOutputDirectory,
+                UseShellExecute = true
+            });
+            StatusMessage = $"已打开下载目录：{DownloadedOutputDirectory}";
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
     /// 从 FTP 下载所选平台的最新构建。下载落地 <c>Intermediate/Download/&lt;Platform&gt;</c>，
     /// 不写 Content/——构建产物是可重新获取的缓存，不是采集归档。
     /// </summary>
@@ -1723,14 +1753,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var result = await new FtpDownloadService(new FluentFtpClientFactory())
             .DownloadAsync(request, progress, OperationCancellationToken);
 
-        DownloadDiagnostics.Clear();
+        // 成功/失败明细统一写入操作日志窗口，页面不再另设诊断列表，避免两处重复。
         foreach (var diagnostic in result.Diagnostics)
         {
-            DownloadDiagnostics.Add(new DownloadDiagnosticOption(
-                diagnostic.Severity.ToString(),
-                diagnostic.Code,
-                diagnostic.LineNumber?.ToString() ?? "-",
-                diagnostic.Message));
+            var fix = diagnostic.SuggestedFix is { Length: > 0 } fixText ? $"（{fixText}）" : string.Empty;
+            AddOperationLog(diagnostic.Severity.ToString(), $"[{diagnostic.Code}] {diagnostic.Message}{fix}");
         }
 
         // Android 下载的是 apk 文件，记录其本地路径供「安装到设备」使用；Win64 下载的是目录。
@@ -1738,9 +1765,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ? result.LocalPath ?? string.Empty
             : string.Empty;
 
+        // 记录最近一次成功下载的本地目录，供「打开下载目录」使用；失败时清空。
+        DownloadedOutputDirectory = result.Succeeded && result.LocalPath is { Length: > 0 } localPath
+            ? (Directory.Exists(localPath) ? localPath : Path.GetDirectoryName(localPath) ?? string.Empty)
+            : string.Empty;
+
         DownloadSummary = result.Succeeded
             ? $"下载完成：{result.SourceSubdir}（{result.FileCount} 个文件）→ {result.LocalPath}"
-            : $"下载失败：{result.SourceSubdir ?? "(无)"}。详见诊断列表。";
+            : $"下载失败：{result.SourceSubdir ?? "(无)"}。详见操作日志。";
+        AddOperationLog(result.Succeeded ? "Info" : "Error", DownloadSummary);
 
         if (result.Succeeded)
         {

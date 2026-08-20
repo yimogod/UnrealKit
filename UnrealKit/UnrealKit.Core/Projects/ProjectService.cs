@@ -1,4 +1,4 @@
-using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.Diagnostics;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Runtime;
 
@@ -396,13 +396,13 @@ public sealed class ProjectService : IProjectService
     /// 与平台无关；各平台的父目录在其 profile 的 <c>FtpPath</c> 中。
     /// 端口未配置回退默认 21，配置了但非法报错（同 RemoteControlHttpPort）。
     /// </summary>
-    private static FtpDownloadSettings ReadFtpSettings(LayeredIniDocument layered, FtpDownloadSettings defaults)
+    private static FtpSettings ReadFtpSettings(LayeredIniDocument layered, FtpSettings defaults)
     {
         var host = layered.GetValue(FtpSection, "Host") ?? defaults.Host;
         var port = ParseFtpPort(layered.GetValue(FtpSection, "Port"), defaults.Port);
         var username = layered.GetValue(FtpSection, "Username") ?? defaults.Username;
         var password = layered.GetValue(FtpSection, "Password") ?? defaults.Password;
-        return new FtpDownloadSettings(host, port, username, password);
+        return new FtpSettings(host, port, username, password);
     }
 
     private static int ParseFtpPort(string? value, int defaultPort)

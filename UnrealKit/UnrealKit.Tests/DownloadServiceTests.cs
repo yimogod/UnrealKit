@@ -1,4 +1,4 @@
-using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.Diagnostics;
 using UnrealKit.Core.Download;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Projects;
@@ -7,7 +7,7 @@ namespace UnrealKit.Tests;
 
 public sealed class DownloadServiceTests
 {
-    private static FtpDownloadSettings ConfiguredSettings => new("ftp.example.com", 21, "user", "pass");
+    private static FtpSettings ConfiguredSettings => new("ftp.example.com", 21, "user", "pass");
 
     private static string NewLocalBaseDirectory() =>
         Path.Combine(Path.GetTempPath(), "UnrealKit.Tests", "Download", Guid.NewGuid().ToString("N"));
@@ -18,7 +18,7 @@ public sealed class DownloadServiceTests
         var service = new FtpDownloadService(new FakeFtpClientFactory());
         var request = new DownloadRequest(
             TargetPlatform.Android,
-            FtpDownloadSettings.CreateDefaults(),
+            FtpSettings.CreateDefaults(),
             "/builds/android",
             NewLocalBaseDirectory());
 
@@ -162,7 +162,7 @@ public sealed class DownloadServiceTests
     private sealed class FakeFtpClientFactory : IFtpClientFactory
     {
         public FakeFtpClient Client { get; } = new();
-        public IFtpClient Create(FtpDownloadSettings settings) => Client;
+        public IFtpClient Create(FtpSettings settings) => Client;
     }
 
     private sealed class FakeFtpClient : IFtpClient

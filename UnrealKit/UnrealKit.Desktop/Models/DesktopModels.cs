@@ -68,6 +68,4 @@ public sealed record TrendDiagnosticOption(string Severity, string Code, string 
 
 public sealed record RenderDocDiagnosticOption(string Severity, string Code, string Line, string Message);
 
-public sealed record DownloadDiagnosticOption(string Severity, string Code, string Line, string Message);
-
 public sealed record TrendChartAxisLabel(double X, double Y, string Label);

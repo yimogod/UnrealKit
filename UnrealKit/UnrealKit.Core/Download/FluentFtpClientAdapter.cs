@@ -1,4 +1,4 @@
-using FluentFTP;
+﻿using FluentFTP;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Projects;
 
@@ -12,7 +12,7 @@ public sealed class FluentFtpClientAdapter : IFtpClient
 {
     private readonly AsyncFtpClient _client;
 
-    public FluentFtpClientAdapter(FtpDownloadSettings settings)
+    public FluentFtpClientAdapter(FtpSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
         _client = new AsyncFtpClient(settings.Host, settings.Username, settings.Password, settings.Port);
@@ -85,5 +85,5 @@ public sealed class FluentFtpClientAdapter : IFtpClient
 /// </summary>
 public sealed class FluentFtpClientFactory : IFtpClientFactory
 {
-    public IFtpClient Create(FtpDownloadSettings settings) => new FluentFtpClientAdapter(settings);
+    public IFtpClient Create(FtpSettings settings) => new FluentFtpClientAdapter(settings);
 }

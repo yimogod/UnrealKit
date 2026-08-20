@@ -1,4 +1,4 @@
-using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.Diagnostics;
 using UnrealKit.Core.Projects;
 
 namespace UnrealKit.Core.Download;
@@ -15,7 +15,7 @@ public sealed record FtpEntry(string Name, bool IsDirectory);
 /// </summary>
 public sealed record DownloadRequest(
     TargetPlatform Platform,
-    FtpDownloadSettings Settings,
+    FtpSettings Settings,
     string FtpPath,
     string LocalBaseDirectory);
 

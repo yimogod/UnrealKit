@@ -1,4 +1,4 @@
-using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.Diagnostics;
 
 namespace UnrealKit.Core.Projects;
 
@@ -136,11 +136,11 @@ public sealed record DeviceAliasMap
 ///
 /// <see cref="Password"/> 是敏感信息：界面用密码框掩码，日志与命令行输出不得打印明文。
 /// </summary>
-public sealed record FtpDownloadSettings(string Host, int Port, string Username, string Password)
+public sealed record FtpSettings(string Host, int Port, string Username, string Password)
 {
     public const int DefaultPort = 21;
 
-    public static FtpDownloadSettings CreateDefaults() => new(string.Empty, DefaultPort, string.Empty, string.Empty);
+    public static FtpSettings CreateDefaults() => new(string.Empty, DefaultPort, string.Empty, string.Empty);
 
     /// <summary>是否已配置主机。主机为空即视为未启用 FTP 下载。</summary>
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Host);
@@ -169,7 +169,7 @@ public sealed record ProjectSettings(
     string RemoteControlFunctionName = "ExecuteConsoleCommand",
     string RemoteControlCommandParameter = "Command",
     DeviceAliasMap? DeviceAliases = null,
-    FtpDownloadSettings? Ftp = null)
+    FtpSettings? Ftp = null)
 {
     /// <summary>
     /// 新建工程时两个平台都给出默认 profile：多平台工程是默认假设，
@@ -195,7 +195,7 @@ public sealed record ProjectSettings(
     /// <summary>
     /// FTP 下载配置。未配置时是默认空配置而不是 null，调用方不必每处判空。
     /// </summary>
-    public FtpDownloadSettings FtpSettings => Ftp ?? FtpDownloadSettings.CreateDefaults();
+    public FtpSettings FtpSettings => Ftp ?? FtpSettings.CreateDefaults();
 
     /// <summary>
     /// 取设备别名，未配置返回 null。
@@ -266,6 +266,7 @@ public static class LaunchParameterPresetDefaults
         new("Mem.LLM_CSV", "-llmcsv", "启动llm csv.", true),
         new("Render.OpenGL", "-OpenGLES", "使用OpenGL渲染.", false),
         new("Render.Vulkan", "-vulkan", "使用Vulkan渲染.", false),
+        new("Profile.RemoteControl", "-RCWebControlEnable -RCWebInterfaceEnable", "启用远程控制.", false),
         new("Trace.Client_All", traceClient_All, "trace default, 网络, 内存.", true),
         new("Trace.Client_Default", traceClient_Default, "默认trace(cpu,gpu,load).", true),
         new("Trace.Client_Network", traceClient_Network, "网络trace.", true),
