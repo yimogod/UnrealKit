@@ -62,15 +62,7 @@ public sealed record ConsoleSequencePreset(string Name, string StepsDefinition, 
 /// <summary>
 /// 启动参数预设
 /// </summary>
-public sealed record LaunchParameterPreset(string Name, string Arguments, string Description, bool IsComposable, string? DisplayArguments = null)
-{
-    /// <summary>
-    /// 列表展示用的参数文本：<see cref="DisplayArguments"/> 有效（非空白）时显示它，
-    /// 否则退回完整 <see cref="Arguments"/>。长参数（如 trace 通道列表）用短文案占位，
-    /// 完整内容仍见预览面板与 <see cref="Launch.LaunchParameterService.BuildContent"/>。
-    /// </summary>
-    public string DisplayText => string.IsNullOrWhiteSpace(DisplayArguments) ? Arguments : DisplayArguments;
-}
+public sealed record LaunchParameterPreset(string Name, string Arguments, string Description, bool IsComposable);
 
 /// <summary>
 /// 设备别名表：设备标识 → 人类可读别名。
@@ -252,10 +244,10 @@ public static class LaunchParameterPresetDefaults
         new("Mem.LLM_CSV", "-llmcsv", "启动llm csv.", true),
         new("Render.OpenGL", "-OpenGLES", "使用OpenGL渲染.", false),
         new("Render.Vulkan", "-vulkan", "使用Vulkan渲染.", false),
-        new("Trace.Client_All", traceClient_All, "trace default, 网络, 内存.", true, "-trace=...,default,memory,net -NetTrace=1"),
-        new("Trace.Client_Default", traceClient_Default, "默认trace(cpu,gpu,load).", true, "-statnamedevents -tracefile -trace=cpu,gpu,..."),
-        new("Trace.Client_Network", traceClient_Network, "网络trace.", true, "-trace=...,net"),
-        new("Trace.Client_Memory", traceClient_Memory, "内存trace.", true, "-trace=...,memory -llm -llmcsv")
+        new("Trace.Client_All", traceClient_All, "trace default, 网络, 内存.", true),
+        new("Trace.Client_Default", traceClient_Default, "默认trace(cpu,gpu,load).", true),
+        new("Trace.Client_Network", traceClient_Network, "网络trace.", true),
+        new("Trace.Client_Memory", traceClient_Memory, "内存trace.", true)
     ];
 }
 

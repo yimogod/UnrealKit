@@ -101,6 +101,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _selectedDeviceIpSummary = "点击「获取 IP」查询所选设备的地址。";
     private CaptureFileInfo? _selectedCaptureResultFile;
     private CaptureDirectoryInfo? _selectedCaptureResult;
+    private LaunchParameterPresetOption? _selectedLaunchParameterPreset;
     private bool _isBusy;
     private CancellationTokenSource? _operationCancellation;
     private CancellationToken OperationCancellationToken => _operationCancellation?.Token ?? CancellationToken.None;
@@ -430,6 +431,26 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             AddOperationLog("Error", $"列出 Capture 文件失败：{exception.Message}");
         }
     }
+
+    /// <summary>
+    /// 当前在预设列表中被选中的预设（点击条目，而非勾选复选框）。选中后
+    /// <see cref="SelectedLaunchParameterPresetArguments"/> 显示其完整参数。
+    /// </summary>
+    public LaunchParameterPresetOption? SelectedLaunchParameterPreset
+    {
+        get => _selectedLaunchParameterPreset;
+        set
+        {
+            if (!SetField(ref _selectedLaunchParameterPreset, value)) return;
+            OnPropertyChanged(nameof(SelectedLaunchParameterPresetArguments));
+        }
+    }
+
+    /// <summary>选中预设的完整参数；未选中时给出提示，而不是留一块空白。</summary>
+    public string SelectedLaunchParameterPresetArguments =>
+        SelectedLaunchParameterPreset is null
+            ? "点击预设条目查看参数。"
+            : SelectedLaunchParameterPreset.Arguments;
 
     /// <summary>
     /// 所选设备摘要。设备标识始终在最前：后续所有操作以它为准，
@@ -829,6 +850,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             option.PropertyChanged += (_, _) => UpdateLaunchParameterPreview();
             LaunchParameterPresets.Add(option);
         }
+        SelectedLaunchParameterPreset = LaunchParameterPresets.Count > 0 ? LaunchParameterPresets[0] : null;
 
         CaptureTag = project.Settings.DefaultCaptureTag;
         ConsoleSequencePresets.Clear();

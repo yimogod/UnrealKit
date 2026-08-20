@@ -81,22 +81,6 @@ public sealed class LaunchParameterServiceTests
     }
 
     [Fact]
-    public void DisplayText_PrefersDisplayArgumentsWhenProvided()
-    {
-        var preset = new LaunchParameterPreset("Trace", "-statnamedevents -tracefile -trace=cpu,gpu,screenshot", "trace.", true, "-trace=cpu,gpu,...");
-
-        Assert.Equal("-trace=cpu,gpu,...", preset.DisplayText);
-    }
-
-    [Fact]
-    public void DisplayText_FallsBackToArgumentsWhenDisplayArgumentsBlank()
-    {
-        var preset = new LaunchParameterPreset("LLM", "-llm", "启动llm.", true);
-
-        Assert.Equal("-llm", preset.DisplayText);
-    }
-
-    [Fact]
     public async Task PushAsync_UsesExpandedPathAndDeletesTemporaryFile()
     {
         var adbService = new RecordingAdbService();

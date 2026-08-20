@@ -23,9 +23,11 @@
                 <RowDefinition Height="*" MinHeight="120" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <TextBlock Text="选择预设。不可组合的预设只能单独使用；无效组合会在预览中显示原因。" Style="{StaticResource HintTextStyle}" Margin="0,0,0,10" />
             <ListBox Grid.Row="1" ItemsSource="{Binding LaunchParameterPresets}" BorderBrush="#FFE2E6EA" BorderThickness="1"
+                     SelectedItem="{Binding SelectedLaunchParameterPreset}"
                      ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
@@ -35,21 +37,17 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" Margin="0,3,8,0" />
-                            <StackPanel Grid.Column="1">
-                                <!-- Name 与 Description 同一行：Name 半粗、Description 弱化灰色，视觉上一眼可区分，
-                                     同时比各自占一行省出垂直空间，同一屏能列出更多预设。 -->
-                                <DockPanel>
-                                    <TextBlock DockPanel.Dock="Left" Text="{Binding Name}" Style="{StaticResource EmphasisTextStyle}" Margin="0,0,8,0" />
-                                    <TextBlock Text="{Binding Description}" Style="{StaticResource HintTextStyle}" />
-                                </DockPanel>
-                                <TextBlock Text="{Binding DisplayText}" Style="{StaticResource HintTextStyle}" FontFamily="Consolas" Margin="0,2,0,0" />
-                            </StackPanel>
+                            <DockPanel Grid.Column="1">
+                                <TextBlock DockPanel.Dock="Left" Text="{Binding Name}" Style="{StaticResource EmphasisTextStyle}" Margin="0,0,8,0" />
+                                <TextBlock Text="{Binding Description}" Style="{StaticResource HintTextStyle}" />
+                            </DockPanel>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
-            <TextBlock Grid.Row="2" Text="自定义参数" Style="{StaticResource StackedFieldLabelTextStyle}" />
-            <TextBox Grid.Row="3" Text="{Binding CustomLaunchArguments, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="64" Padding="8,6" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" />
+            <TextBlock Grid.Row="2" Text="{Binding SelectedLaunchParameterPresetArguments}" Style="{StaticResource HintTextStyle}" FontFamily="Consolas" Margin="0,6,0,4" />
+            <TextBlock Grid.Row="3" Text="自定义参数" Style="{StaticResource StackedFieldLabelTextStyle}" />
+            <TextBox Grid.Row="4" Text="{Binding CustomLaunchArguments, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="64" Padding="8,6" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" />
         </Grid>
         <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding LaunchParameterPreview, Mode=OneWay}" IsReadOnly="True" Margin="8,12,0,0" Padding="8" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
         <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,18,0,0">
