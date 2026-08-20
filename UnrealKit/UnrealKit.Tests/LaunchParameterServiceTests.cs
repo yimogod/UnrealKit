@@ -73,11 +73,61 @@ public sealed class LaunchParameterServiceTests
     }
 
     [Fact]
-    public void BuildContent_RejectsNonComposablePresetWithAnotherPreset()
+    public void BuildContent_AllowsRemoteControlWithMemoryPreset()
+    {
+        var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));
+        var settings = ProjectSettings.CreateDefaults("Sample");
+
+        // RemoteControl 开关与渲染/内存/追踪彼此正交，应可叠加。
+        var content = service.BuildContent(settings, ["Profile.RemoteControl", "Mem.LLM"]);
+
+        Assert.Equal(string.Join(Environment.NewLine,
+        [
+            "-RCWebControlEnable",
+            "-RCWebInterfaceEnable",
+            "-llm"
+        ]), content);
+    }
+
+    [Fact]
+    public void BuildContent_RejectsTwoPresetsInSameExclusiveGroup()
     {
         var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));
 
-        Assert.Throws<ArgumentException>(() => service.BuildContent(ProjectSettings.CreateDefaults("Sample"), ["Render.OpenGL", "Mem.LLM"]));
+        var exception = Assert.Throws<ArgumentException>(() =>
+            service.BuildContent(ProjectSettings.CreateDefaults("Sample"), ["Render.OpenGL", "Render.Vulkan"]));
+
+        Assert.Contains("mutually exclusive", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildContent_AllowsExclusiveGroupMemberWithUngroupedPreset()
+    {
+        var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));
+        var settings = ProjectSettings.CreateDefaults("Sample");
+
+        // 互斥只在组内生效：OpenGL 属于 Render 组，可与组外的 Mem.LLM 叠加。
+        var content = service.BuildContent(settings, ["Render.OpenGL", "Mem.LLM"]);
+
+        Assert.Equal(string.Join(Environment.NewLine, ["-OpenGLES", "-llm"]), content);
+    }
+
+    [Fact]
+    public void BuildContent_AllowsCoexistGroupMembersTogether()
+    {
+        // 同一个预设可以分到 Coexist 组，验证非互斥组不施加任何约束。
+        var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));
+        var settings = ProjectSettings.CreateDefaults("Sample") with
+        {
+            LaunchParameterGroups =
+            [
+                new LaunchParameterPresetGroup("Mem", LaunchParameterGroupMode.Coexist, ["Mem.LLM", "Mem.LLM_CSV"])
+            ]
+        };
+
+        var content = service.BuildContent(settings, ["Mem.LLM", "Mem.LLM_CSV"]);
+
+        Assert.Equal(string.Join(Environment.NewLine, ["-llm", "-llmcsv"]), content);
     }
 
     [Fact]

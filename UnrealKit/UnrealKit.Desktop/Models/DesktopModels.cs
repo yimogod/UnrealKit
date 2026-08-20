@@ -29,7 +29,7 @@ public sealed record MemReportMetricOption(string Group, string Name, string Val
 
 public sealed record MemReportSummaryOption(string Category, string Count, string Details);
 
-public sealed class LaunchParameterPresetOption(LaunchParameterPreset preset) : INotifyPropertyChanged
+public sealed class LaunchParameterPresetOption(LaunchParameterPreset preset, LaunchParameterPresetGroup? group = null) : INotifyPropertyChanged
 {
     private bool _isSelected;
 
@@ -37,7 +37,20 @@ public sealed class LaunchParameterPresetOption(LaunchParameterPreset preset) : 
     public string Name => preset.Name;
     public string Arguments => preset.Arguments;
     public string Description => preset.Description;
-    public bool IsComposable => preset.IsComposable;
+
+    /// <summary>预设所属分组；未分组为 null。</summary>
+    public string? GroupName => group?.Name;
+
+    /// <summary>是否处于互斥组（同组最多选一个）。</summary>
+    public bool IsExclusive => group?.Mode == LaunchParameterGroupMode.Exclusive;
+
+    /// <summary>分组说明；未分组为空，界面据此决定是否显示。</summary>
+    public string GroupLabel => group is null
+        ? string.Empty
+        : group.Mode == LaunchParameterGroupMode.Exclusive
+            ? $"互斥组：{group.Name}"
+            : $"同组：{group.Name}";
+
     public bool IsSelected
     {
         get => _isSelected;
@@ -67,5 +80,18 @@ public sealed record TrendSeriesOption(string Group, string Name, string Unit, s
 public sealed record TrendDiagnosticOption(string Severity, string Code, string Line, string Message);
 
 public sealed record RenderDocDiagnosticOption(string Severity, string Code, string Line, string Message);
+
+/// <summary>
+/// 本地已下载构建包的展示投影。安装到设备前据此取 <see cref="LocalApkPath"/>；
+/// <see cref="InstallBlockReason"/> 说明该包不可安装的具体原因。
+/// </summary>
+public sealed record DownloadedPackageOption(string FolderName, string? LocalApkPath, string? InstallBlockReason)
+{
+    /// <summary>该包是否可直接安装（有唯一本地 APK 且无阻塞原因）。</summary>
+    public bool IsInstallable => LocalApkPath is not null;
+
+    /// <summary>列表展示的说明：可直接安装的包显示版本目录名，不可安装的在目录名后追加原因。</summary>
+    public string Display => InstallBlockReason is null ? FolderName : $"{FolderName}（{InstallBlockReason}）";
+}
 
 public sealed record TrendChartAxisLabel(double X, double Y, string Label);

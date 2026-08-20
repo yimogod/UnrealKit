@@ -30,10 +30,19 @@ public sealed class LaunchParameterService : ILaunchParameterService
         var selectedNames = presetNames.Where(name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var presets = selectedNames.Select(name => settings.LaunchParameterPresets.FirstOrDefault(preset => string.Equals(preset.Name, name, StringComparison.OrdinalIgnoreCase))
             ?? throw new ArgumentException($"Unknown launch parameter preset: {name}", nameof(presetNames))).ToArray();
-        var nonComposable = presets.Where(preset => !preset.IsComposable).ToArray();
-        if (nonComposable.Length > 1 || nonComposable.Length == 1 && presets.Length > 1)
+
+        // 组合约束由分组决定：互斥组内最多选一个。未分组或同处 Coexist 组的预设
+        // 可自由叠加，不再需要预设自带的「可组合」标记。
+        var selected = selectedNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in settings.LaunchParameterGroups.Where(group => group.Mode == LaunchParameterGroupMode.Exclusive))
         {
-            throw new ArgumentException("A non-composable launch parameter preset must be used alone.", nameof(presetNames));
+            var conflicts = group.Members.Where(member => selected.Contains(member)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            if (conflicts.Length > 1)
+            {
+                throw new ArgumentException(
+                    $"Launch parameter presets {string.Join(", ", conflicts)} are mutually exclusive (group '{group.Name}'); select at most one.",
+                    nameof(presetNames));
+            }
         }
 
         // 预设参数参与合并去重；自定义参数按用户要求原样追加，不参与合并。

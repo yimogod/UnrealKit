@@ -25,7 +25,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <TextBlock Text="选择预设。不可组合的预设只能单独使用；无效组合会在预览中显示原因。" Style="{StaticResource HintTextStyle}" Margin="0,0,0,10" />
+            <TextBlock Text="选择预设。互斥组内最多选一个；无效组合会在预览中显示原因。" Style="{StaticResource HintTextStyle}" Margin="0,0,0,10" />
             <ListBox Grid.Row="1" ItemsSource="{Binding LaunchParameterPresets}" BorderBrush="#FFE2E6EA" BorderThickness="1"
                      SelectedItem="{Binding SelectedLaunchParameterPreset}"
                      ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -36,11 +36,16 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
                             <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" Margin="0,3,8,0" />
                             <DockPanel Grid.Column="1">
                                 <TextBlock DockPanel.Dock="Left" Text="{Binding Name}" Style="{StaticResource EmphasisTextStyle}" Margin="0,0,8,0" />
                                 <TextBlock Text="{Binding Description}" Style="{StaticResource HintTextStyle}" />
                             </DockPanel>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding GroupLabel}" Style="{StaticResource HintTextStyle}" Margin="0,2,0,0" />
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

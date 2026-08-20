@@ -14,8 +14,14 @@
                 <Button Content="下载最新" Command="{Binding DownloadCommand}" Padding="18,8" Margin="16,0,0,0" />
                 <Button Content="安装到设备" Command="{Binding InstallDownloadedApkCommand}" Padding="18,8" Margin="12,0,0,0" />
                 <Button Content="打开下载目录" Command="{Binding OpenDownloadedDirectoryCommand}" Padding="18,8" Margin="12,0,0,0" />
+                <Button Content="刷新本地包" Command="{Binding RefreshDownloadedPackagesCommand}" Padding="18,8" Margin="12,0,0,0" />
             </StackPanel>
             <TextBlock Text="{Binding DownloadSummary}" Style="{StaticResource ResultSummaryTextStyle}" Margin="0,16,0,0" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding DownloadFolderSummary}" Style="{StaticResource HintTextStyle}" Margin="0,8,0,0" TextWrapping="Wrap" />
+            <ListBox ItemsSource="{Binding DownloadedPackages}"
+                     SelectedItem="{Binding SelectedDownloadedPackage}"
+                     DisplayMemberPath="Display"
+                     MinHeight="140" MaxHeight="260" Margin="0,8,0,0" />
             <TextBlock Text="{Binding DownloadedApkPath, StringFormat='本地 APK：{0}'}"
                        Style="{StaticResource HintTextStyle}" Margin="0,8,0,0" FontFamily="Consolas" TextWrapping="Wrap" />
             <TextBlock Text="下载的成功与失败明细写入右上角「操作日志」，不在此处重复展示。"

@@ -60,9 +60,28 @@ public sealed record ConsoleSequencePreset(string Name, string StepsDefinition, 
 }
 
 /// <summary>
+/// 预设组合模式：<see cref="Exclusive"/> 表示组内互斥（同组最多选一个），
+/// <see cref="Coexist"/> 表示组内可同时存在（无约束）。
+/// </summary>
+public enum LaunchParameterGroupMode
+{
+    /// <summary>组内可同时存在，不施加任何约束。</summary>
+    Coexist,
+    /// <summary>组内互斥，同组最多选一个。</summary>
+    Exclusive,
+}
+
+/// <summary>
 /// 启动参数预设
 /// </summary>
-public sealed record LaunchParameterPreset(string Name, string Arguments, string Description, bool IsComposable);
+public sealed record LaunchParameterPreset(string Name, string Arguments, string Description);
+
+/// <summary>
+/// 启动参数预设分组：把有互斥关系的预设放进同一组。<see cref="Mode"/> 决定组内约束，
+/// 成员是预设名。分组是组合约束的唯一来源——预设本身不携带「是否可组合」属性，
+/// 因此新增预设不必写死可组合标记，只需按需归组。
+/// </summary>
+public sealed record LaunchParameterPresetGroup(string Name, LaunchParameterGroupMode Mode, IReadOnlyList<string> Members);
 
 /// <summary>
 /// 设备别名表：设备标识 → 人类可读别名。
@@ -159,6 +178,7 @@ public sealed record ProjectSettings(
     string DefaultCaptureTag,
     string DefaultExportDirectory,
     IReadOnlyList<LaunchParameterPreset> LaunchParameterPresets,
+    IReadOnlyList<LaunchParameterPresetGroup> LaunchParameterGroups,
     IReadOnlyList<ConsoleSequencePreset> ConsoleSequences,
     string? PreCaptureSequence,
     string? PostCaptureSequence,
@@ -181,6 +201,7 @@ public sealed record ProjectSettings(
         DefaultCaptureTag: "Default",
         DefaultExportDirectory: "Saved/Exports",
         LaunchParameterPresets: LaunchParameterPresetDefaults.All,
+        LaunchParameterGroups: LaunchParameterPresetDefaults.Groups,
         ConsoleSequences: [],
         PreCaptureSequence: null,
         PostCaptureSequence: null,
@@ -262,15 +283,24 @@ public static class LaunchParameterPresetDefaults
 
     public static IReadOnlyList<LaunchParameterPreset> All { get; } =
     [
-        new("Mem.LLM", "-llm", "启动llm.", true),
-        new("Mem.LLM_CSV", "-llmcsv", "启动llm csv.", true),
-        new("Render.OpenGL", "-OpenGLES", "使用OpenGL渲染.", false),
-        new("Render.Vulkan", "-vulkan", "使用Vulkan渲染.", false),
-        new("Profile.RemoteControl", "-RCWebControlEnable -RCWebInterfaceEnable", "启用远程控制.", false),
-        new("Trace.Client_All", traceClient_All, "trace default, 网络, 内存.", true),
-        new("Trace.Client_Default", traceClient_Default, "默认trace(cpu,gpu,load).", true),
-        new("Trace.Client_Network", traceClient_Network, "网络trace.", true),
-        new("Trace.Client_Memory", traceClient_Memory, "内存trace.", true)
+        new("Mem.LLM", "-llm", "启动llm."),
+        new("Mem.LLM_CSV", "-llmcsv", "启动llm csv."),
+        new("Render.OpenGL", "-OpenGLES", "使用OpenGL渲染."),
+        new("Render.Vulkan", "-vulkan", "使用Vulkan渲染."),
+        new("Profile.RemoteControl", "-RCWebControlEnable -RCWebInterfaceEnable", "启用远程控制."),
+        new("Trace.Client_All", traceClient_All, "trace default, 网络, 内存."),
+        new("Trace.Client_Default", traceClient_Default, "默认trace(cpu,gpu,load)."),
+        new("Trace.Client_Network", traceClient_Network, "网络trace."),
+        new("Trace.Client_Memory", traceClient_Memory, "内存trace.")
+    ];
+
+    /// <summary>
+    /// 内置预设分组：渲染后端 OpenGL 与 Vulkan 二选一，故同属互斥组 Render。
+    /// 其余预设（内存、追踪、远程控制）彼此与渲染后端都正交，不归组即可自由叠加。
+    /// </summary>
+    public static IReadOnlyList<LaunchParameterPresetGroup> Groups { get; } =
+    [
+        new("Render", LaunchParameterGroupMode.Exclusive, ["Render.OpenGL", "Render.Vulkan"])
     ];
 }
 

@@ -4,6 +4,12 @@ All notable changes to UnrealKit.
 
 ## [Unreleased]
 
+### Launch Parameter Presets Use Groups For Mutual Exclusion
+- Replaced the per-preset `IsComposable` bool with launch parameter **groups**. A group declares a mode (`Exclusive` = at most one member selectable; `Coexist` = no constraint) plus its members, so the real conflict is expressible: `Render` group makes OpenGL and Vulkan mutually exclusive while either still composes with `Mem.LLM` / trace / remote-control presets. Ungrouped presets compose freely
+- **Breaking:** `LaunchParameterPreset` drops `IsComposable`; `ProjectSettings` gains `LaunchParameterGroups` (`IReadOnlyList<LaunchParameterPresetGroup>`). `LaunchParameterPresetGroup(Name, Mode, Members)` with `LaunchParameterGroupMode` enum (`Coexist`/`Exclusive`). `BuildContent` now validates by group membership instead of a preset flag, so the earlier false exclusion (`Profile.RemoteControl` + `Mem.LLM` failing) no longer happens
+- New `[UnrealKit.LaunchPresetGroups]` section in `Config/DefaultGame.ini` (`Render=Exclusive:Render.OpenGL,Render.Vulkan`), layered like the rest of the config — `BaseGame.ini` holds team defaults, the project overrides. An unrecognized mode or a missing `:` errors (`InvalidDataException`) rather than silently treating the group as exclusive. Built-in default is a single `Render` exclusive group
+- The GUI launch-parameter list shows each preset's group label (`互斥组：Render` / `同组：…`); ungrouped presets show nothing
+
 ### Build Download From FTP
 - New `unrealkit download` CLI verb plus a WPF "安装包" page: pull the latest build for a platform from FTP — the newest subdirectory by natural sort (numeric segments by value, text segments case-insensitive), downloading the single `.apk` (Android) or the whole subdirectory (Win64 exe + resources). `unrealkit download install` installs a local APK to a connected Android device
 - FTP host/port/credentials live in a new shared `[UnrealKit.Ftp]` section (`Host`/`Port`/`Username`/`Password`) on `ProjectSettings.Ftp` (`FtpDownloadSettings`); each platform's parent directory is its own profile's `FtpPath`. Host or FtpPath blank fails before any network I/O, naming the missing field. `Port` empty falls back to `21`; a non-1–65535 value errors instead of silently defaulting

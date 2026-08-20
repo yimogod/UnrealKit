@@ -12,6 +12,7 @@ public sealed class ProjectService : IProjectService
     private const string DescriptorSection = "UnrealKit.Project";
     private const string SettingsSection = "UnrealKit.ProjectSettings";
     private const string PresetsSection = "UnrealKit.LaunchPresets";
+    private const string LaunchPresetGroupsSection = "UnrealKit.LaunchPresetGroups";
     private const string ConsoleSequencesSection = "UnrealKit.ConsoleSequences";
     private const string DeviceAliasesSection = "UnrealKit.DeviceAliases";
     private const string FtpSection = "UnrealKit.Ftp";
@@ -211,6 +212,11 @@ public sealed class ProjectService : IProjectService
             document.SetValue(PresetsSection, preset.Name, preset.Arguments);
         }
 
+        foreach (var group in settings.LaunchParameterGroups)
+        {
+            document.SetValue(LaunchPresetGroupsSection, group.Name, FormatLaunchParameterGroup(group));
+        }
+
         foreach (var sequence in settings.ConsoleSequences)
         {
             document.SetValue(ConsoleSequencesSection, sequence.Name, sequence.StepsDefinition);
@@ -253,9 +259,11 @@ public sealed class ProjectService : IProjectService
                 : defaultPreset)
             .Concat(configuredPresets
                 .Where(pair => !LaunchParameterPresetDefaults.All.Any(defaultPreset => string.Equals(defaultPreset.Name, pair.Key, StringComparison.OrdinalIgnoreCase)))
-                .Select(pair => new LaunchParameterPreset(pair.Key, pair.Value, string.Empty, true)))
+                .Select(pair => new LaunchParameterPreset(pair.Key, pair.Value, string.Empty)))
             .OrderBy(preset => preset.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
+        var launchGroups = ReadLaunchParameterGroups(layered.GetSection(LaunchPresetGroupsSection));
 
         var configuredSequences = layered.GetSection(ConsoleSequencesSection);
         var sequences = configuredSequences
@@ -268,6 +276,7 @@ public sealed class ProjectService : IProjectService
             layered.GetValue(SettingsSection, "DefaultCaptureTag") ?? defaults.DefaultCaptureTag,
             layered.GetValue(SettingsSection, "DefaultExportDirectory") ?? defaults.DefaultExportDirectory,
             presets,
+            launchGroups,
             sequences,
             layered.GetValue(SettingsSection, "PreCaptureSequence"),
             layered.GetValue(SettingsSection, "PostCaptureSequence"),
@@ -422,4 +431,68 @@ public sealed class ProjectService : IProjectService
     }
 
     private static void Report(IProgress<OperationProgress>? progress, string operationId, string stage, string message, int? current = null, int? total = null) => progress?.Report(new OperationProgress(operationId, stage, current, total, message));
+
+    /// <summary>
+    /// 把分组写回 INI：<c>组名=模式:成员1,成员2</c>。模式用稳定标识 <c>Exclusive</c> /
+    /// <c>Coexist</c>，读写对称，手写配置时也只需记住这两个词。
+    /// </summary>
+    private static string FormatLaunchParameterGroup(LaunchParameterPresetGroup group) =>
+        $"{FormatLaunchParameterGroupMode(group.Mode)}:{string.Join(",", group.Members)}";
+
+    private static string FormatLaunchParameterGroupMode(LaunchParameterGroupMode mode) => mode switch
+    {
+        LaunchParameterGroupMode.Exclusive => "Exclusive",
+        LaunchParameterGroupMode.Coexist => "Coexist",
+        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown launch parameter group mode.")
+    };
+
+    /// <summary>
+    /// 解析 <c>[UnrealKit.LaunchPresetGroups]</c> 节。值是 <c>模式:成员1,成员2</c>，
+    /// 模式缺失或无法识别时报错而不是当互斥处理——把笔误的 <c>Exclusive</c> 静默读成
+    /// 互斥会让用户以为约束生效，实则什么都没拦。
+    /// </summary>
+    private static IReadOnlyList<LaunchParameterPresetGroup> ReadLaunchParameterGroups(IReadOnlyDictionary<string, string> section)
+    {
+        var groups = new List<LaunchParameterPresetGroup>();
+        foreach (var (name, value) in section)
+        {
+            var separator = value.IndexOf(':');
+            if (separator <= 0)
+            {
+                throw new InvalidDataException(
+                    $"启动参数分组 {name} 格式无效: 需要 \"Mode:Member1,Member2\"，收到 \"{value}\"。");
+            }
+
+            var mode = ParseLaunchParameterGroupMode(value[..separator].Trim(), name);
+            var members = value[(separator + 1)..]
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(member => member.Length > 0)
+                .ToArray();
+            if (members.Length == 0)
+            {
+                throw new InvalidDataException($"启动参数分组 {name} 未包含任何成员。");
+            }
+
+            groups.Add(new LaunchParameterPresetGroup(name.Trim(), mode, members));
+        }
+
+        return groups;
+    }
+
+    private static LaunchParameterGroupMode ParseLaunchParameterGroupMode(string text, string groupName)
+    {
+        var trimmed = text.Trim();
+        if (string.Equals(trimmed, "Exclusive", StringComparison.OrdinalIgnoreCase))
+        {
+            return LaunchParameterGroupMode.Exclusive;
+        }
+
+        if (string.Equals(trimmed, "Coexist", StringComparison.OrdinalIgnoreCase))
+        {
+            return LaunchParameterGroupMode.Coexist;
+        }
+
+        throw new InvalidDataException(
+            $"启动参数分组 {groupName} 的模式 \"{text}\" 无法识别，只能是 Exclusive 或 Coexist。");
+    }
 }

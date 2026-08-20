@@ -361,6 +361,64 @@ public sealed class ProjectServiceTests : IDisposable
         Assert.NotEmpty(reopened.Settings.RemoteControlObjectPath);
     }
 
+    [Fact]
+    public async Task UpdateSettingsAsync_PersistsLaunchParameterGroups()
+    {
+        // 分组随 DefaultGame.ini 往返：默认只有 Render 互斥组，改成自定义组后重开应还原。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "LaunchGroupProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "LaunchGroupProject"));
+        var settings = created.Project.Settings with
+        {
+            LaunchParameterGroups =
+            [
+                new LaunchParameterPresetGroup("Render", LaunchParameterGroupMode.Exclusive, ["Render.OpenGL", "Render.Vulkan"]),
+                new LaunchParameterPresetGroup("Trace", LaunchParameterGroupMode.Coexist, ["Trace.Client_All", "Trace.Client_Default"])
+            ]
+        };
+
+        await service.UpdateSettingsAsync(created.Project, settings);
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal(2, reopened.Settings.LaunchParameterGroups.Count);
+        var render = reopened.Settings.LaunchParameterGroups.Single(g => g.Name == "Render");
+        Assert.Equal(LaunchParameterGroupMode.Exclusive, render.Mode);
+        Assert.Equal(["Render.OpenGL", "Render.Vulkan"], render.Members);
+        var trace = reopened.Settings.LaunchParameterGroups.Single(g => g.Name == "Trace");
+        Assert.Equal(LaunchParameterGroupMode.Coexist, trace.Mode);
+        Assert.Equal(["Trace.Client_All", "Trace.Client_Default"], trace.Members);
+    }
+
+    [Fact]
+    public async Task OpenProjectAsync_LaunchGroupInvalidMode_Errors()
+    {
+        // 手写配置把模式写错，应报错而非静默当互斥或忽略。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "BadGroupModeProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "BadGroupModeProject"));
+        await File.AppendAllTextAsync(created.Project.ConfigFilePath,
+            Environment.NewLine
+            + "[UnrealKit.LaunchPresetGroups]" + Environment.NewLine
+            + "Render=Exclusiv:Render.OpenGL,Render.Vulkan" + Environment.NewLine);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => service.OpenProjectAsync(created.Project.ProjectFilePath));
+    }
+
+    [Fact]
+    public async Task OpenProjectAsync_LaunchGroupMissingColon_Errors()
+    {
+        // 缺冒号（值不是 Mode:成员 形式）同样报错，指名是哪个组。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "BadGroupFormatProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "BadGroupFormatProject"));
+        await File.AppendAllTextAsync(created.Project.ConfigFilePath,
+            Environment.NewLine
+            + "[UnrealKit.LaunchPresetGroups]" + Environment.NewLine
+            + "Render=Render.OpenGL,Render.Vulkan" + Environment.NewLine);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => service.OpenProjectAsync(created.Project.ProjectFilePath));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))

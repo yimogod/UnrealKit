@@ -105,7 +105,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _downloadPlatform = PlatformNames.ToName(TargetPlatform.Android);
     private string _downloadSummary = "请先打开工程并配置 FTP 下载，然后选择平台下载最新构建。";
     private string _downloadedApkPath = string.Empty;
-    private string _downloadedOutputDirectory = string.Empty;
+    private string _downloadFolderSummary = "打开工程后显示本地已下载的构建包。";
     private UkitProject? _project;
     private PlatformScope _platformScope = PlatformScope.All;
     private DeviceDisplayInfo? _selectedDevice;
@@ -164,7 +164,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         InstallDownloadedApkCommand = new AsyncDelegateCommand(InstallDownloadedApkAsync, CanInstallDownloadedApk);
         OpenDownloadedDirectoryCommand = new AsyncDelegateCommand(
             OpenDownloadedDirectoryAsync,
-            () => !string.IsNullOrWhiteSpace(DownloadedOutputDirectory) && Directory.Exists(DownloadedOutputDirectory));
+            () => DownloadRootDirectory is { Length: > 0 } root && Directory.Exists(root));
+        RefreshDownloadedPackagesCommand = new AsyncDelegateCommand(RefreshDownloadedPackagesAsync, () => !IsBusy && _project is not null);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -209,6 +210,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string SelectedTrendChartSeries { get => _selectedTrendChartSeries; set { if (SetField(ref _selectedTrendChartSeries, value)) UpdateTrendChart(); } }
     public ObservableCollection<TrendDiagnosticOption> TrendDiagnostics { get; } = [];
     public ObservableCollection<RenderDocDiagnosticOption> RenderDocDiagnostics { get; } = [];
+    public ObservableCollection<DownloadedPackageOption> DownloadedPackages { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
     public ICommand RefreshDevicesCommand { get; }
@@ -233,6 +235,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand DownloadCommand { get; }
     public ICommand InstallDownloadedApkCommand { get; }
     public ICommand OpenDownloadedDirectoryCommand { get; }
+    public ICommand RefreshDownloadedPackagesCommand { get; }
 
     public string SelectedNavigationItem
     {
@@ -255,7 +258,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "静态相机" => "解析静态相机性能日志，查看逐相机指标并生成 HTML 报告。",
         "基线差分" => "明确选择基线与当前两份输入，比较指标回退与改善。",
         "历史趋势" => "按标签和时间范围汇总工程内的历史 Capture，查看指标走势。",
-        "安装包" => "从 FTP 下载最新构建；Android 平台可把下载到的 APK 安装到已选设备。",
+        "安装包" => "从 FTP 下载最新构建，或从本地已下载的构建包中选择一个安装到设备；未选择时安装最新包。",
         _ => string.Empty
     };
 
@@ -319,20 +322,48 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string DownloadPlatform
     {
         get => _downloadPlatform;
-        set { if (SetField(ref _downloadPlatform, value)) RaiseCommandStates(); }
+        set
+        {
+            if (!SetField(ref _downloadPlatform, value))
+            {
+                return;
+            }
+
+            RaiseCommandStates();
+            // 平台决定本地下载根目录，换平台即换列表；立即刷新而不是等用户点刷新。
+            _ = RefreshDownloadedPackagesAsync();
+        }
     }
 
     public string DownloadSummary { get => _downloadSummary; private set => SetField(ref _downloadSummary, value); }
 
+    /// <summary>本地已下载构建包列表的现状说明（数量、有无、当前平台）。</summary>
+    public string DownloadFolderSummary { get => _downloadFolderSummary; private set => SetField(ref _downloadFolderSummary, value); }
+
+    /// <summary>
+    /// 用户在列表中选择的本地构建包。为 null 表示「未选择」，此时安装最新包。
+    /// </summary>
+    public DownloadedPackageOption? SelectedDownloadedPackage
+    {
+        get => _selectedDownloadedPackage;
+        set { if (SetField(ref _selectedDownloadedPackage, value)) RaiseCommandStates(); }
+    }
+
+    private DownloadedPackageOption? _selectedDownloadedPackage;
+
     /// <summary>最近一次下载得到的 APK 本地路径（仅 Android）。</summary>
     public string DownloadedApkPath { get => _downloadedApkPath; private set { if (SetField(ref _downloadedApkPath, value)) RaiseCommandStates(); } }
 
-    /// <summary>最近一次成功下载的本地落地目录（Android 为 APK 所在目录，Win64 为整包目录）。</summary>
-    public string DownloadedOutputDirectory
-    {
-        get => _downloadedOutputDirectory;
-        private set { if (SetField(ref _downloadedOutputDirectory, value)) RaiseCommandStates(); }
-    }
+    /// <summary>
+    /// 当前平台的本地下载根目录（<c>Intermediate/Download/&lt;Platform&gt;</c>）。
+    /// 未打开工程或平台无法解析时为 null；目录本身可能尚未创建。
+    /// </summary>
+    private string? DownloadRootDirectory =>
+        _project is null
+            ? null
+            : PlatformNames.TryParse(DownloadPlatform, out var platform)
+                ? Path.Combine(_project.IntermediateDir, "Download", PlatformNames.ToName(platform))
+                : null;
 
     /// <summary>
     /// 当前操作的平台，由所选设备决定。没有选中设备时为空——
@@ -905,7 +936,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         LaunchParameterPresets.Clear();
         foreach (var preset in project.Settings.LaunchParameterPresets)
         {
-            var option = new LaunchParameterPresetOption(preset);
+            var group = project.Settings.LaunchParameterGroups
+                .FirstOrDefault(candidate => candidate.Members.Contains(preset.Name, StringComparer.OrdinalIgnoreCase));
+            var option = new LaunchParameterPresetOption(preset, group);
             option.PropertyChanged += (_, _) => UpdateLaunchParameterPreview();
             LaunchParameterPresets.Add(option);
         }
@@ -944,7 +977,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         // 切换工程后，上一个工程的下载结果与 APK 路径不再成立。
         DownloadSummary = "请选择平台并点击「下载最新」。";
         DownloadedApkPath = string.Empty;
-        DownloadedOutputDirectory = string.Empty;
+        DownloadedPackages.Clear();
+        SelectedDownloadedPackage = null;
+        DownloadFolderSummary = "点击「刷新本地包」列出本工程已下载的构建包。";
 
         OnPropertyChanged(nameof(ProjectTitle));
         UpdateLaunchParameterPreview();
@@ -1709,22 +1744,33 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         && SelectedDevice?.IsAvailable == true
         && PlatformNames.TryParse(DownloadPlatform, out var platform)
         && platform == TargetPlatform.Android
-        && !string.IsNullOrWhiteSpace(DownloadedApkPath);
+        && !string.IsNullOrWhiteSpace(InstallApkPath);
 
     /// <summary>
-    /// 在资源管理器中打开最近一次下载的本地目录。目录不存在或尚未下载时按钮禁用，
+    /// 本次安装要用的本地 APK。已选包优先；未选包回落列表中最新的可安装包；
+    /// 列表尚为空（例如下载刚完成尚未刷新）时回落到最近一次下载得到的 APK。
+    /// 只在三者都缺失时返回空并禁用安装，不隐式挑一台设备或一个未声明的路径。
+    /// </summary>
+    private string InstallApkPath =>
+        SelectedDownloadedPackage?.LocalApkPath
+        ?? DownloadedPackages.FirstOrDefault(package => package.IsInstallable)?.LocalApkPath
+        ?? (DownloadedApkPath is { Length: > 0 } apk ? apk : string.Empty);
+
+    /// <summary>
+    /// 在资源管理器中打开当前平台的本地下载根目录。目录不存在时按钮已禁用，
     /// 因此这里只需做一次防御性判断。
     /// </summary>
     private Task OpenDownloadedDirectoryAsync()
     {
-        if (!string.IsNullOrWhiteSpace(DownloadedOutputDirectory) && Directory.Exists(DownloadedOutputDirectory))
+        var root = DownloadRootDirectory;
+        if (root is { Length: > 0 } && Directory.Exists(root))
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = DownloadedOutputDirectory,
+                FileName = root,
                 UseShellExecute = true
             });
-            StatusMessage = $"已打开下载目录：{DownloadedOutputDirectory}";
+            StatusMessage = $"已打开下载目录：{root}";
         }
 
         return Task.CompletedTask;
@@ -1765,11 +1811,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ? result.LocalPath ?? string.Empty
             : string.Empty;
 
-        // 记录最近一次成功下载的本地目录，供「打开下载目录」使用；失败时清空。
-        DownloadedOutputDirectory = result.Succeeded && result.LocalPath is { Length: > 0 } localPath
-            ? (Directory.Exists(localPath) ? localPath : Path.GetDirectoryName(localPath) ?? string.Empty)
-            : string.Empty;
-
         DownloadSummary = result.Succeeded
             ? $"下载完成：{result.SourceSubdir}（{result.FileCount} 个文件）→ {result.LocalPath}"
             : $"下载失败：{result.SourceSubdir ?? "(无)"}。详见操作日志。";
@@ -1778,6 +1819,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         if (result.Succeeded)
         {
             StatusMessage = $"下载完成：{result.LocalPath}";
+            // 新下载的包立即进入本地列表，供后续选择安装。
+            await RefreshDownloadedPackagesAsync();
         }
     });
 
@@ -1795,20 +1838,60 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             throw new InvalidOperationException($"设备 {device.Id} 不支持安装应用包。");
         }
 
-        if (!await _confirmationService.ConfirmInstallApplicationAsync(device.Id, DownloadedApkPath))
+        var apkPath = InstallApkPath;
+        if (!await _confirmationService.ConfirmInstallApplicationAsync(device.Id, apkPath))
         {
             StatusMessage = "已取消安装。";
             return;
         }
 
-        var result = await deviceService.InstallApplicationAsync(device.Device, DownloadedApkPath, progress, OperationCancellationToken);
+        var result = await deviceService.InstallApplicationAsync(device.Device, apkPath, progress, OperationCancellationToken);
         if (!result.Succeeded)
         {
             throw new InvalidOperationException($"安装失败（exit {result.ExitCode}）：{result.StandardError}");
         }
 
-        StatusMessage = $"已安装 {DownloadedApkPath} 到 {device.Id}。";
+        StatusMessage = $"已安装 {apkPath} 到 {device.Id}。";
     });
+
+    /// <summary>
+    /// 列出本地下载根目录下已下载的构建包，供用户选择指定包安装。
+    /// 未打开工程时列表为空并说明原因，不读一个不存在的目录。
+    /// </summary>
+    private async Task RefreshDownloadedPackagesAsync()
+    {
+        DownloadedPackages.Clear();
+        SelectedDownloadedPackage = null;
+        RaiseCommandStates();
+
+        if (_project is null)
+        {
+            DownloadFolderSummary = "请先打开工程以浏览本地已下载的构建包。";
+            return;
+        }
+
+        if (!PlatformNames.TryParse(DownloadPlatform, out var platform))
+        {
+            DownloadFolderSummary = "请选择平台以浏览本地已下载的构建包。";
+            return;
+        }
+
+        // 此时工程与平台均已确认有效，下载根目录必然非空（目录本身可能尚未创建）。
+        var baseDirectory = DownloadRootDirectory!;
+        var packages = await Task.Run(() => LocalDownloadCatalog.List(baseDirectory, platform));
+
+        // 自然排序升序即旧→新，列表倒序展示让最新的包排在最上。
+        foreach (var package in packages.Reverse())
+        {
+            DownloadedPackages.Add(new DownloadedPackageOption(
+                package.FolderName, package.LocalApkPath, package.InstallBlockReason));
+        }
+
+        DownloadFolderSummary = DownloadedPackages.Count == 0
+            ? $"本地暂无已下载的 {PlatformNames.ToName(platform)} 构建包。点击「下载最新」获取。"
+            : $"本地已下载 {DownloadedPackages.Count} 个 {PlatformNames.ToName(platform)} 构建包，选择其一可安装到设备；未选择则安装最新。";
+        RaiseCommandStates();
+    }
 
     private void UpdateTrendChart()
     {
@@ -2027,7 +2110,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
