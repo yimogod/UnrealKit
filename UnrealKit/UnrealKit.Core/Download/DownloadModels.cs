@@ -54,4 +54,7 @@ public static class DownloadDiagnosticCodes
 
     /// <summary>下载文件或目录失败。</summary>
     public const string DownloadFailed = "DWN006";
+
+    /// <summary>最新构建已在本地存在，本次未重新下载。</summary>
+    public const string AlreadyUpToDate = "DWN007";
 }

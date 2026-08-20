@@ -76,7 +76,11 @@ internal static class DownloadCommands
         {
             if (result.Succeeded)
             {
-                Console.WriteLine($"Downloaded latest '{result.SourceSubdir}' for {PlatformNames.ToName(platform)}.");
+                var alreadyUpToDate = result.Diagnostics.Any(
+                    diagnostic => diagnostic.Code == DownloadDiagnosticCodes.AlreadyUpToDate);
+                Console.WriteLine(alreadyUpToDate
+                    ? $"Latest build '{result.SourceSubdir}' for {PlatformNames.ToName(platform)} already exists locally — skipped."
+                    : $"Downloaded latest '{result.SourceSubdir}' for {PlatformNames.ToName(platform)}.");
                 Console.WriteLine($"Local: {result.LocalPath}");
                 Console.WriteLine($"Files: {result.FileCount}");
             }

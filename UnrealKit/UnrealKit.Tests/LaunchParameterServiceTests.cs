@@ -156,9 +156,11 @@ public sealed class LaunchParameterServiceTests
 
         await service.DeleteAsync(project, "R58M123ABC");
         await service.StartApplicationAsync(project, "R58M123ABC");
+        await service.StopApplicationAsync(project, "R58M123ABC");
 
         Assert.Equal("/sdcard/Android/data/com.example.game/files/UnrealGame/Sample/Sample/uecommandline.txt", adbService.DeletedRemotePath);
         Assert.Equal(("R58M123ABC", "com.example.game", "com.example.game.MainActivity"), adbService.StartRequest);
+        Assert.Equal(("R58M123ABC", "com.example.game"), adbService.ForceStopRequest);
     }
 
     private static UkitProject CreateProject()
@@ -180,6 +182,7 @@ public sealed class LaunchParameterServiceTests
         public string? PushedContent { get; private set; }
         public string? DeletedRemotePath { get; private set; }
         public (string SerialNumber, string PackageName, string ActivityName)? StartRequest { get; private set; }
+        public (string SerialNumber, string PackageName)? ForceStopRequest { get; private set; }
 
         public Task<ProcessExecutionResult> GetVersionAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<AdbDevice>>([]);
@@ -190,7 +193,11 @@ public sealed class LaunchParameterServiceTests
         public Task<ProcessExecutionResult> TcpIpAsync(string serialNumber, int port, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> InstallApkAsync(string serialNumber, string localApkPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
 
-        public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            ForceStopRequest = (serialNumber, packageName);
+            return Task.FromResult(Success);
+        }
         public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public async IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await System.Threading.Tasks.Task.CompletedTask; yield break; }
         public Task<IReadOnlyList<DeviceIpAddress>> GetIpAddressesAsync(string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<DeviceIpAddress>>([]);

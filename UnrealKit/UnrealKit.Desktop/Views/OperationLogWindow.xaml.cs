@@ -1,4 +1,4 @@
-using System.Collections.Specialized;
+﻿using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
 using Microsoft.Win32;
@@ -72,7 +72,7 @@ public partial class OperationLogWindow : Window
 
     private void ScrollToEnd()
     {
-        if (LogGrid.Items.Count == 0) return;
+        if (LogGrid.Items.Count <= 10) return;
         LogGrid.ScrollIntoView(LogGrid.Items[^1]!);
     }
 

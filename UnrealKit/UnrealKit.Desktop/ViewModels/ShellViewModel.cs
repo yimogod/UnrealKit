@@ -1104,9 +1104,23 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private Task StartApplicationAsync() => RunAsync("正在启动应用…", async progress =>
     {
-        await CreateLaunchParameterService(SelectedDevice!.Device).StartApplicationAsync(_project!, SelectedDevice!.Id, progress, OperationCancellationToken);
+        var service = CreateLaunchParameterService(SelectedDevice!.Device);
         var target = _project!.Settings.ResolveTarget(
             PlatformNames.Parse(SelectedDevice!.Platform, nameof(SelectedDevice)));
+
+        // 启动前先尝试停止旧实例，避免进程已在前台运行导致启动无效。
+        // 停止是尽力而为：应用可能本来就未运行（Win64 force-stop 或 Android am force-stop
+        // 对未运行目标会失败），此时不把「没有可停的进程」当成启动失败。
+        try
+        {
+            await service.StopApplicationAsync(_project, SelectedDevice!.Id, progress, OperationCancellationToken);
+        }
+        catch (DeviceCommandException exception)
+        {
+            AddOperationLog("Warning", $"停止旧实例失败（忽略，继续启动）：{exception.Message}");
+        }
+
+        await service.StartApplicationAsync(_project, SelectedDevice!.Id, progress, OperationCancellationToken);
         StatusMessage = $"已发送应用启动请求：{target.LaunchTarget}{(target.LaunchActivity is { Length: > 0 } activity ? $"/{activity}" : string.Empty)}";
     });
 
@@ -1810,6 +1824,17 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         DownloadedApkPath = platform == TargetPlatform.Android && result.Succeeded
             ? result.LocalPath ?? string.Empty
             : string.Empty;
+
+        var alreadyUpToDate = result.Diagnostics.Any(
+            diagnostic => diagnostic.Code == DownloadDiagnosticCodes.AlreadyUpToDate);
+        if (alreadyUpToDate)
+        {
+            DownloadSummary = $"本地已有最新构建 {result.SourceSubdir}，未重新下载。";
+            StatusMessage = DownloadSummary;
+            AddOperationLog("Info", DownloadSummary);
+            await RefreshDownloadedPackagesAsync();
+            return;
+        }
 
         DownloadSummary = result.Succeeded
             ? $"下载完成：{result.SourceSubdir}（{result.FileCount} 个文件）→ {result.LocalPath}"

@@ -40,6 +40,9 @@ public sealed class DesktopShellViewModelTests
         Assert.Equal("R58M123ABC", adb.PushSerialNumber);
         Assert.Contains("-trace=memory", adb.PushedContent);
         Assert.Equal(("R58M123ABC", "com.example.game", "com.example.game.MainActivity"), adb.StartRequest);
+        Assert.Equal(("R58M123ABC", "com.example.game"), adb.ForceStopRequest);
+        // 启动前先尝试停止旧实例：stop 必须排在 start 之前。
+        Assert.Equal(["stop", "start"], adb.OperationOrder);
         Assert.Equal("R58M123ABC", adb.DeleteSerialNumber);
         Assert.True(confirmation.WasAsked);
         Assert.NotEmpty(viewModel.OperationLogs);
@@ -714,6 +717,9 @@ public sealed class DesktopShellViewModelTests
         public string? PushedContent { get; private set; }
         public string? DeleteSerialNumber { get; private set; }
         public (string SerialNumber, string PackageName, string ActivityName)? StartRequest { get; private set; }
+        public (string SerialNumber, string PackageName)? ForceStopRequest { get; private set; }
+        /// <summary>按调用先后记录 stop/start，验证「先关后启」的顺序。</summary>
+        public List<string> OperationOrder { get; } = [];
         public Task<ProcessExecutionResult> GetVersionAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<AdbDevice>>([new("R58M123ABC", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, "R58M123ABC device model:Pixel")]);
         public Task<ProcessExecutionResult> StartServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
@@ -721,13 +727,13 @@ public sealed class DesktopShellViewModelTests
         public Task<ProcessExecutionResult> ConnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> DisconnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> TcpIpAsync(string serialNumber, int port, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> StartApplicationAsync(string serialNumber, string packageName, string activityName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { StartRequest = (serialNumber, packageName, activityName); return Task.FromResult(Success); }
+        public Task<ProcessExecutionResult> StartApplicationAsync(string serialNumber, string packageName, string activityName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { StartRequest = (serialNumber, packageName, activityName); OperationOrder.Add("start"); return Task.FromResult(Success); }
         public async Task<ProcessExecutionResult> PushFileAsync(string serialNumber, string localPath, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { PushSerialNumber = serialNumber; PushedContent = await File.ReadAllTextAsync(localPath, cancellationToken); return Success; }
         public Task<ProcessExecutionResult> PullDirectoryAsync(string serialNumber, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> DeleteRemoteFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { DeleteSerialNumber = serialNumber; return Task.FromResult(Success); }
         public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> InstallApkAsync(string serialNumber, string localApkPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { ForceStopRequest = (serialNumber, packageName); OperationOrder.Add("stop"); return Task.FromResult(new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)); }
         public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public async IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await System.Threading.Tasks.Task.CompletedTask; yield break; }
         /// <summary>置空表示设备未联网，与真实服务一致地抛异常而不是返回空列表。</summary>

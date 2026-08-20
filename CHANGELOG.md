@@ -4,6 +4,13 @@ All notable changes to UnrealKit.
 
 ## [Unreleased]
 
+### Download Latest Skips An Already-Present Build
+- "下载最新" now checks whether the newest build directory already exists under `Intermediate/Download/<Platform>/<subdir>/` before connecting to the FTP server. If it is already there, the download is skipped with a `DWN007` "already up to date" informational diagnostic instead of deleting and re-downloading it. The local directory is the re-fetchable cache, so a present copy is treated as good unless the user removes it. New `DownloadDiagnosticCodes.AlreadyUpToDate` (`DWN007`); `DownloadResult.Succeeded` remains true for this path, and both the CLI `unrealkit download` and the WPF 安装包 page surface the skip distinctly
+
+### Launch Application Stops The Running Instance First
+- The launch-parameter page's "启动应用" now force-stops any running instance before starting it, so a hot-started app no longer keeps running the old `uecommandline.txt`. The stop is best-effort: an app that isn't running is logged as a warning and start still proceeds, never surfacing "nothing to stop" as a launch failure
+- New `ILaunchParameterService.StopApplicationAsync`. It targets `PlatformTarget.ProcessIdentity` (package name on Android, process name on Win64) rather than `LaunchTarget`, which on Win64 is the full executable path and would never match `GetProcessesByName`
+
 ### Launch Parameter Presets Use Groups For Mutual Exclusion
 - Replaced the per-preset `IsComposable` bool with launch parameter **groups**. A group declares a mode (`Exclusive` = at most one member selectable; `Coexist` = no constraint) plus its members, so the real conflict is expressible: `Render` group makes OpenGL and Vulkan mutually exclusive while either still composes with `Mem.LLM` / trace / remote-control presets. Ungrouped presets compose freely
 - **Breaking:** `LaunchParameterPreset` drops `IsComposable`; `ProjectSettings` gains `LaunchParameterGroups` (`IReadOnlyList<LaunchParameterPresetGroup>`). `LaunchParameterPresetGroup(Name, Mode, Members)` with `LaunchParameterGroupMode` enum (`Coexist`/`Exclusive`). `BuildContent` now validates by group membership instead of a preset flag, so the earlier false exclusion (`Profile.RemoteControl` + `Mem.LLM` failing) no longer happens

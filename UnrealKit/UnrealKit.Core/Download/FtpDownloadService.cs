@@ -89,6 +89,21 @@ public sealed class FtpDownloadService : IFtpDownloadService
 
             var latest = subdirectories[^1];
             var sourcePath = CombineRemotePath(request.FtpPath, latest);
+
+            // 最新构建已在本地（目录已存在）时不删除重下：构建目录是可重新获取的缓存，
+            // 本地已有一份说明之前下过这个版本，覆盖它不带来任何新信息。
+            var localBaseDirectory = Path.Combine(request.LocalBaseDirectory, latest);
+            if (Directory.Exists(localBaseDirectory))
+            {
+                var alreadyLocalPath = request.Platform == TargetPlatform.Android
+                    ? FindLocalApk(localBaseDirectory) ?? localBaseDirectory
+                    : localBaseDirectory;
+                return new DownloadResult(alreadyLocalPath, latest, 0,
+                    [Info(DownloadDiagnosticCodes.AlreadyUpToDate,
+                        $"本地已有最新构建 {latest}，未重新下载。",
+                        $"如确认本地文件已损坏，可删除 {localBaseDirectory} 后重试。")]);
+            }
+
             progress?.Report(new OperationProgress(
                 "ftp-download", "Downloading", null, null,
                 $"Downloading '{latest}' for {platformName}."));
@@ -196,6 +211,15 @@ public sealed class FtpDownloadService : IFtpDownloadService
     private static string CombineRemotePath(string basePath, string name) =>
         $"{basePath.TrimEnd('/')}/{name}";
 
+    /// <summary>
+    /// Android 包目录里唯一的本地 .apk；目录被判定为「已下载」时据此给出真正的本地文件路径。
+    /// 目录里没有或不止一个 .apk 时返回 null，由调用方回落到目录路径并依赖后续安装校验如实报错。
+    /// </summary>
+    private static string? FindLocalApk(string localDirectory) =>
+        Directory.EnumerateFiles(localDirectory, "*.apk", SearchOption.TopDirectoryOnly).ToArray() is { Length: 1 } apks
+            ? apks[0]
+            : null;
+
     private static int CountFiles(string directory) =>
         Directory.Exists(directory)
             ? Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories).Count()
@@ -203,4 +227,7 @@ public sealed class FtpDownloadService : IFtpDownloadService
 
     private static Diagnostic Error(string code, string message, string? suggestedFix = null) =>
         new(DiagnosticSeverity.Error, code, message, SuggestedFix: suggestedFix);
+
+    private static Diagnostic Info(string code, string message, string? suggestedFix = null) =>
+        new(DiagnosticSeverity.Information, code, message, SuggestedFix: suggestedFix);
 }

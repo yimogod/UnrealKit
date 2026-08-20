@@ -182,6 +182,21 @@ public sealed class LaunchParameterService : ILaunchParameterService
     }
 
     /// <summary>
+    /// 停止目标应用。停止目标用 <see cref="PlatformTarget.ProcessIdentity"/> 而非
+    /// <see cref="PlatformTarget.LaunchTarget"/>：Android 两者同为包名，但 Win64 的
+    /// 停止按进程名（不含扩展名）匹配，而 LaunchTarget 是可执行文件全路径。
+    /// </summary>
+    public Task<ProcessExecutionResult> StopApplicationAsync(UkitProject project, string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentException.ThrowIfNullOrWhiteSpace(serialNumber);
+
+        var target = ResolveTarget(project.Settings);
+        return _deviceService.StopApplicationAsync(
+            ResolveDevice(serialNumber), target.ProcessIdentity, progress, cancellationToken);
+    }
+
+    /// <summary>
     /// 解析本服务所绑定平台的落地值。该平台在工程中未配置时报错并列出已配置平台。
     /// </summary>
     private PlatformTarget ResolveTarget(ProjectSettings settings) =>

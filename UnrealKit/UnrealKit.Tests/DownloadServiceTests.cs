@@ -159,6 +159,48 @@ public sealed class DownloadServiceTests
         Assert.Equal(DownloadDiagnosticCodes.ListFailed, Assert.Single(result.Diagnostics).Code);
     }
 
+    [Fact]
+    public async Task DownloadAsync_Android_LatestAlreadyLocal_SkipsAndReportsDwn007()
+    {
+        // 本地已有最新版本目录时，下载前创建该目录模拟「已下过」，期望服务跳过下载并给出 DWN007 提示。
+        var factory = new FakeFtpClientFactory();
+        factory.Client.ListResults["/builds/android"] =
+        [
+            new("v1.0.9", true),
+            new("v1.0.10", true)
+        ];
+        factory.Client.ListResults["/builds/android/v1.0.10"] = [new("Game.apk", false)];
+        var localBase = NewLocalBaseDirectory();
+        Directory.CreateDirectory(Path.Combine(localBase, "v1.0.10"));
+        var service = new FtpDownloadService(factory);
+        var request = new DownloadRequest(TargetPlatform.Android, ConfiguredSettings, "/builds/android", localBase);
+
+        var result = await service.DownloadAsync(request);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(DownloadDiagnosticCodes.AlreadyUpToDate, Assert.Single(result.Diagnostics).Code);
+        Assert.Equal("v1.0.10", result.SourceSubdir);
+        Assert.Empty(factory.Client.DownloadedFiles);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_Win64_LatestAlreadyLocal_SkipsAndReportsDwn007()
+    {
+        var factory = new FakeFtpClientFactory();
+        factory.Client.ListResults["/builds/win64"] = [new("2024.01.01", true), new("2024.01.05", true)];
+        var localBase = NewLocalBaseDirectory();
+        Directory.CreateDirectory(Path.Combine(localBase, "2024.01.05"));
+        var service = new FtpDownloadService(factory);
+        var request = new DownloadRequest(TargetPlatform.Win64, ConfiguredSettings, "/builds/win64", localBase);
+
+        var result = await service.DownloadAsync(request);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(DownloadDiagnosticCodes.AlreadyUpToDate, Assert.Single(result.Diagnostics).Code);
+        Assert.Equal("2024.01.05", result.SourceSubdir);
+        Assert.Empty(factory.Client.DownloadedDirectories);
+    }
+
     private sealed class FakeFtpClientFactory : IFtpClientFactory
     {
         public FakeFtpClient Client { get; } = new();
