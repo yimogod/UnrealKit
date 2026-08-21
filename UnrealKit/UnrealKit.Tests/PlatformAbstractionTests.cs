@@ -1,9 +1,9 @@
 using UnrealKit.Core.Adb;
+using UnrealKit.Core.CommandChannel;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
-using UnrealKit.Core.RemoteControl;
 
 namespace UnrealKit.Tests;
 
@@ -88,38 +88,33 @@ public sealed class DeviceCapabilityTests
         Assert.Equal("Win64", exception.Platform);
     }
 
-    private sealed class RecordingRemoteControlService : IRemoteControlService
-    {
-        public List<RemoteControlCommandRequest> Requests { get; } = [];
-
-        public Task<ProcessExecutionResult> SendConsoleCommandAsync(
-            RemoteControlCommandRequest request,
-            IProgress<OperationProgress>? progress = null,
-            CancellationToken cancellationToken = default)
-        {
-            Requests.Add(request);
-            return Task.FromResult(new ProcessExecutionResult(
-                0,
-                "ok",
-                string.Empty,
-                DateTimeOffset.UtcNow,
-                DateTimeOffset.UtcNow));
-        }
-    }
-
     [Fact]
-    public async Task Win64_SendConsoleCommand_UsesRemoteControlService()
+    public async Task Win64_SendConsoleCommand_UsesConfiguredTransport()
     {
-        var remoteControl = new RecordingRemoteControlService();
-        var service = new Win64DeviceService(remoteControlService: remoteControl);
+        var transport = new RecordingCommandTransport(CommandTransportKind.Http, 30010);
+        var service = new Win64DeviceService(commandTransport: transport);
         var device = new Win64Device();
 
         var result = await service.SendConsoleCommandAsync(device, "stat unit");
 
         Assert.True(result.Succeeded);
-        var request = Assert.Single(remoteControl.Requests);
-        Assert.Equal(30010, request.HttpPort);
-        Assert.Equal("stat unit", request.Command);
+        Assert.Equal("stat unit", Assert.Single(transport.Commands));
+    }
+
+    [Fact]
+    public async Task Win64_SendConsoleCommand_TransportFailure_BecomesDeviceCommandException()
+    {
+        // 通道失败必须归一到 DeviceCommandException，否则 CLI 的可预期失败处理会被绕过。
+        var transport = new FailingCommandTransport(
+            CommandChannelDiagnosticCodes.ConnectFailed,
+            CommandTransportKind.Http,
+            30010);
+        var service = new Win64DeviceService(commandTransport: transport);
+
+        var exception = await Assert.ThrowsAsync<DeviceCommandException>(
+            () => service.SendConsoleCommandAsync(new Win64Device(), "stat unit"));
+
+        Assert.Contains(CommandChannelDiagnosticCodes.ConnectFailed, exception.Message);
     }
 }
 
@@ -130,7 +125,7 @@ public sealed class AdbDeviceServicePortForwardTests
     {
         // 指令序列每步都 forward 会多起一个 adb 进程，并把 adb 输出混进序列报告。
         var adb = new ForwardCountingAdbService();
-        var service = new AdbDeviceService(adb, remoteControlService: new AlwaysOkRemoteControlService());
+        var service = new AdbDeviceService(adb, commandTransport: new RecordingCommandTransport());
         var device = DeviceReference.Create("ABC123", TargetPlatform.Android);
 
         await service.SendConsoleCommandAsync(device, "stat fps");
@@ -144,7 +139,7 @@ public sealed class AdbDeviceServicePortForwardTests
     public async Task SendConsoleCommand_ForwardsOncePerDistinctDevice()
     {
         var adb = new ForwardCountingAdbService();
-        var service = new AdbDeviceService(adb, remoteControlService: new AlwaysOkRemoteControlService());
+        var service = new AdbDeviceService(adb, commandTransport: new RecordingCommandTransport());
 
         await service.SendConsoleCommandAsync(DeviceReference.Create("ABC123", TargetPlatform.Android), "stat fps");
         await service.SendConsoleCommandAsync(DeviceReference.Create("XYZ789", TargetPlatform.Android), "stat fps");
@@ -158,7 +153,7 @@ public sealed class AdbDeviceServicePortForwardTests
     {
         // 失败的转发不记录，否则设备重连后永远不会重试。
         var adb = new ForwardCountingAdbService { FailForward = true };
-        var service = new AdbDeviceService(adb, remoteControlService: new AlwaysOkRemoteControlService());
+        var service = new AdbDeviceService(adb, commandTransport: new RecordingCommandTransport());
         var device = DeviceReference.Create("ABC123", TargetPlatform.Android);
 
         await Assert.ThrowsAsync<DeviceCommandException>(() => service.SendConsoleCommandAsync(device, "stat fps"));
@@ -169,13 +164,32 @@ public sealed class AdbDeviceServicePortForwardTests
         Assert.Equal(2, adb.ForwardCallCount);
     }
 
-    private sealed class AlwaysOkRemoteControlService : IRemoteControlService
+    [Fact]
+    public async Task SendConsoleCommand_ForwardsThePortTheTransportConnectsTo()
     {
-        public Task<ProcessExecutionResult> SendConsoleCommandAsync(
-            RemoteControlCommandRequest request,
-            IProgress<OperationProgress>? progress = null,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new ProcessExecutionResult(0, "ok", string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        // 转发端口与实际连接端口必须同源，否则改了一处就会转发到无人监听的端口。
+        var adb = new ForwardCountingAdbService();
+        var transport = new RecordingCommandTransport(CommandTransportKind.Tcp, 41234);
+        var service = new AdbDeviceService(adb, commandTransport: transport);
+
+        await service.SendConsoleCommandAsync(DeviceReference.Create("ABC123", TargetPlatform.Android), "stat unit");
+
+        Assert.Equal(41234, adb.LastForwardHostPort);
+        Assert.Equal(41234, adb.LastForwardDevicePort);
+    }
+
+    [Fact]
+    public async Task SendConsoleCommand_TransportFailure_BecomesDeviceCommandExceptionWithCode()
+    {
+        var adb = new ForwardCountingAdbService();
+        var service = new AdbDeviceService(
+            adb,
+            commandTransport: new FailingCommandTransport(CommandChannelDiagnosticCodes.ConnectFailed));
+
+        var exception = await Assert.ThrowsAsync<DeviceCommandException>(
+            () => service.SendConsoleCommandAsync(DeviceReference.Create("ABC123", TargetPlatform.Android), "stat unit"));
+
+        Assert.Contains(CommandChannelDiagnosticCodes.ConnectFailed, exception.Message);
     }
 
     private sealed class ForwardCountingAdbService : IAdbService
@@ -186,9 +200,15 @@ public sealed class AdbDeviceServicePortForwardTests
 
         public bool FailForward { get; set; }
 
+        public int? LastForwardHostPort { get; private set; }
+
+        public int? LastForwardDevicePort { get; private set; }
+
         public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             ForwardCallCount++;
+            LastForwardHostPort = hostPort;
+            LastForwardDevicePort = devicePort;
             return Task.FromResult(FailForward
                 ? new ProcessExecutionResult(1, string.Empty, "device offline", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
                 : Success);

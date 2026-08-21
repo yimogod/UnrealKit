@@ -1,4 +1,5 @@
-﻿using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.CommandChannel;
+using UnrealKit.Core.Diagnostics;
 
 namespace UnrealKit.Core.Projects;
 
@@ -189,7 +190,10 @@ public sealed record ProjectSettings(
     string RemoteControlFunctionName = "ExecuteConsoleCommand",
     string RemoteControlCommandParameter = "Command",
     DeviceAliasMap? DeviceAliases = null,
-    FtpSettings? Ftp = null)
+    FtpSettings? Ftp = null,
+    int CommandTcpPort = CommandChannelOptions.DefaultTcpPort,
+    CommandTransportKind AndroidCommandTransport = CommandTransportKind.Tcp,
+    CommandTransportKind Win64CommandTransport = CommandTransportKind.Http)
 {
     /// <summary>
     /// 新建工程时两个平台都给出默认 profile：多平台工程是默认假设，

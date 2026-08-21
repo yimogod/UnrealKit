@@ -1,4 +1,5 @@
-﻿using UnrealKit.Core.Projects;
+﻿using UnrealKit.Core.CommandChannel;
+using UnrealKit.Core.Projects;
 using UnrealKit.Core.Runtime;
 
 namespace UnrealKit.Tests;
@@ -228,6 +229,79 @@ public sealed class ProjectServiceTests : IDisposable
         Assert.Equal("/Game/RC/RC_Preset.RC_Preset:PersistentLevel.BP_Console", reopened.Settings.RemoteControlObjectPath);
         Assert.Equal("RunConsoleCommand", reopened.Settings.RemoteControlFunctionName);
         Assert.Equal("CommandText", reopened.Settings.RemoteControlCommandParameter);
+    }
+
+    [Fact]
+    public async Task UpdateSettingsAsync_PersistsCommandChannelConfiguration()
+    {
+        var projectDirectory = Path.Combine(_temporaryDirectory, "CommandChannelProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "CommandChannelProject"));
+        var settings = created.Project.Settings with
+        {
+            CommandTcpPort = 41234,
+            AndroidCommandTransport = CommandTransportKind.Tcp,
+            // 引擎 fork 改过白名单的工程可以把 Win64 也留在 HTTP 之外；这里验证两个平台各自可配。
+            Win64CommandTransport = CommandTransportKind.Tcp
+        };
+
+        await service.UpdateSettingsAsync(created.Project, settings);
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal(41234, reopened.Settings.CommandTcpPort);
+        Assert.Equal(CommandTransportKind.Tcp, reopened.Settings.AndroidCommandTransport);
+        Assert.Equal(CommandTransportKind.Tcp, reopened.Settings.Win64CommandTransport);
+    }
+
+    [Fact]
+    public async Task CreateProjectAsync_DefaultsAndroidToTcpAndWin64ToHttp()
+    {
+        // Android 不能用 HTTP：引擎的 WebRemoteControl 模块带 PlatformAllowList，
+        // Android 构建里没有 HTTP 服务器。默认值走反了会让手机端指令永远连不上。
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(
+            new CreateProjectRequest(Path.Combine(_temporaryDirectory, "ChannelDefaults"), "ChannelDefaults"));
+
+        Assert.Equal(CommandTransportKind.Tcp, created.Project.Settings.AndroidCommandTransport);
+        Assert.Equal(CommandTransportKind.Http, created.Project.Settings.Win64CommandTransport);
+        Assert.Equal(CommandChannelOptions.DefaultTcpPort, created.Project.Settings.CommandTcpPort);
+    }
+
+    [Fact]
+    public async Task OpenProjectAsync_UnknownCommandTransport_FailsInsteadOfFallingBack()
+    {
+        // 拼错 Tcp 后静默走 HTTP，会让 Android 指令连不上却报成「Remote Control 未启用」。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "BadTransportProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "BadTransportProject"));
+        var configPath = Path.Combine(projectDirectory, "Config", "DefaultGame.ini");
+        var config = await File.ReadAllTextAsync(configPath);
+        await File.WriteAllTextAsync(configPath, config.Replace("AndroidCommandTransport=Tcp", "AndroidCommandTransport=Tpc"));
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(
+            () => service.OpenProjectAsync(created.Project.ProjectFilePath));
+
+        Assert.Contains("AndroidCommandTransport", exception.Message);
+        Assert.Contains("Tcp", exception.Message);
+    }
+
+    [Fact]
+    public async Task OpenProjectAsync_EmptyCommandTransport_FallsBackToDefault()
+    {
+        // INI 把 `Key=` 存为空串而非 null，空值与未配置同义。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "EmptyTransportProject");
+        var service = new ProjectService();
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "EmptyTransportProject"));
+        var configPath = Path.Combine(projectDirectory, "Config", "DefaultGame.ini");
+        var config = await File.ReadAllTextAsync(configPath);
+        await File.WriteAllTextAsync(configPath, config
+            .Replace("AndroidCommandTransport=Tcp", "AndroidCommandTransport=")
+            .Replace("CommandTcpPort=39010", "CommandTcpPort="));
+
+        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
+
+        Assert.Equal(CommandTransportKind.Tcp, reopened.Settings.AndroidCommandTransport);
+        Assert.Equal(CommandChannelOptions.DefaultTcpPort, reopened.Settings.CommandTcpPort);
     }
 
     [Fact]

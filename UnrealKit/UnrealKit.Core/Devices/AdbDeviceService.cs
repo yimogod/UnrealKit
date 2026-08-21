@@ -1,8 +1,8 @@
 using UnrealKit.Core.Adb;
+using UnrealKit.Core.CommandChannel;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
-using UnrealKit.Core.RemoteControl;
 
 namespace UnrealKit.Core.Devices;
 
@@ -13,8 +13,13 @@ namespace UnrealKit.Core.Devices;
 public sealed class AdbDeviceService : IDeviceService
 {
     private readonly IAdbService _adb;
-    private readonly RemoteControlOptions _remoteControlOptions;
-    private readonly IRemoteControlService _remoteControl;
+
+    /// <summary>
+    /// 控制台指令通道。Android 默认走 UE 侧自研 TCP 命令插件——引擎的
+    /// <c>WebRemoteControl</c> 模块带 <c>PlatformAllowList</c>（只含 Mac/Win64/Linux），
+    /// Android 构建里不编译 HTTP 服务器，见 <c>Doc/方案B-UE客户端控制台命令通道.md</c>。
+    /// </summary>
+    private readonly ICommandTransport _commandTransport;
 
     /// <summary>
     /// 已完成端口转发的设备。指令序列每步都重新 forward 会多起一个 adb 进程，
@@ -23,14 +28,17 @@ public sealed class AdbDeviceService : IDeviceService
     private readonly HashSet<string> _forwardedDevices = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _forwardLock = new(1, 1);
 
+    /// <param name="adb">ADB 调用。</param>
+    /// <param name="channelOptions">指令通道配置。null 取内置默认（Android = TCP）。</param>
+    /// <param name="commandTransport">显式指定的通道实例，仅用于测试注入；否则按配置构造。</param>
     public AdbDeviceService(
         IAdbService adb,
-        RemoteControlOptions? remoteControlOptions = null,
-        IRemoteControlService? remoteControlService = null)
+        CommandChannelOptions? channelOptions = null,
+        ICommandTransport? commandTransport = null)
     {
         _adb = adb ?? throw new ArgumentNullException(nameof(adb));
-        _remoteControlOptions = remoteControlOptions ?? RemoteControlOptions.Default;
-        _remoteControl = remoteControlService ?? new RemoteControlService();
+        _commandTransport = commandTransport
+            ?? (channelOptions ?? CommandChannelOptions.Default).CreateTransport(TargetPlatform.Android);
     }
 
     public TargetPlatform Platform => TargetPlatform.Android;
@@ -80,17 +88,9 @@ public sealed class AdbDeviceService : IDeviceService
 
         try
         {
-            return await _remoteControl.SendConsoleCommandAsync(
-                new RemoteControlCommandRequest(
-                    _remoteControlOptions.HttpPort,
-                    _remoteControlOptions.ObjectPath,
-                    _remoteControlOptions.FunctionName,
-                    _remoteControlOptions.CommandParameterName,
-                    command),
-                progress,
-                cancellationToken);
+            return await _commandTransport.SendConsoleCommandAsync(command, progress, cancellationToken);
         }
-        catch (RemoteControlException exception)
+        catch (CommandTransportException exception)
         {
             throw new DeviceCommandException(exception.Message, exception.Result, exception);
         }
@@ -163,7 +163,9 @@ public sealed class AdbDeviceService : IDeviceService
     }
 
     /// <summary>
-    /// 为设备建立 Remote Control 端口转发，同一设备只执行一次。
+    /// 为设备建立指令通道的端口转发，同一设备只执行一次。
+    /// 端口取自通道自身（<see cref="ICommandTransport.Port"/>）：转发的端口与实际连接的
+    /// 端口若各取一处配置，改了一边就会转发到无人监听的端口。
     /// 失败不记录，下次调用重试。
     /// </summary>
     private async Task EnsurePortForwardedAsync(
@@ -189,12 +191,12 @@ public sealed class AdbDeviceService : IDeviceService
                 "Forwarding",
                 null,
                 null,
-                $"Forwarding TCP port {_remoteControlOptions.HttpPort} for {device.Id}."));
+                $"Forwarding TCP port {_commandTransport.Port} ({_commandTransport.Kind}) for {device.Id}."));
 
             await RunRequiredAsync(_adb.ForwardTcpAsync(
                 device.Id,
-                _remoteControlOptions.HttpPort,
-                _remoteControlOptions.HttpPort,
+                _commandTransport.Port,
+                _commandTransport.Port,
                 progress,
                 cancellationToken));
 
