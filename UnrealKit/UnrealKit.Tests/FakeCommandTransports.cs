@@ -1,6 +1,7 @@
 using UnrealKit.Core.CommandChannel;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
+using UnrealKit.Core.RemoteControl;
 
 namespace UnrealKit.Tests;
 
@@ -9,8 +10,8 @@ namespace UnrealKit.Tests;
 /// 而不必真的起一个监听端口。
 /// </summary>
 internal sealed class RecordingCommandTransport(
-    CommandTransportKind kind = CommandTransportKind.Tcp,
-    int port = CommandChannelOptions.DefaultTcpPort) : ICommandTransport
+    CommandTransportKind kind = CommandTransportKind.Http,
+    int port = RemoteControlOptions.DefaultHttpPort) : ICommandTransport
 {
     public CommandTransportKind Kind => kind;
 
@@ -34,8 +35,8 @@ internal sealed class RecordingCommandTransport(
 /// </summary>
 internal sealed class FailingCommandTransport(
     string code,
-    CommandTransportKind kind = CommandTransportKind.Tcp,
-    int port = CommandChannelOptions.DefaultTcpPort) : ICommandTransport
+    CommandTransportKind kind = CommandTransportKind.Http,
+    int port = RemoteControlOptions.DefaultHttpPort) : ICommandTransport
 {
     public CommandTransportKind Kind => kind;
 

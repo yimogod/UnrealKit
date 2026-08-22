@@ -14,13 +14,12 @@ public sealed class Win64DeviceService : IDeviceService
     private readonly IProcessRunner _processRunner;
 
     /// <summary>
-    /// 控制台指令通道。Win64 默认走引擎自带的 Web Remote Control HTTP 服务，
-    /// UE 侧无需额外插件；配置可改为 TCP（工程若也为 Win64 打包了命令插件）。
+    /// 控制台指令通道。Win64 与 Android 统一走引擎自带 Web Remote Control 的 HTTP 服务。
     /// </summary>
     private readonly ICommandTransport _commandTransport;
 
     /// <param name="processRunner">外部进程调用。</param>
-    /// <param name="channelOptions">指令通道配置。null 取内置默认（Win64 = HTTP）。</param>
+    /// <param name="channelOptions">指令通道配置。null 取内置默认（Web Remote Control HTTP）。</param>
     /// <param name="commandTransport">显式指定的通道实例，仅用于测试注入；否则按配置构造。</param>
     public Win64DeviceService(
         IProcessRunner? processRunner = null,
@@ -29,7 +28,7 @@ public sealed class Win64DeviceService : IDeviceService
     {
         _processRunner = processRunner ?? new ProcessRunner();
         _commandTransport = commandTransport
-            ?? (channelOptions ?? CommandChannelOptions.Default).CreateTransport(TargetPlatform.Win64);
+            ?? (channelOptions ?? CommandChannelOptions.Default).CreateTransport();
     }
 
     public TargetPlatform Platform => TargetPlatform.Win64;
@@ -201,7 +200,7 @@ public sealed class Win64DeviceService : IDeviceService
     }
 
     /// <summary>
-    /// Win64 上发送 UE 控制台指令走本机的指令通道（默认 Remote Control HTTP）。
+    /// Win64 上发送 UE 控制台指令走本机的 Web Remote Control HTTP 通道。
     /// 「设备」就是本机，因此不需要端口转发。
     /// </summary>
     public async Task<ProcessExecutionResult> SendConsoleCommandAsync(

@@ -1,5 +1,5 @@
-﻿using UnrealKit.Core.CommandChannel;
-using UnrealKit.Core.Projects;
+﻿using UnrealKit.Core.Projects;
+using UnrealKit.Core.RemoteControl;
 using UnrealKit.Core.Runtime;
 
 namespace UnrealKit.Tests;
@@ -207,30 +207,6 @@ public sealed class ProjectServiceTests : IDisposable
         Assert.Contains("Android", exception.Message, StringComparison.Ordinal);
     }
 
-
-    [Fact]
-    public async Task UpdateSettingsAsync_PersistsRemoteControlConfiguration()
-    {
-        var projectDirectory = Path.Combine(_temporaryDirectory, "RemoteControlProject");
-        var service = new ProjectService();
-        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "RemoteControlProject"));
-        var settings = created.Project.Settings with
-        {
-            RemoteControlHttpPort = 31010,
-            RemoteControlObjectPath = "/Game/RC/RC_Preset.RC_Preset:PersistentLevel.BP_Console",
-            RemoteControlFunctionName = "RunConsoleCommand",
-            RemoteControlCommandParameter = "CommandText"
-        };
-
-        await service.UpdateSettingsAsync(created.Project, settings);
-        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
-
-        Assert.Equal(31010, reopened.Settings.RemoteControlHttpPort);
-        Assert.Equal("/Game/RC/RC_Preset.RC_Preset:PersistentLevel.BP_Console", reopened.Settings.RemoteControlObjectPath);
-        Assert.Equal("RunConsoleCommand", reopened.Settings.RemoteControlFunctionName);
-        Assert.Equal("CommandText", reopened.Settings.RemoteControlCommandParameter);
-    }
-
     [Fact]
     public async Task UpdateSettingsAsync_PersistsCommandChannelConfiguration()
     {
@@ -239,69 +215,69 @@ public sealed class ProjectServiceTests : IDisposable
         var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "CommandChannelProject"));
         var settings = created.Project.Settings with
         {
-            CommandTcpPort = 41234,
-            AndroidCommandTransport = CommandTransportKind.Tcp,
-            // 引擎 fork 改过白名单的工程可以把 Win64 也留在 HTTP 之外；这里验证两个平台各自可配。
-            Win64CommandTransport = CommandTransportKind.Tcp
+            RemoteControlHttpPort = 41234,
+            RemoteControlObjectPath = "/Script/Engine.Default__KismetSystemLibrary",
+            RemoteControlFunctionName = "ExecuteConsoleCommand",
+            RemoteControlCommandParameter = "CustomCommand"
         };
 
         await service.UpdateSettingsAsync(created.Project, settings);
         var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
 
-        Assert.Equal(41234, reopened.Settings.CommandTcpPort);
-        Assert.Equal(CommandTransportKind.Tcp, reopened.Settings.AndroidCommandTransport);
-        Assert.Equal(CommandTransportKind.Tcp, reopened.Settings.Win64CommandTransport);
+        Assert.Equal(41234, reopened.Settings.RemoteControlHttpPort);
+        Assert.Equal("/Script/Engine.Default__KismetSystemLibrary", reopened.Settings.RemoteControlObjectPath);
+        Assert.Equal("ExecuteConsoleCommand", reopened.Settings.RemoteControlFunctionName);
+        Assert.Equal("CustomCommand", reopened.Settings.RemoteControlCommandParameter);
     }
 
     [Fact]
-    public async Task CreateProjectAsync_DefaultsAndroidToTcpAndWin64ToHttp()
+    public async Task CreateProjectAsync_DefaultsRemoteControlToHttp()
     {
-        // Android 不能用 HTTP：引擎的 WebRemoteControl 模块带 PlatformAllowList，
-        // Android 构建里没有 HTTP 服务器。默认值走反了会让手机端指令永远连不上。
+        // 两个平台统一走引擎自带 Web Remote Control HTTP，端口与映射字段取内置默认。
         var service = new ProjectService();
         var created = await service.CreateProjectAsync(
             new CreateProjectRequest(Path.Combine(_temporaryDirectory, "ChannelDefaults"), "ChannelDefaults"));
 
-        Assert.Equal(CommandTransportKind.Tcp, created.Project.Settings.AndroidCommandTransport);
-        Assert.Equal(CommandTransportKind.Http, created.Project.Settings.Win64CommandTransport);
-        Assert.Equal(CommandChannelOptions.DefaultTcpPort, created.Project.Settings.CommandTcpPort);
+        Assert.Equal(RemoteControlOptions.DefaultHttpPort, created.Project.Settings.RemoteControlHttpPort);
+        Assert.Equal(RemoteControlOptions.DefaultObjectPath, created.Project.Settings.RemoteControlObjectPath);
+        Assert.Equal(RemoteControlOptions.DefaultFunctionName, created.Project.Settings.RemoteControlFunctionName);
+        Assert.Equal(RemoteControlOptions.DefaultCommandParameterName, created.Project.Settings.RemoteControlCommandParameter);
     }
 
     [Fact]
-    public async Task OpenProjectAsync_UnknownCommandTransport_FailsInsteadOfFallingBack()
+    public async Task OpenProjectAsync_InvalidRemoteControlPort_FailsInsteadOfFallingBack()
     {
-        // 拼错 Tcp 后静默走 HTTP，会让 Android 指令连不上却报成「Remote Control 未启用」。
-        var projectDirectory = Path.Combine(_temporaryDirectory, "BadTransportProject");
+        // 端口写成非整数后静默回退默认值，会让指令连到无人监听的端口却报成「未启动」。
+        var projectDirectory = Path.Combine(_temporaryDirectory, "BadRemoteControlPortProject");
         var service = new ProjectService();
-        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "BadTransportProject"));
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "BadRemoteControlPortProject"));
         var configPath = Path.Combine(projectDirectory, "Config", "DefaultGame.ini");
         var config = await File.ReadAllTextAsync(configPath);
-        await File.WriteAllTextAsync(configPath, config.Replace("AndroidCommandTransport=Tcp", "AndroidCommandTransport=Tpc"));
+        await File.WriteAllTextAsync(configPath, config.Replace("RemoteControlHttpPort=30010", "RemoteControlHttpPort=abc"));
 
         var exception = await Assert.ThrowsAsync<InvalidDataException>(
             () => service.OpenProjectAsync(created.Project.ProjectFilePath));
 
-        Assert.Contains("AndroidCommandTransport", exception.Message);
-        Assert.Contains("Tcp", exception.Message);
+        Assert.Contains("RemoteControlHttpPort", exception.Message);
     }
 
     [Fact]
-    public async Task OpenProjectAsync_EmptyCommandTransport_FallsBackToDefault()
+    public async Task OpenProjectAsync_EmptyRemoteControlValue_FallsBackToDefault()
     {
         // INI 把 `Key=` 存为空串而非 null，空值与未配置同义。
-        var projectDirectory = Path.Combine(_temporaryDirectory, "EmptyTransportProject");
+        var projectDirectory = Path.Combine(_temporaryDirectory, "EmptyRemoteControlProject");
         var service = new ProjectService();
-        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "EmptyTransportProject"));
+        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "EmptyRemoteControlProject"));
         var configPath = Path.Combine(projectDirectory, "Config", "DefaultGame.ini");
         var config = await File.ReadAllTextAsync(configPath);
         await File.WriteAllTextAsync(configPath, config
-            .Replace("AndroidCommandTransport=Tcp", "AndroidCommandTransport=")
-            .Replace("CommandTcpPort=39010", "CommandTcpPort="));
+            .Replace("RemoteControlHttpPort=30010", "RemoteControlHttpPort=")
+            .Replace("RemoteControlObjectPath=/Script/Engine.Default__KismetSystemLibrary", "RemoteControlObjectPath="));
 
         var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
 
-        Assert.Equal(CommandTransportKind.Tcp, reopened.Settings.AndroidCommandTransport);
-        Assert.Equal(CommandChannelOptions.DefaultTcpPort, reopened.Settings.CommandTcpPort);
+        Assert.Equal(RemoteControlOptions.DefaultHttpPort, reopened.Settings.RemoteControlHttpPort);
+        Assert.Equal(RemoteControlOptions.DefaultObjectPath, reopened.Settings.RemoteControlObjectPath);
     }
 
     [Fact]
@@ -410,29 +386,6 @@ public sealed class ProjectServiceTests : IDisposable
 
         Assert.Equal(0, reopened.Settings.Aliases.Count);
         Assert.Null(reopened.Settings.TryGetDeviceAlias("R58M123ABC"));
-    }
-
-    [Fact]
-    public async Task OpenProjectAsync_EmptyRemoteControlValues_FallBackToDefaults()
-    {
-        var projectDirectory = Path.Combine(_temporaryDirectory, "EmptyRemoteControlProject");
-        var service = new ProjectService();
-        var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "EmptyRemoteControlProject"));
-        var configPath = Path.Combine(projectDirectory, "Config", "DefaultGame.ini");
-
-        // 手工编辑出的空值：INI 把 `Key=` 存为空串而不是 null。
-        await File.AppendAllTextAsync(configPath,
-            Environment.NewLine
-            + "RemoteControlObjectPath=" + Environment.NewLine
-            + "RemoteControlFunctionName=" + Environment.NewLine
-            + "RemoteControlCommandParameter=" + Environment.NewLine);
-
-        var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
-
-        Assert.Equal(created.Project.Settings.RemoteControlObjectPath, reopened.Settings.RemoteControlObjectPath);
-        Assert.Equal(created.Project.Settings.RemoteControlFunctionName, reopened.Settings.RemoteControlFunctionName);
-        Assert.Equal(created.Project.Settings.RemoteControlCommandParameter, reopened.Settings.RemoteControlCommandParameter);
-        Assert.NotEmpty(reopened.Settings.RemoteControlObjectPath);
     }
 
     [Fact]

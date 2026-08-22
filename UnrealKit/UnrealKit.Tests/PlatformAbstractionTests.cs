@@ -4,6 +4,7 @@ using UnrealKit.Core.Devices;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.RemoteControl;
 
 namespace UnrealKit.Tests;
 
@@ -91,7 +92,7 @@ public sealed class DeviceCapabilityTests
     [Fact]
     public async Task Win64_SendConsoleCommand_UsesConfiguredTransport()
     {
-        var transport = new RecordingCommandTransport(CommandTransportKind.Http, 30010);
+        var transport = new RecordingCommandTransport(CommandTransportKind.Http, RemoteControlOptions.DefaultHttpPort);
         var service = new Win64DeviceService(commandTransport: transport);
         var device = new Win64Device();
 
@@ -108,7 +109,7 @@ public sealed class DeviceCapabilityTests
         var transport = new FailingCommandTransport(
             CommandChannelDiagnosticCodes.ConnectFailed,
             CommandTransportKind.Http,
-            30010);
+            RemoteControlOptions.DefaultHttpPort);
         var service = new Win64DeviceService(commandTransport: transport);
 
         var exception = await Assert.ThrowsAsync<DeviceCommandException>(
@@ -169,7 +170,7 @@ public sealed class AdbDeviceServicePortForwardTests
     {
         // 转发端口与实际连接端口必须同源，否则改了一处就会转发到无人监听的端口。
         var adb = new ForwardCountingAdbService();
-        var transport = new RecordingCommandTransport(CommandTransportKind.Tcp, 41234);
+        var transport = new RecordingCommandTransport(CommandTransportKind.Http, 41234);
         var service = new AdbDeviceService(adb, commandTransport: transport);
 
         await service.SendConsoleCommandAsync(DeviceReference.Create("ABC123", TargetPlatform.Android), "stat unit");

@@ -1,5 +1,4 @@
-﻿using UnrealKit.Core.CommandChannel;
-using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.Diagnostics;
 
 namespace UnrealKit.Core.Projects;
 
@@ -185,15 +184,12 @@ public sealed record ProjectSettings(
     string? PostCaptureSequence,
     AndroidPlatformProfile? Android = null,
     Win64PlatformProfile? Win64 = null,
+    DeviceAliasMap? DeviceAliases = null,
+    FtpSettings? Ftp = null,
     int RemoteControlHttpPort = 30010,
     string RemoteControlObjectPath = "/Script/Engine.Default__KismetSystemLibrary",
     string RemoteControlFunctionName = "ExecuteConsoleCommand",
-    string RemoteControlCommandParameter = "Command",
-    DeviceAliasMap? DeviceAliases = null,
-    FtpSettings? Ftp = null,
-    int CommandTcpPort = CommandChannelOptions.DefaultTcpPort,
-    CommandTransportKind AndroidCommandTransport = CommandTransportKind.Tcp,
-    CommandTransportKind Win64CommandTransport = CommandTransportKind.Http)
+    string RemoteControlCommandParameter = "Command")
 {
     /// <summary>
     /// 新建工程时两个平台都给出默认 profile：多平台工程是默认假设，
@@ -291,7 +287,6 @@ public static class LaunchParameterPresetDefaults
         new("Mem.LLM_CSV", "-llmcsv", "启动llm csv."),
         new("Render.OpenGL", "-OpenGLES", "使用OpenGL渲染."),
         new("Render.Vulkan", "-vulkan", "使用Vulkan渲染."),
-        new("Profile.RemoteControl", "-RCWebControlEnable -RCWebInterfaceEnable", "启用远程控制."),
         new("Trace.Client_All", traceClient_All, "trace default, 网络, 内存."),
         new("Trace.Client_Default", traceClient_Default, "默认trace(cpu,gpu,load)."),
         new("Trace.Client_Network", traceClient_Network, "网络trace."),
@@ -300,7 +295,7 @@ public static class LaunchParameterPresetDefaults
 
     /// <summary>
     /// 内置预设分组：渲染后端 OpenGL 与 Vulkan 二选一，故同属互斥组 Render。
-    /// 其余预设（内存、追踪、远程控制）彼此与渲染后端都正交，不归组即可自由叠加。
+    /// 其余预设（内存、追踪）彼此与渲染后端都正交，不归组即可自由叠加。
     /// </summary>
     public static IReadOnlyList<LaunchParameterPresetGroup> Groups { get; } =
     [

@@ -5,12 +5,11 @@ using UnrealKit.Core.RemoteControl;
 namespace UnrealKit.Core.CommandChannel;
 
 /// <summary>
-/// 走引擎自带 Web Remote Control 的指令通道，服务 Win64。
+/// 走引擎自带 Web Remote Control 的指令通道，服务 Android 与 Win64。
 ///
 /// 是既有 <see cref="RemoteControlService"/> 的薄适配：把 <see cref="RemoteControlException"/>
-/// 归一到带 <c>UKC*</c> 码的 <see cref="CommandTransportException"/>，让上层对两条通道
-/// 只处理一种失败类型。HTTP 的请求构造与错误文案仍留在 <see cref="RemoteControlService"/>，
-/// 不在此处复制一份。
+/// 归一到带 <c>UKC*</c> 码的 <see cref="CommandTransportException"/>，让上层只处理一种失败类型。
+/// HTTP 的请求构造与错误文案仍留在 <see cref="RemoteControlService"/>，不在此处复制一份。
 /// </summary>
 public sealed class HttpCommandTransport : ICommandTransport
 {

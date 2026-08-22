@@ -73,23 +73,6 @@ public sealed class LaunchParameterServiceTests
     }
 
     [Fact]
-    public void BuildContent_AllowsRemoteControlWithMemoryPreset()
-    {
-        var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));
-        var settings = ProjectSettings.CreateDefaults("Sample");
-
-        // RemoteControl 开关与渲染/内存/追踪彼此正交，应可叠加。
-        var content = service.BuildContent(settings, ["Profile.RemoteControl", "Mem.LLM"]);
-
-        Assert.Equal(string.Join(' ',
-        [
-            "-RCWebControlEnable",
-            "-RCWebInterfaceEnable",
-            "-llm"
-        ]), content);
-    }
-
-    [Fact]
     public void BuildContent_RejectsTwoPresetsInSameExclusiveGroup()
     {
         var service = new LaunchParameterService(new AdbDeviceService(new RecordingAdbService()));

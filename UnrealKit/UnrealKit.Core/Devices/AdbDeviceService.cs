@@ -15,9 +15,8 @@ public sealed class AdbDeviceService : IDeviceService
     private readonly IAdbService _adb;
 
     /// <summary>
-    /// 控制台指令通道。Android 默认走 UE 侧自研 TCP 命令插件——引擎的
-    /// <c>WebRemoteControl</c> 模块带 <c>PlatformAllowList</c>（只含 Mac/Win64/Linux），
-    /// Android 构建里不编译 HTTP 服务器，见 <c>Doc/方案B-UE客户端控制台命令通道.md</c>。
+    /// 控制台指令通道。Android 与 Win64 统一走引擎自带 Web Remote Control 的 HTTP 服务；
+    /// Android 需改引擎两处 <c>PlatformAllowList</c> 加入 Android（属用户改引擎的职责）。
     /// </summary>
     private readonly ICommandTransport _commandTransport;
 
@@ -29,7 +28,7 @@ public sealed class AdbDeviceService : IDeviceService
     private readonly SemaphoreSlim _forwardLock = new(1, 1);
 
     /// <param name="adb">ADB 调用。</param>
-    /// <param name="channelOptions">指令通道配置。null 取内置默认（Android = TCP）。</param>
+    /// <param name="channelOptions">指令通道配置。null 取内置默认（Web Remote Control HTTP）。</param>
     /// <param name="commandTransport">显式指定的通道实例，仅用于测试注入；否则按配置构造。</param>
     public AdbDeviceService(
         IAdbService adb,
@@ -38,7 +37,7 @@ public sealed class AdbDeviceService : IDeviceService
     {
         _adb = adb ?? throw new ArgumentNullException(nameof(adb));
         _commandTransport = commandTransport
-            ?? (channelOptions ?? CommandChannelOptions.Default).CreateTransport(TargetPlatform.Android);
+            ?? (channelOptions ?? CommandChannelOptions.Default).CreateTransport();
     }
 
     public TargetPlatform Platform => TargetPlatform.Android;

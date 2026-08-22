@@ -1,5 +1,4 @@
-﻿using UnrealKit.Core.CommandChannel;
-using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.Diagnostics;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Runtime;
 
@@ -198,9 +197,6 @@ public sealed class ProjectService : IProjectService
         document.SetValue(SettingsSection, "RemoteControlObjectPath", settings.RemoteControlObjectPath);
         document.SetValue(SettingsSection, "RemoteControlFunctionName", settings.RemoteControlFunctionName);
         document.SetValue(SettingsSection, "RemoteControlCommandParameter", settings.RemoteControlCommandParameter);
-        document.SetValue(SettingsSection, "CommandTcpPort", settings.CommandTcpPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        document.SetValue(SettingsSection, "AndroidCommandTransport", settings.AndroidCommandTransport.ToString());
-        document.SetValue(SettingsSection, "Win64CommandTransport", settings.Win64CommandTransport.ToString());
         document.SetValue(SettingsSection, "DefaultCaptureTag", settings.DefaultCaptureTag);
         document.SetValue(SettingsSection, "DefaultExportDirectory", settings.DefaultExportDirectory);
 
@@ -286,16 +282,13 @@ public sealed class ProjectService : IProjectService
             layered.GetValue(SettingsSection, "PostCaptureSequence"),
             PlatformProfileIni.Read<AndroidPlatformProfile>(layered, TargetPlatform.Android),
             PlatformProfileIni.Read<Win64PlatformProfile>(layered, TargetPlatform.Win64),
-            ParsePort(layered.GetValue(SettingsSection, "RemoteControlHttpPort"), defaults.RemoteControlHttpPort, "RemoteControlHttpPort"),
-            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlObjectPath"), defaults.RemoteControlObjectPath),
-            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlFunctionName"), defaults.RemoteControlFunctionName),
-            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlCommandParameter"), defaults.RemoteControlCommandParameter),
             // 分层合并：BaseGame.ini 可提供团队共用的设备别名，工程的 DefaultGame.ini 覆盖同一序列号。
             DeviceAliasMap.Create(layered.GetSection(DeviceAliasesSection)),
             ReadFtpSettings(layered, defaults.FtpSettings),
-            ParsePort(layered.GetValue(SettingsSection, "CommandTcpPort"), defaults.CommandTcpPort, "CommandTcpPort"),
-            ParseCommandTransport(layered.GetValue(SettingsSection, "AndroidCommandTransport"), defaults.AndroidCommandTransport, "AndroidCommandTransport"),
-            ParseCommandTransport(layered.GetValue(SettingsSection, "Win64CommandTransport"), defaults.Win64CommandTransport, "Win64CommandTransport"));
+            ParsePort(layered.GetValue(SettingsSection, "RemoteControlHttpPort"), defaults.RemoteControlHttpPort, "RemoteControlHttpPort"),
+            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlObjectPath"), defaults.RemoteControlObjectPath),
+            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlFunctionName"), defaults.RemoteControlFunctionName),
+            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlCommandParameter"), defaults.RemoteControlCommandParameter));
     }
 
     private static string RequireValue(IniDocument document, string key)
@@ -346,27 +339,6 @@ public sealed class ProjectService : IProjectService
         ArgumentException.ThrowIfNullOrWhiteSpace(settings.RemoteControlObjectPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(settings.RemoteControlFunctionName);
         ArgumentException.ThrowIfNullOrWhiteSpace(settings.RemoteControlCommandParameter);
-
-        if (settings.CommandTcpPort is < 1 or > 65535)
-        {
-            throw new ArgumentException("CommandTcpPort must be between 1 and 65535.", nameof(settings));
-        }
-
-        // 枚举字段也要校验：调用方可以直接 `with { AndroidCommandTransport = (CommandTransportKind)7 }`，
-        // 未定义值会一路写进配置文件，等到发指令时才以「未实现的传输方式」失败。
-        foreach (var (kind, fieldName) in new[]
-                 {
-                     (settings.AndroidCommandTransport, nameof(settings.AndroidCommandTransport)),
-                     (settings.Win64CommandTransport, nameof(settings.Win64CommandTransport))
-                 })
-        {
-            if (!Enum.IsDefined(kind))
-            {
-                throw new ArgumentException(
-                    $"{fieldName} 取值无效: {(int)kind}。可选值: {string.Join(" / ", Enum.GetNames<CommandTransportKind>())}。",
-                    nameof(settings));
-            }
-        }
     }
 
     private static void ValidateCaptureTag(string tag)
@@ -401,16 +373,8 @@ public sealed class ProjectService : IProjectService
     }
 
     /// <summary>
-    /// 解析 Remote Control 的字符串配置。`Key=` 在 INI 里存为空串而不是 null，
-    /// 直接 `?? 默认值` 会让空值绕过默认值，最后在发送指令时才以参数名报错。
-    /// 空值与未配置同义，一律回退到默认值。
-    /// </summary>
-    private static string RequireRemoteControlValue(string? value, string defaultValue) =>
-        string.IsNullOrWhiteSpace(value) ? defaultValue : value;
-
-    /// <summary>
     /// 解析端口配置。未配置时用默认值；配置了但非法必须报错，
-    /// 不让「HTTP 30010」悄悄回退到默认端口，否则用户会误以为已切到目标端口。
+    /// 不让「39010」悄悄回退到默认端口，否则用户会误以为已切到目标端口。
     /// </summary>
     private static int ParsePort(string? value, int defaultPort, string fieldName)
     {
@@ -429,26 +393,12 @@ public sealed class ProjectService : IProjectService
     }
 
     /// <summary>
-    /// 解析某平台的指令通道传输方式。未配置回退默认值；写了但无法识别必须报错，
-    /// 不静默回退——把 <c>Tcp</c> 拼错后悄悄走 HTTP，会让 Android 指令连不上却
-    /// 报成「Remote Control 未启用」，排查方向完全错。
+    /// Remote Control 映射字段（ObjectPath / FunctionName / CommandParameter）：
+    /// 未配置回退默认值；配置了但为空白同样回退——空串在此处与「未配置」同义，
+    /// 因为 INI 里的 <c>Key=</c> 是空串而非缺失。
     /// </summary>
-    private static CommandTransportKind ParseCommandTransport(string? value, CommandTransportKind defaultKind, string fieldName)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return defaultKind;
-        }
-
-        if (!Enum.TryParse<CommandTransportKind>(value.Trim(), ignoreCase: true, out var kind)
-            || !Enum.IsDefined(kind))
-        {
-            throw new InvalidDataException(
-                $"{fieldName} 配置无效: {value}。可选值: {string.Join(" / ", Enum.GetNames<CommandTransportKind>())}。");
-        }
-
-        return kind;
-    }
+    private static string RequireRemoteControlValue(string? value, string defaultValue) =>
+        string.IsNullOrWhiteSpace(value) ? defaultValue : value;
 
     /// <summary>
     /// 读取 FTP 下载配置。主机 / 端口 / 凭据共享自 <c>[UnrealKit.Ftp]</c> 节，
