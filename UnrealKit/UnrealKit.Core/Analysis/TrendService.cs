@@ -10,11 +10,11 @@ namespace UnrealKit.Core.Analysis;
 /// </summary>
 public sealed class TrendService
 {
-    private readonly IBaselineService _baselineService;
+    private readonly BaselineService _baselineService;
     private readonly CaptureAnalysisService _captureAnalysisService;
 
     public TrendService(
-        IBaselineService? baselineService = null,
+        BaselineService? baselineService = null,
         CaptureAnalysisService? captureAnalysisService = null)
     {
         _baselineService = baselineService ?? new BaselineService();

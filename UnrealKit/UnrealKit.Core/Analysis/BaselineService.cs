@@ -1,4 +1,4 @@
-using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.Diagnostics;
 using UnrealKit.Core.Parsing;
 
 namespace UnrealKit.Core.Analysis;
@@ -7,7 +7,7 @@ namespace UnrealKit.Core.Analysis;
 /// Compares a current report against a baseline report of the same type.
 /// Inputs are read-only: nothing is written back to either side.
 /// </summary>
-public sealed class BaselineService : IBaselineService
+public sealed class BaselineService
 {
     /// <summary>
     /// Absolute tolerance below which two values are treated as unchanged. Static camera timings are
