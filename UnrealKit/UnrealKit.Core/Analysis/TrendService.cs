@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using UnrealKit.Core.Capture;
 using UnrealKit.Core.Diagnostics;
 
@@ -11,11 +11,11 @@ namespace UnrealKit.Core.Analysis;
 public sealed class TrendService : ITrendService
 {
     private readonly IBaselineService _baselineService;
-    private readonly ICaptureAnalysisService _captureAnalysisService;
+    private readonly CaptureAnalysisService _captureAnalysisService;
 
     public TrendService(
         IBaselineService? baselineService = null,
-        ICaptureAnalysisService? captureAnalysisService = null)
+        CaptureAnalysisService? captureAnalysisService = null)
     {
         _baselineService = baselineService ?? new BaselineService();
         _captureAnalysisService = captureAnalysisService ?? new CaptureAnalysisService();
