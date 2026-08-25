@@ -761,7 +761,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         return DeviceDisplayInfo.CreateAll(result.Devices, _project?.Settings);
     }
 
-    private IAdbService CreateAdbService()
+    private AdbService CreateAdbService()
     {
         return _adbServiceFactory.Create(_project?.Settings, new Progress<ProcessOutput>(output =>
             AddOperationLog(output.Stream.ToString(), output.Text)));

@@ -1,4 +1,4 @@
-using UnrealKit.Core.Adb;
+﻿using UnrealKit.Core.Adb;
 using UnrealKit.Core.CommandChannel;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
@@ -22,10 +22,10 @@ public interface IDeviceServiceFactory
 /// </summary>
 public sealed class DeviceServiceFactory : IDeviceServiceFactory
 {
-    private readonly IAdbService? _adbService;
+    private readonly AdbService? _adbService;
     private readonly IProcessRunner? _processRunner;
 
-    public DeviceServiceFactory(IAdbService? adbService = null, IProcessRunner? processRunner = null)
+    public DeviceServiceFactory(AdbService? adbService = null, IProcessRunner? processRunner = null)
     {
         _adbService = adbService;
         _processRunner = processRunner;

@@ -1,4 +1,4 @@
-using UnrealKit.Core.Adb;
+﻿using UnrealKit.Core.Adb;
 using UnrealKit.Core.CommandChannel;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
@@ -12,7 +12,7 @@ namespace UnrealKit.Core.Devices;
 /// </summary>
 public sealed class AdbDeviceService : IDeviceService
 {
-    private readonly IAdbService _adb;
+    private readonly AdbService _adb;
 
     /// <summary>
     /// 控制台指令通道。Android 与 Win64 统一走引擎自带 Web Remote Control 的 HTTP 服务；
@@ -31,7 +31,7 @@ public sealed class AdbDeviceService : IDeviceService
     /// <param name="channelOptions">指令通道配置。null 取内置默认（Web Remote Control HTTP）。</param>
     /// <param name="commandTransport">显式指定的通道实例，仅用于测试注入；否则按配置构造。</param>
     public AdbDeviceService(
-        IAdbService adb,
+        AdbService adb,
         CommandChannelOptions? channelOptions = null,
         ICommandTransport? commandTransport = null)
     {

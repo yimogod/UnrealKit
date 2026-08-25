@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using UnrealKit.Core.Adb;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Devices;
@@ -9,7 +9,7 @@ namespace UnrealKit.Desktop.Services;
 
 public interface IDesktopAdbServiceFactory
 {
-    IAdbService Create(ProjectSettings? settings, IProgress<ProcessOutput>? output);
+    AdbService Create(ProjectSettings? settings, IProgress<ProcessOutput>? output);
 
     AdbPathResolution Resolve(ProjectSettings? settings);
 }
@@ -30,7 +30,7 @@ public sealed class DesktopAdbServiceFactory(AdbPathResolver? adbPathResolver = 
 
     private readonly object _latchLock = new();
 
-    public IAdbService Create(ProjectSettings? settings, IProgress<ProcessOutput>? output)
+    public AdbService Create(ProjectSettings? settings, IProgress<ProcessOutput>? output)
     {
         var resolution = Resolve(settings);
         var adbPath = resolution.ResolvedPath ?? throw new AdbPathResolutionException(resolution);

@@ -22,8 +22,8 @@ public sealed class ConsoleCommandService : IConsoleCommandService
         _timeProvider = timeProvider;
     }
 
-    /// <summary>兼容既有调用方：由 IAdbService 构造 Android 设备服务。</summary>
-    public ConsoleCommandService(IAdbService adbService, TimeProvider? timeProvider = null)
+    /// <summary>兼容既有调用方：由 AdbService 构造 Android 设备服务。</summary>
+    public ConsoleCommandService(AdbService adbService, TimeProvider? timeProvider = null)
         : this(new AdbDeviceService(adbService), timeProvider)
     {
     }

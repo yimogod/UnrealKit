@@ -1,4 +1,4 @@
-using UnrealKit.Core.Operations;
+﻿using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 
 namespace UnrealKit.Core.Adb;
@@ -6,7 +6,7 @@ namespace UnrealKit.Core.Adb;
 /// <summary>
 /// ADB 服务
 /// </summary>
-public sealed class AdbService : IAdbService
+public sealed class AdbService
 {
     // 进程运行器
     private readonly IProcessRunner _processRunner;
