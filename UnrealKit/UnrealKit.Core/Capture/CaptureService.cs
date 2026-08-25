@@ -6,7 +6,7 @@ using UnrealKit.Core.Projects;
 
 namespace UnrealKit.Core.Capture;
 
-public sealed class CaptureService : ICaptureService
+public sealed class CaptureService
 {
     private readonly IDeviceService? _deviceService;
     private readonly IConsoleCommandService? _consoleService;
