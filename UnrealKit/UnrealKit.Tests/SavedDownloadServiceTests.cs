@@ -1,4 +1,4 @@
-using UnrealKit.Core.Capture;
+﻿using UnrealKit.Core.Capture;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
@@ -24,7 +24,7 @@ public sealed class SavedDownloadServiceTests : IDisposable
 
         // 落地在工程 Saved/DeviceSaved 下，而不是 Content——下载没有清单，不是采集归档。
         Assert.StartsWith(
-            Path.Combine(project.SavedDir, SavedDownloadService.DownloadRootName, "Win64"),
+            Path.Combine(project.SavedDir, UnrealModels.DownloadRootName, "Win64"),
             result.Plan.LocalDirectory,
             StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(result.Plan.LocalDirectory, "Config", "GameUserSettings.ini")));
@@ -88,7 +88,7 @@ public sealed class SavedDownloadServiceTests : IDisposable
             () => service.DownloadAsync(new SavedDownloadRequest(project, new Win64Device())));
 
         Assert.Contains("没有取回任何内容", exception.Message, StringComparison.Ordinal);
-        Assert.False(Directory.Exists(Path.Combine(project.SavedDir, SavedDownloadService.DownloadRootName)));
+        Assert.False(Directory.Exists(Path.Combine(project.SavedDir, UnrealModels.DownloadRootName)));
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public sealed class SavedDownloadServiceTests : IDisposable
             () => service.DownloadAsync(new SavedDownloadRequest(
                 project, new StubDevice("localhost", "Win64", IsAvailable: false))));
 
-        Assert.False(Directory.Exists(Path.Combine(project.SavedDir, SavedDownloadService.DownloadRootName)));
+        Assert.False(Directory.Exists(Path.Combine(project.SavedDir, UnrealModels.DownloadRootName)));
     }
 
     /// <summary>

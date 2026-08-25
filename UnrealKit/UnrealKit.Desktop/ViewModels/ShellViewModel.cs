@@ -1,24 +1,25 @@
 ﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Windows.Input;
 using UnrealKit.Core.Adb;
-using UnrealKit.Core.Capture;
-using UnrealKit.Core.Launch;
-using UnrealKit.Core.Operations;
-using UnrealKit.Core.Export;
-using UnrealKit.Core.Parsing;
-using UnrealKit.Core.Processes;
-using System.Linq;
-using UnrealKit.Core.Projects;
-using UnrealKit.Core.Runtime;
 using UnrealKit.Core.Analysis;
-using System.Text;
-using UnrealKit.Core.RenderDoc;
+using UnrealKit.Core.Capture;
 using UnrealKit.Core.Console;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Download;
+using UnrealKit.Core.Export;
+using UnrealKit.Core.Launch;
+using UnrealKit.Core.Operations;
+using UnrealKit.Core.Parsing;
+using UnrealKit.Core.Processes;
+using UnrealKit.Core.Projects;
+using UnrealKit.Core.RenderDoc;
+using UnrealKit.Core.Runtime;
+using UnrealKit.Core.Unreal;
 using UnrealKit.Desktop.Models;
 using UnrealKit.Desktop.Services;
 
@@ -1251,24 +1252,24 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     /// 只是一次「拿下来看看」，落地在 Saved/DeviceSaved 这类可再生的派生数据下。
     /// 每次取回都进新的带时间戳目录，不覆盖上一次的结果。
     /// </summary>
-    private Task DownloadDeviceSavedAsync() => DownloadDeviceSavedAsync(SavedDownloadScope.All, "Saved");
+    private Task DownloadDeviceSavedAsync() => DownloadDeviceSavedAsync(UnealSavedScope.All, "Saved");
 
     /// <summary>
     /// 只把所选设备上的 <c>Saved/Logs</c> 取回本地并打开该目录。日志通常是排查问题时唯一要看的部分，
     /// 而完整 Saved 可能很大（含 Profiling、截图），因此单独给一个入口。
     /// </summary>
-    private Task DownloadDeviceLogsAsync() => DownloadDeviceSavedAsync(SavedDownloadScope.Logs, "Logs");
+    private Task DownloadDeviceLogsAsync() => DownloadDeviceSavedAsync(UnealSavedScope.Logs, "Logs");
 
     /// <summary>
     /// 取回设备 Saved 数据的共用流程。范围不同只影响设备端源目录与提示文字，
     /// 落地、打开目录、汇总展示完全一致，因此两个按钮共用这一份实现——
     /// 各写一份会让「不覆盖上一次」这类规则在两处分别演化。
     /// </summary>
-    private Task DownloadDeviceSavedAsync(SavedDownloadScope scope, string scopeLabel) =>
+    private Task DownloadDeviceSavedAsync(UnealSavedScope scope, string scopeLabel) =>
         RunAsync($"正在下载设备 {scopeLabel} 目录…", async progress =>
         {
-            var request = new SavedDownloadRequest(_project!, SelectedDevice!.Device, scope);
-            var service = new SavedDownloadService(ResolveDeviceServiceForDevice(SelectedDevice.Device));
+            var request = new UnrealSavedPullRequest(_project!, SelectedDevice!.Device, scope);
+            var service = new UnrealSavedService(ResolveDeviceServiceForDevice(SelectedDevice.Device));
             var result = await service.DownloadAsync(request, progress, OperationCancellationToken);
 
             DeviceSavedDownloadSummary =
