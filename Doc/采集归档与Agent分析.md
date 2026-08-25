@@ -48,6 +48,28 @@ Content/<Platform>/<Tag>/<YYYY-MM-DD>/<CaptureId>/
 - `CaptureImportRequest(Project, SourceDirectory, Platform, Tag, CaptureId?)` — 从本地目录导入既有数据，同样生成 Manifest 与校验信息。
 - `CapturePlan` 在实际写入前确定 `CaptureId`、目标目录和设备源路径；GUI 应在确认阶段展示计划路径。
 
+## 下载设备 Saved
+
+`SavedDownloadService`（`SavedDownloadRequest` / `SavedDownloadPlan` / `SavedDownloadResult`）把设备上的 UE Saved 数据取回本地，供用户直接翻看日志、截图、Profiling 文件。GUI 在「采集归档」页有两个按钮，下载完成后都会打开落地目录：
+
+| 按钮 | `SavedDownloadScope` | 设备端源目录 |
+| --- | --- | --- |
+| 下载 Saved | `All` | `PlatformTarget.SavedRootPath` |
+| 下载 Log | `Logs` | 其下的 `Logs` 子目录 |
+
+两个范围共用同一条落地流程，只有源目录与提示文字不同。分两个入口是因为排查问题时通常只看日志，而完整 Saved 可能很大（含 Profiling、截图）。
+
+范围用枚举而不是让调用方传自由的子目录名：子目录名是 UE 的固定布局，可自由填写的路径会让「取回 Logs」和「取回一个拼错的名字」无法区分，后者会以「设备上没有该目录」的形式失败，读起来像设备的问题。
+
+它与采集刻意分开，不是采集的简化版：
+
+- 落地在 `Saved/DeviceSaved/<Platform>/<yyyyMMdd-HHmmss>-<设备 id>-<Saved|Logs>/`，不写 `Content/`。下载不生成 `CaptureManifest.json`，来源无从追溯，混进归档会让 `Content/` 里出现无法溯源的数据。
+- 每次下载进一个新目录，目标目录已存在时报错而不是覆盖或合并——覆盖会静默抹掉两次取回之间的差异。目录名同时含时间戳、设备 id 与范围三者：同一天多台设备各取一次要靠设备 id 区分，同一秒对同一设备既取 Saved 又取 Logs 要靠范围区分，少任何一项都可能撞名。
+- 落地目录直接就是所取范围的内容，不多包一层同名子目录：取 Logs 得到的是 `Game.log` 等文件本身，而不是 `Logs/Game.log`。
+- 先落 `Intermediate/SavedDownloadStaging/` 暂存再整体 `Directory.Move`。中途失败或取消留下的是暂存目录，不是一个看起来完整、实则只有一半文件的下载结果。
+- 拉取报告成功但本地没有内容时报错，指出设备端路径与可能原因，不产出空目录——「设备上没有该目录」和「取回成功但没数据」必须可区分。
+- 类内无平台分支：设备端路径由 `PlatformTarget` 提供，子目录用 `PlatformTarget.CombineDevicePath` 拼接（按平台风格选分隔符，不用 `Path.Combine`——它在 Windows 主机上会给 Android 路径写入反斜杠），拉取动作委托 `IDeviceService.PullDirectoryAsync`。平台不支持 `DeviceCapability.PullDirectory` 时抛 `DeviceCapabilityNotSupportedException`。
+
 ## Agent 分析
 
 Agent 分析是工程的派生能力，不是原始数据的替代品。

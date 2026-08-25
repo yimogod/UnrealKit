@@ -41,6 +41,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _customLaunchArguments = string.Empty;
     private string _captureTag = string.Empty;
     private string _captureArchivePreview = "请先打开工程并选择状态为 device 的设备。";
+    private string _deviceSavedDownloadSummary = "尚未下载设备 Saved 目录。下载后这里显示落地路径与文件数。";
     private string _packageName = string.Empty;
     private string _unrealProjectName = string.Empty;
     private string _activity = string.Empty;
@@ -145,6 +146,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         ReadLaunchParametersCommand = new AsyncDelegateCommand(ReadLaunchParametersAsync, CanOperateOnSelectedDevice);
         StartApplicationCommand = new AsyncDelegateCommand(StartApplicationAsync, CanOperateOnSelectedDevice);
         RunCaptureCommand = new AsyncDelegateCommand(RunCaptureAsync, CanOperateOnSelectedDevice);
+        DownloadDeviceSavedCommand = new AsyncDelegateCommand(DownloadDeviceSavedAsync, CanOperateOnSelectedDevice);
+        DownloadDeviceLogsCommand = new AsyncDelegateCommand(DownloadDeviceLogsAsync, CanOperateOnSelectedDevice);
         CancelOperationCommand = new DelegateCommand(CancelCurrentOperation, () => IsBusy);
         SaveProjectSettingsCommand = new AsyncDelegateCommand(SaveProjectSettingsAsync, () => !IsBusy && _project is not null);
         ParseMemInfoCommand = new AsyncDelegateCommand(ParseMemInfoAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(MemInfoInputPath));
@@ -223,6 +226,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand ReadLaunchParametersCommand { get; }
     public ICommand StartApplicationCommand { get; }
     public ICommand RunCaptureCommand { get; }
+    public ICommand DownloadDeviceSavedCommand { get; }
+    public ICommand DownloadDeviceLogsCommand { get; }
     public ICommand CancelOperationCommand { get; }
     public ICommand SaveProjectSettingsCommand { get; }
     public ICommand ParseMemInfoCommand { get; }
@@ -273,6 +278,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string CustomLaunchArguments { get => _customLaunchArguments; set { if (SetField(ref _customLaunchArguments, value)) UpdateLaunchParameterPreview(); } }
     public string CaptureTag { get => _captureTag; set { if (SetField(ref _captureTag, value)) UpdateCaptureArchivePreview(); } }
     public string CaptureArchivePreview { get => _captureArchivePreview; private set => SetField(ref _captureArchivePreview, value); }
+
+    /// <summary>最近一次「下载设备 Saved」的落地路径与规模。与归档预览分开显示：
+    /// 两者是不同的操作，共用一个文本框会让用户以为下载也写进了 Content 归档。</summary>
+    public string DeviceSavedDownloadSummary { get => _deviceSavedDownloadSummary; private set => SetField(ref _deviceSavedDownloadSummary, value); }
     public string UnrealProjectName { get => _unrealProjectName; set => SetField(ref _unrealProjectName, value); }
 
     // 各平台配置并列可编辑，不按「当前平台」切换可见性：多平台工程需要一次填完全部平台。
@@ -1178,6 +1187,79 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         CaptureArchivePreview = $"归档目录：{result.Plan.CaptureDirectory}{Environment.NewLine}清单：{result.ManifestPath}";
         StatusMessage = $"采集完成：{result.Plan.CaptureDirectory}";
     });
+
+    /// <summary>
+    /// 把所选设备上的 UE Saved 整目录取回本地并打开该目录。
+    ///
+    /// 与「采集并归档」分开是刻意的：这里不写 Content/、不生成 CaptureManifest.json，
+    /// 只是一次「拿下来看看」，落地在 Saved/DeviceSaved 这类可再生的派生数据下。
+    /// 每次取回都进新的带时间戳目录，不覆盖上一次的结果。
+    /// </summary>
+    private Task DownloadDeviceSavedAsync() => DownloadDeviceSavedAsync(SavedDownloadScope.All, "Saved");
+
+    /// <summary>
+    /// 只把所选设备上的 <c>Saved/Logs</c> 取回本地并打开该目录。日志通常是排查问题时唯一要看的部分，
+    /// 而完整 Saved 可能很大（含 Profiling、截图），因此单独给一个入口。
+    /// </summary>
+    private Task DownloadDeviceLogsAsync() => DownloadDeviceSavedAsync(SavedDownloadScope.Logs, "Logs");
+
+    /// <summary>
+    /// 取回设备 Saved 数据的共用流程。范围不同只影响设备端源目录与提示文字，
+    /// 落地、打开目录、汇总展示完全一致，因此两个按钮共用这一份实现——
+    /// 各写一份会让「不覆盖上一次」这类规则在两处分别演化。
+    /// </summary>
+    private Task DownloadDeviceSavedAsync(SavedDownloadScope scope, string scopeLabel) =>
+        RunAsync($"正在下载设备 {scopeLabel} 目录…", async progress =>
+        {
+            var request = new SavedDownloadRequest(_project!, SelectedDevice!.Device, scope);
+            var service = new SavedDownloadService(CreateDeviceServiceForDevice(SelectedDevice.Device));
+            var result = await service.DownloadAsync(request, progress, OperationCancellationToken);
+
+            DeviceSavedDownloadSummary =
+                $"已下载到：{result.Plan.LocalDirectory}{Environment.NewLine}" +
+                $"设备 {scopeLabel}：{result.Plan.DeviceDirectory}{Environment.NewLine}" +
+                $"共 {result.FileCount} 个文件、{FormatByteSize(result.TotalBytes)}。";
+            StatusMessage = $"设备 {scopeLabel} 已下载：{result.Plan.LocalDirectory}";
+            AddOperationLog("Info", DeviceSavedDownloadSummary);
+
+            // 打开目录是下载的一部分（用户就是为了翻看文件），但打不开不算下载失败：
+            // 文件已经在本地了，路径也已显示，因此只记一条警告。
+            OpenLocalDirectory(result.Plan.LocalDirectory);
+        });
+
+    /// <summary>
+    /// 在资源管理器中打开本地目录。失败按警告处理，不抛出——调用方的主操作已经成功，
+    /// 把「打不开窗口」升级成操作失败会让用户以为文件没下载下来。
+    /// </summary>
+    private void OpenLocalDirectory(string directory)
+    {
+        if (!Directory.Exists(directory))
+        {
+            AddOperationLog("Warning", $"目录不存在，无法打开：{directory}");
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = directory,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            AddOperationLog("Warning", $"无法打开目录 {directory}：{exception.Message}");
+        }
+    }
+
+    private static string FormatByteSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
+        _ => $"{bytes / (1024.0 * 1024 * 1024):F2} GB"
+    };
 
     private Task ParseMemInfoAsync() => RunAsync("Parsing Android meminfo...", async _ =>
     {
@@ -2163,7 +2245,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
