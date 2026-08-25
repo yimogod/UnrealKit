@@ -18,11 +18,41 @@ public sealed class DesktopAdbServiceFactory(AdbPathResolver? adbPathResolver = 
 {
     private readonly AdbPathResolver _adbPathResolver = adbPathResolver ?? new AdbPathResolver();
 
+    /// <summary>
+    /// adb server 启动标记，由工厂持有而不是随 AdbService 走：每次操作都会新建一个 AdbService，
+    /// 标记若随实例走就等于每次操作都要重新 start-server。工厂与窗口同生命周期，
+    /// 因此「本次运行只确保一次」正好落在这一层。
+    /// </summary>
+    private AdbServerLatch _serverLatch = new();
+
+    /// <summary>标记对应的 adb 路径。换了 adb 可执行文件要重新确保一次 server。</summary>
+    private string? _latchedAdbPath;
+
+    private readonly object _latchLock = new();
+
     public IAdbService Create(ProjectSettings? settings, IProgress<ProcessOutput>? output)
     {
         var resolution = Resolve(settings);
         var adbPath = resolution.ResolvedPath ?? throw new AdbPathResolutionException(resolution);
-        return new AdbService(new ProcessRunner(), adbPath, output);
+        return new AdbService(new ProcessRunner(), adbPath, output, GetServerLatch(adbPath));
+    }
+
+    /// <summary>
+    /// 取当前 adb 路径对应的启动标记。路径变了就换一个新标记——不同的 adb 可执行文件
+    /// 可能对应不同版本的 server，沿用旧标记会跳过那次必要的 start-server。
+    /// </summary>
+    private AdbServerLatch GetServerLatch(string adbPath)
+    {
+        lock (_latchLock)
+        {
+            if (!string.Equals(_latchedAdbPath, adbPath, StringComparison.OrdinalIgnoreCase))
+            {
+                _serverLatch = new AdbServerLatch();
+                _latchedAdbPath = adbPath;
+            }
+
+            return _serverLatch;
+        }
     }
 
     // adb 路径属于 Android 配置：未配置 Android 平台的工程走环境变量与 PATH 解析。

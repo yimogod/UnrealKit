@@ -767,18 +767,70 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             AddOperationLog(output.Stream.ToString(), output.Text)));
     }
 
-    private IDeviceService CreateDeviceServiceForDevice(IDevice device) =>
-        new DeviceServiceFactory(
+    /// <summary>
+    /// 按设备缓存的设备服务。
+    ///
+    /// AdbDeviceService 内部记着「这台设备已 forward 过端口」，每次操作都新建服务会把那份记录
+    /// 一起丢掉，于是每条控制台指令都要多起一个 adb forward 进程，并把它的输出混进指令结果——
+    /// 正是那份缓存想避免的事。缓存服务实例让 forward-once 真正成立。
+    ///
+    /// 失效条件见 <see cref="InvalidateDeviceServices"/> 与 <see cref="DropStaleDeviceServices"/>。
+    /// </summary>
+    private readonly Dictionary<(string Platform, string Id), IDeviceService> _deviceServices = [];
+
+    /// <summary>
+    /// 取该设备的设备服务，没有则新建并缓存。
+    ///
+    /// 平台取自设备本身，不取自工程配置：固定用 AdbDeviceService 会让 Win64 设备的操作走 adb。
+    /// </summary>
+    private IDeviceService ResolveDeviceServiceForDevice(IDevice device)
+    {
+        var key = (device.Platform, device.Id);
+        if (_deviceServices.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        var created = new DeviceServiceFactory(
             adbService: PlatformNames.Parse(device.Platform, nameof(device)) == TargetPlatform.Android ? CreateAdbService() : null,
             processRunner: new ProcessRunner())
             .CreateForDevice(device, _project?.Settings);
+        _deviceServices[key] = created;
+        return created;
+    }
+
+    /// <summary>
+    /// 清空全部缓存的设备服务。工程或工程配置变化后必须调用：指令通道端口、adb 路径都来自配置，
+    /// 留着旧实例会让保存后的配置对已经用过的设备不生效。
+    /// </summary>
+    private void InvalidateDeviceServices() => _deviceServices.Clear();
+
+    /// <summary>
+    /// 丢掉当前不可用设备的缓存服务。
+    ///
+    /// adb forward 随设备断开一起消失，而缓存里的「已 forward 过」标记不会自己失效；
+    /// 留着它会让重连后的指令跳过 forward，打到一个已经不存在的转发上。
+    /// 因此每次刷新设备列表时，凡是不在「当前可用」之列的设备一律丢掉，重连后重新 forward。
+    /// </summary>
+    private void DropStaleDeviceServices(IReadOnlyList<DeviceDisplayInfo> devices)
+    {
+        var available = devices
+            .Where(device => device.IsAvailable)
+            .Select(device => (device.Platform, device.Id))
+            .ToHashSet();
+
+        foreach (var key in _deviceServices.Keys.Where(key => !available.Contains(key)).ToArray())
+        {
+            _deviceServices.Remove(key);
+        }
+    }
 
     /// <summary>
     /// 为指定设备构造启动参数服务。必须按设备平台构造设备服务——
     /// 固定用 AdbDeviceService 会让 Win64 设备的操作走 adb 并按 Android 路径规则解析。
     /// </summary>
     private LaunchParameterService CreateLaunchParameterService(IDevice device) =>
-        new(CreateDeviceServiceForDevice(device));
+        new(ResolveDeviceServiceForDevice(device));
 
     /// <summary>
     /// 当前所选设备平台的落地值。未选设备或该平台未配置时返回 null，
@@ -811,7 +863,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     /// </summary>
     private CaptureService CreateCaptureService(IDevice device)
     {
-        var deviceService = CreateDeviceServiceForDevice(device);
+        var deviceService = ResolveDeviceServiceForDevice(device);
 
         // 按能力而非平台判断：新增平台时无需回到这里改分支。
         var consoleService = deviceService.Supports(DeviceCapability.SendConsoleCommand)
@@ -822,6 +874,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void UpdateDevices(IReadOnlyList<DeviceDisplayInfo> devices)
     {
+        DropStaleDeviceServices(devices);
         Devices.Clear();
         foreach (var device in devices) Devices.Add(device);
         ApplyPlatformScope();
@@ -944,6 +997,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private void SetCurrentProject(UkitProject project)
     {
         _project = project;
+
+        // 指令通道端口、adb 路径都来自工程配置，换工程或保存配置后旧实例就是过期的。
+        InvalidateDeviceServices();
         ProjectFilePath = project.ProjectFilePath;
         Devices.Clear();
         ScopedDevices.Clear();
@@ -1212,7 +1268,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         RunAsync($"正在下载设备 {scopeLabel} 目录…", async progress =>
         {
             var request = new SavedDownloadRequest(_project!, SelectedDevice!.Device, scope);
-            var service = new SavedDownloadService(CreateDeviceServiceForDevice(SelectedDevice.Device));
+            var service = new SavedDownloadService(ResolveDeviceServiceForDevice(SelectedDevice.Device));
             var result = await service.DownloadAsync(request, progress, OperationCancellationToken);
 
             DeviceSavedDownloadSummary =
@@ -1966,7 +2022,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private Task InstallDownloadedApkAsync() => RunAsync("正在安装应用…", async progress =>
     {
         var device = SelectedDevice!;
-        var deviceService = CreateDeviceServiceForDevice(device.Device);
+        var deviceService = ResolveDeviceServiceForDevice(device.Device);
         if (deviceService.Platform != TargetPlatform.Android
             || !deviceService.Supports(DeviceCapability.InstallApplication))
         {
@@ -2149,7 +2205,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         try
         {
             // 单一路径：ConsoleCommandService 依赖 IDeviceService，平台差异由能力探测表达。
-            var consoleService = new ConsoleCommandService(CreateDeviceServiceForDevice(_selectedDevice.Device));
+            var consoleService = new ConsoleCommandService(ResolveDeviceServiceForDevice(_selectedDevice.Device));
             if (!consoleService.IsSupported)
             {
                 ConsoleOutput = $"[SKIP] {_selectedDevice.Platform} 平台暂不支持发送 UE 控制台指令。";
@@ -2180,7 +2236,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         if (_selectedDevice is null) return;
 
-        var consoleService = new ConsoleCommandService(CreateDeviceServiceForDevice(_selectedDevice.Device));
+        var consoleService = new ConsoleCommandService(ResolveDeviceServiceForDevice(_selectedDevice.Device));
         if (!consoleService.IsSupported)
         {
             ConsoleSequenceOutput = $"[SKIP] {_selectedDevice.Platform} 平台暂不支持执行 UE 控制台指令序列。";

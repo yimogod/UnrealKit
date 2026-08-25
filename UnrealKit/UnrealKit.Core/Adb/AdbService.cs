@@ -17,12 +17,28 @@ public sealed class AdbService : IAdbService
     // 进度报告
     private readonly IProgress<ProcessOutput>? _output;
 
-    public AdbService(IProcessRunner processRunner, string adbPath, IProgress<ProcessOutput>? output = null)
+    /// <summary>
+    /// 「adb server 已在运行」标记。adb 客户端每次调用都会在 server 未启动时自行拉起它，
+    /// 那次冷启动的代价会落在一条真实命令的超时窗口内；这里用一次显式的 start-server 前置掉，
+    /// 之后所有命令直接发出。标记跨实例共享，见 <see cref="AdbServerLatch"/>。
+    /// </summary>
+    private readonly AdbServerLatch _serverLatch;
+
+    /// <param name="serverLatch">
+    /// 共享的 server 启动标记。省略时本实例独享一个，即每个实例各自确保一次——
+    /// 每次操作都新建服务的调用方应显式传入同一个实例。
+    /// </param>
+    public AdbService(
+        IProcessRunner processRunner,
+        string adbPath,
+        IProgress<ProcessOutput>? output = null,
+        AdbServerLatch? serverLatch = null)
     {
         _processRunner = processRunner;
         ArgumentException.ThrowIfNullOrWhiteSpace(adbPath);
         _adbPath = adbPath;
         _output = output;
+        _serverLatch = serverLatch ?? new AdbServerLatch();
     }
 
     public Task<ProcessExecutionResult> GetVersionAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) =>
@@ -37,14 +53,24 @@ public sealed class AdbService : IAdbService
     /// <summary>
     /// 启动 ADB 服务器
     /// </summary>
-    public Task<ProcessExecutionResult> StartServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) =>
-        RunRequiredAsync(["start-server"], progress, cancellationToken);
+    public async Task<ProcessExecutionResult> StartServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        var result = await RunCoreRequiredAsync(["start-server"], progress, cancellationToken);
+        await _serverLatch.EnsureStartedAsync(_ => Task.FromResult(true), cancellationToken);
+        return result;
+    }
 
     /// <summary>
     /// 终止 ADB 服务器
     /// </summary>
-    public Task<ProcessExecutionResult> KillServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) =>
-        RunRequiredAsync(["kill-server"], progress, cancellationToken);
+    public async Task<ProcessExecutionResult> KillServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        // server 已被杀掉，下一条命令必须重新确保它在运行——留着标记会让后续命令
+        // 跳过 start-server，把冷启动代价又推回那条命令自己。
+        var result = await RunCoreRequiredAsync(["kill-server"], progress, cancellationToken);
+        _serverLatch.Reset();
+        return result;
+    }
 
     /// <summary>
     /// 连接到 ADB 服务器
@@ -240,6 +266,11 @@ public sealed class AdbService : IAdbService
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ValidateSerialNumber(serialNumber);
+
+        // logcat 直接起进程而不经 RunRequiredAsync，因此在这里也走一次确保：
+        // 否则 server 冷启动的输出会混进日志流的头几行。
+        await EnsureServerStartedAsync(null, cancellationToken);
+
         var arguments = new List<string> { "-s", serialNumber, "logcat", "-v", "threadtime" };
         if (!string.IsNullOrWhiteSpace(filter))
         {
@@ -298,9 +329,37 @@ public sealed class AdbService : IAdbService
         RunRequiredAsync(["-s", serialNumber, .. arguments], progress, cancellationToken);
 
     /// <summary>
+    /// 确保 adb server 已在运行。共享同一个 <see cref="AdbServerLatch"/> 的所有实例合计只发一次 start-server。
+    ///
+    /// 失败不抛也不置标记：server 起不来时真正的命令会带着自己的退出码与 stderr 失败，
+    /// 那条信息比这里的二手报错更有用；标记不置位则下一条命令会再试一次。
+    /// </summary>
+    private Task EnsureServerStartedAsync(IProgress<OperationProgress>? progress, CancellationToken cancellationToken) =>
+        _serverLatch.EnsureStartedAsync(
+            async token =>
+            {
+                var result = await _processRunner.RunAsync(
+                    new ProcessExecutionRequest(_adbPath, ["start-server"], Output: _output),
+                    progress,
+                    token);
+                return result.Succeeded;
+            },
+            cancellationToken);
+
+    /// <summary>
     /// 运行 ADB 命令
     /// </summary>
     private async Task<ProcessExecutionResult> RunRequiredAsync(IReadOnlyList<string> arguments, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
+    {
+        await EnsureServerStartedAsync(progress, cancellationToken);
+        return await RunCoreRequiredAsync(arguments, progress, cancellationToken);
+    }
+
+    /// <summary>
+    /// 运行 ADB 命令，不经 <see cref="EnsureServerStartedAsync"/>。
+    /// 供 server 生命周期自身的命令使用，避免 start-server 递归确保 server。
+    /// </summary>
+    private async Task<ProcessExecutionResult> RunCoreRequiredAsync(IReadOnlyList<string> arguments, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
     {
         var result = await _processRunner.RunAsync(new ProcessExecutionRequest(_adbPath, arguments, Output: _output), progress, cancellationToken);
         if (result.Succeeded)
@@ -316,8 +375,11 @@ public sealed class AdbService : IAdbService
     /// 运行 ADB 命令并原样返回结果，非零退出码不抛异常。
     /// 供「多条命令依次探测、单条失败可接受」的场景使用；调用方必须自己检查 <see cref="ProcessExecutionResult.Succeeded"/>。
     /// </summary>
-    private Task<ProcessExecutionResult> RunAllowingFailureAsync(IReadOnlyList<string> arguments, IProgress<OperationProgress>? progress, CancellationToken cancellationToken) =>
-        _processRunner.RunAsync(new ProcessExecutionRequest(_adbPath, arguments, Output: _output), progress, cancellationToken);
+    private async Task<ProcessExecutionResult> RunAllowingFailureAsync(IReadOnlyList<string> arguments, IProgress<OperationProgress>? progress, CancellationToken cancellationToken)
+    {
+        await EnsureServerStartedAsync(progress, cancellationToken);
+        return await _processRunner.RunAsync(new ProcessExecutionRequest(_adbPath, arguments, Output: _output), progress, cancellationToken);
+    }
 
     /// <summary>
     /// 验证 ADB 设备序列号

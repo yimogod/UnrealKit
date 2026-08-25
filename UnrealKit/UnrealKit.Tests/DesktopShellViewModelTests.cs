@@ -1,4 +1,4 @@
-using UnrealKit.Core.Adb;
+﻿using UnrealKit.Core.Adb;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
@@ -642,6 +642,92 @@ public sealed class DesktopShellViewModelTests
         return viewModel;
     }
 
+    [Fact]
+    public async Task SendConsoleCommand_ForwardsPortOncePerDeviceAcrossOperations()
+    {
+        // 每次操作都新建设备服务会丢掉 AdbDeviceService 里的「已 forward 过」记录，
+        // 于是每条指令都要多起一个 adb forward 进程，并把它的输出混进指令结果。
+        var adb = new RecordingAdbService();
+        var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
+
+        viewModel.ConsoleCommandText = "stat fps";
+        await ((AsyncDelegateCommand)viewModel.SendConsoleCommandCommand).ExecuteAsync();
+        viewModel.ConsoleCommandText = "stat unit";
+        await ((AsyncDelegateCommand)viewModel.SendConsoleCommandCommand).ExecuteAsync();
+        viewModel.ConsoleCommandText = "stat rhi";
+        await ((AsyncDelegateCommand)viewModel.SendConsoleCommandCommand).ExecuteAsync();
+
+        Assert.Equal(1, adb.ForwardCallCount);
+    }
+
+    [Fact]
+    public async Task RefreshDevices_ForwardsAgainAfterDeviceDisconnects()
+    {
+        // adb forward 随设备断开一起消失，缓存里的标记不会自己失效；
+        // 沿用它会让重连后的指令打到一个已经不存在的转发上。
+        var adb = new RecordingAdbService();
+        var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
+
+        viewModel.ConsoleCommandText = "stat fps";
+        await ((AsyncDelegateCommand)viewModel.SendConsoleCommandCommand).ExecuteAsync();
+        Assert.Equal(1, adb.ForwardCallCount);
+
+        // 设备掉线后再回来：刷新两次之间设备不在列表里，缓存必须被丢掉。
+        var device = adb.Devices[0];
+        adb.Devices.Clear();
+        await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+        adb.Devices.Add(device);
+        await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+
+        viewModel.SelectedDevice = viewModel.Devices.First(candidate => candidate.Platform == "Android");
+        viewModel.ConsoleCommandText = "stat unit";
+        await ((AsyncDelegateCommand)viewModel.SendConsoleCommandCommand).ExecuteAsync();
+
+        Assert.Equal(2, adb.ForwardCallCount);
+    }
+
+    [Fact]
+    public async Task RefreshDevices_KeepsForwardWhenDeviceStaysAvailable()
+    {
+        // 刷新本身不该让缓存失效：设备一直在线时重复 forward 又回到每次操作起一个进程。
+        var adb = new RecordingAdbService();
+        var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
+
+        viewModel.ConsoleCommandText = "stat fps";
+        await ((AsyncDelegateCommand)viewModel.SendConsoleCommandCommand).ExecuteAsync();
+        await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+
+        viewModel.SelectedDevice = viewModel.Devices.First(candidate => candidate.Platform == "Android");
+        viewModel.ConsoleCommandText = "stat unit";
+        await ((AsyncDelegateCommand)viewModel.SendConsoleCommandCommand).ExecuteAsync();
+
+        Assert.Equal(1, adb.ForwardCallCount);
+    }
+
+    [Fact]
+    public async Task SaveProjectSettings_InvalidatesCachedDeviceServices()
+    {
+        // 指令通道端口与 adb 路径都来自工程配置，留着旧实例会让保存后的配置不生效。
+        var adb = new RecordingAdbService();
+        var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
+
+        viewModel.ConsoleCommandText = "stat fps";
+        await ((AsyncDelegateCommand)viewModel.SendConsoleCommandCommand).ExecuteAsync();
+        Assert.Equal(1, adb.ForwardCallCount);
+
+        await ((AsyncDelegateCommand)viewModel.SaveProjectSettingsCommand).ExecuteAsync();
+
+        // 保存配置会重建工程状态并清空设备列表，因此要重新枚举再选设备。
+        // 此时设备仍然在线，靠 DropStaleDeviceServices 是丢不掉那份缓存的——
+        // 必须由 SetCurrentProject 里的失效来保证新配置生效。
+        await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+        viewModel.SelectedDevice = viewModel.Devices.First(candidate => candidate.Platform == "Android");
+        viewModel.ConsoleCommandText = "stat unit";
+        await ((AsyncDelegateCommand)viewModel.SendConsoleCommandCommand).ExecuteAsync();
+
+        Assert.Equal(2, adb.ForwardCallCount);
+    }
+
     private static UkitProject CreateProject()
     {
         var settings = ProjectSettings.CreateDefaults("Sample") with
@@ -762,7 +848,13 @@ public sealed class DesktopShellViewModelTests
         /// <summary>按调用先后记录 stop/start，验证「先关后启」的顺序。</summary>
         public List<string> OperationOrder { get; } = [];
         public Task<ProcessExecutionResult> GetVersionAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<AdbDevice>>([new("R58M123ABC", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, "R58M123ABC device model:Pixel")]);
+        /// <summary>可变设备列表，供「设备断开后重连」场景改写。</summary>
+        public List<AdbDevice> Devices { get; } =
+        [
+            new("R58M123ABC", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, "R58M123ABC device model:Pixel")
+        ];
+
+        public Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<AdbDevice>>(Devices.ToArray());
         public Task<ProcessExecutionResult> StartServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> KillServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> ConnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
@@ -787,7 +879,9 @@ public sealed class DesktopShellViewModelTests
         public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> InstallApkAsync(string serialNumber, string localApkPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { ForceStopRequest = (serialNumber, packageName); OperationOrder.Add("stop"); return Task.FromResult(new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)); }
-        public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        /// <summary>adb forward 次数。每条指令都 forward 会多起一个 adb 进程，因此要能数出来。</summary>
+        public int ForwardCallCount { get; private set; }
+        public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { ForwardCallCount++; return Task.FromResult(Success); }
         public async IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await System.Threading.Tasks.Task.CompletedTask; yield break; }
         /// <summary>置空表示设备未联网，与真实服务一致地抛异常而不是返回空列表。</summary>
         public List<DeviceIpAddress> IpAddresses { get; } =

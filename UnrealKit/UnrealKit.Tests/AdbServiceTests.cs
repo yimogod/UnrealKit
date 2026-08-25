@@ -214,7 +214,8 @@ public sealed class AdbServiceTests
                 inet 192.168.1.23/24 brd 192.168.1.255 scope global wlan0
             """;
         var runner = new ScriptedProcessRunner(new ProcessExecutionResult(0, output, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
-        var service = new AdbService(runner, "adb");
+        // 标记预置为已启动：本测试断言的是请求序列，不该被隐式的 start-server 占掉一位。
+        var service = new AdbService(runner, "adb", serverLatch: AdbServerLatch.CreateStarted());
 
         var addresses = await service.GetIpAddressesAsync("R58M123ABC");
 
@@ -228,7 +229,8 @@ public sealed class AdbServiceTests
         var runner = new ScriptedProcessRunner(
             new ProcessExecutionResult(1, string.Empty, "ip: not found", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
             new ProcessExecutionResult(0, "192.168.1.0/24 dev wlan0 proto kernel scope link src 192.168.1.23", string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
-        var service = new AdbService(runner, "adb");
+        // 标记预置为已启动：本测试断言的是请求序列，不该被隐式的 start-server 占掉一位。
+        var service = new AdbService(runner, "adb", serverLatch: AdbServerLatch.CreateStarted());
 
         var addresses = await service.GetIpAddressesAsync("R58M123ABC");
 
@@ -243,7 +245,8 @@ public sealed class AdbServiceTests
         var runner = new ScriptedProcessRunner(
             new ProcessExecutionResult(0, "1: lo: <LOOPBACK,UP>\n    inet 127.0.0.1/8 scope host lo", string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
             new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
-        var service = new AdbService(runner, "adb");
+        // 标记预置为已启动：本测试断言的是请求序列，不该被隐式的 start-server 占掉一位。
+        var service = new AdbService(runner, "adb", serverLatch: AdbServerLatch.CreateStarted());
 
         var exception = await Assert.ThrowsAsync<AdbDeviceAddressUnavailableException>(
             () => service.GetIpAddressesAsync("R58M123ABC"));
@@ -260,6 +263,78 @@ public sealed class AdbServiceTests
         var service = new AdbService(new RecordingProcessRunner(ProcessExecutionResultForSuccess()), "adb");
 
         await Assert.ThrowsAsync<ArgumentException>(() => service.GetIpAddressesAsync(" "));
+    }
+
+    [Fact]
+    public async Task RunCommand_StartsServerOnceBeforeFirstCommand()
+    {
+        // adb 客户端会在 server 未启动时自行拉起它，那次冷启动的代价会落在第一条真实命令上。
+        // 显式前置一次 start-server，且只在首条命令前发一次。
+        var runner = new ScriptedProcessRunner(ProcessExecutionResultForSuccess());
+        var service = new AdbService(runner, "adb");
+
+        await service.RunDumpsysAsync("R58M123ABC", "com.example.game");
+        await service.RunDumpsysAsync("R58M123ABC", "com.example.game");
+        await service.ForceStopApplicationAsync("R58M123ABC", "com.example.game");
+
+        Assert.Equal(["start-server"], runner.Requests[0].Arguments);
+        Assert.Single(runner.Requests, request => request.Arguments.Contains("start-server"));
+    }
+
+    [Fact]
+    public async Task RunCommand_SharesServerLatchAcrossServiceInstances()
+    {
+        // GUI 每次操作都新建一个 AdbService，标记若随实例走就等于每次操作都要 start-server 一次。
+        var runner = new ScriptedProcessRunner(ProcessExecutionResultForSuccess());
+        var latch = new AdbServerLatch();
+
+        await new AdbService(runner, "adb", serverLatch: latch).RunDumpsysAsync("R58M123ABC", "com.example.game");
+        await new AdbService(runner, "adb", serverLatch: latch).RunDumpsysAsync("R58M123ABC", "com.example.game");
+
+        Assert.Single(runner.Requests, request => request.Arguments.Contains("start-server"));
+    }
+
+    [Fact]
+    public async Task RunCommand_RetriesServerStartWhenPreviousAttemptFailed()
+    {
+        // start-server 失败不置标记：真正的命令会带着自己的退出码失败，下一条命令还要再试一次。
+        var runner = new ScriptedProcessRunner(
+            new ProcessExecutionResult(1, string.Empty, "cannot connect to daemon", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+            new ProcessExecutionResult(1, string.Empty, "cannot connect to daemon", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+            ProcessExecutionResultForSuccess());
+        var service = new AdbService(runner, "adb");
+
+        // 第一条命令：start-server 失败，dumpsys 也失败。
+        await Assert.ThrowsAsync<AdbCommandException>(() => service.RunDumpsysAsync("R58M123ABC", "com.example.game"));
+        await service.RunDumpsysAsync("R58M123ABC", "com.example.game");
+
+        Assert.Equal(2, runner.Requests.Count(request => request.Arguments.Contains("start-server")));
+    }
+
+    [Fact]
+    public async Task KillServerAsync_ClearsLatchSoNextCommandEnsuresServerAgain()
+    {
+        var runner = new ScriptedProcessRunner(ProcessExecutionResultForSuccess());
+        var service = new AdbService(runner, "adb");
+
+        await service.RunDumpsysAsync("R58M123ABC", "com.example.game");
+        await service.KillServerAsync();
+        await service.RunDumpsysAsync("R58M123ABC", "com.example.game");
+
+        Assert.Equal(2, runner.Requests.Count(request => request.Arguments.Contains("start-server")));
+    }
+
+    [Fact]
+    public async Task StartServerAsync_DoesNotSendStartServerTwice()
+    {
+        // 显式 StartServerAsync 本身就是那次确保，不该再被隐式确保包一层。
+        var runner = new ScriptedProcessRunner(ProcessExecutionResultForSuccess());
+        var service = new AdbService(runner, "adb");
+
+        await service.StartServerAsync();
+        await service.RunDumpsysAsync("R58M123ABC", "com.example.game");
+
+        Assert.Single(runner.Requests, request => request.Arguments.Contains("start-server"));
     }
 
     private static ProcessExecutionResult ProcessExecutionResultForSuccess() => new(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);

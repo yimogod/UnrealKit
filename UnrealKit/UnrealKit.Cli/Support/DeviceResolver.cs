@@ -22,13 +22,39 @@ internal sealed record ResolvedDeviceTarget(
 
 internal static class DeviceResolver
 {
+    /// <summary>
+    /// adb server 启动标记，按 adb 路径共享。一条 CLI 命令内部可能构造多个 AdbService
+    /// （跨平台枚举、解析设备后再建设备服务），标记若随实例走就会各自 start-server 一次。
+    /// </summary>
+    private static readonly Dictionary<string, AdbServerLatch> ServerLatches =
+        new(StringComparer.OrdinalIgnoreCase);
+
     internal static AdbService CreateAdbService(string? explicitPath, string? projectAdbPath = null, bool streamOutput = true)
     {
         var resolvedPath = new AdbPathResolver().ResolveRequired(explicitPath, projectAdbPath);
         return new AdbService(
             new ProcessRunner(),
             resolvedPath,
-            streamOutput ? new Progress<ProcessOutput>(CliOutput.WriteProcessOutput) : null);
+            streamOutput ? new Progress<ProcessOutput>(CliOutput.WriteProcessOutput) : null,
+            GetServerLatch(resolvedPath));
+    }
+
+    /// <summary>
+    /// 取该 adb 路径对应的启动标记。不同的 adb 可执行文件可能对应不同版本的 server，
+    /// 因此按路径分开，不共用同一个标记。
+    /// </summary>
+    private static AdbServerLatch GetServerLatch(string resolvedPath)
+    {
+        lock (ServerLatches)
+        {
+            if (!ServerLatches.TryGetValue(resolvedPath, out var latch))
+            {
+                latch = new AdbServerLatch();
+                ServerLatches[resolvedPath] = latch;
+            }
+
+            return latch;
+        }
     }
 
     /// <summary>
