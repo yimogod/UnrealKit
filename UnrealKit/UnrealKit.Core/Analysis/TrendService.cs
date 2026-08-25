@@ -8,7 +8,7 @@ namespace UnrealKit.Core.Analysis;
 /// Builds per-metric series across multiple captures. Reads capture archives only; derived output is
 /// written by the export services under <c>Saved/</c>.
 /// </summary>
-public sealed class TrendService : ITrendService
+public sealed class TrendService
 {
     private readonly IBaselineService _baselineService;
     private readonly CaptureAnalysisService _captureAnalysisService;
