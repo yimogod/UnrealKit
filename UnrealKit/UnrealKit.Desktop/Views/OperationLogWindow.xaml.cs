@@ -1,5 +1,6 @@
 ﻿using System.Collections.Specialized;
 using System.Windows;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using UnrealKit.Desktop.ViewModels;
 
@@ -65,8 +66,26 @@ public partial class OperationLogWindow : Window
     {
         if (e.Action == NotifyCollectionChangedAction.Add && AutoScroll)
         {
-            ScrollToEnd();
+            ScheduleScrollToEnd();
         }
+    }
+
+    private bool _scrollPending;
+
+    /// <summary>
+    /// 滚动必须推迟到集合变更处理完成之后：<see cref="DataGrid"/> 的 ItemContainerGenerator
+    /// 在处理 CollectionChanged 期间尚未完成计数对账，此刻同步调用 ScrollIntoView 会触发
+    /// 「累积计数与实际计数不符」异常。合并同一批次的多次 Add，只滚动一次。
+    /// </summary>
+    private void ScheduleScrollToEnd()
+    {
+        if (_scrollPending) return;
+        _scrollPending = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _scrollPending = false;
+            ScrollToEnd();
+        }), DispatcherPriority.Background);
     }
 
     private void ScrollToEnd()

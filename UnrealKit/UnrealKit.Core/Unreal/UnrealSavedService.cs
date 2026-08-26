@@ -36,7 +36,7 @@ public sealed class UnrealSavedService
         // 目录名带时间戳、设备标识与范围三者：同一天从多台设备各取一次会按设备区分，
         // 同一秒对同一设备既取 Saved 又取 Logs 会按范围区分。少任何一项都可能撞名，
         // 而撞名会以「下载目录已存在」的形式失败，读起来像是重复操作而非两次不同的取回。
-        var folderName = $"{localTime.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture)}-{SanitizeDeviceId(request.Device.Id)}-{leafName}";
+        var folderName = $"{leafName}-{localTime.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture)}-{SanitizeDeviceId(request.Device.Id)}";
         var localDirectory = Path.Combine(
             request.Project.SavedDir, DownloadRootName, target.PlatformName, folderName);
 
