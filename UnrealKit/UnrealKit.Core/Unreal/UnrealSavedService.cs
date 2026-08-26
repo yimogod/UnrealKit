@@ -16,10 +16,7 @@ namespace UnrealKit.Core.Unreal;
 public sealed class UnrealSavedService
 {
     /// <summary><c>Saved/</c> 下存放设备 Saved 下载结果的子目录名。</summary>
-    public const string DownloadRootName = "DeviceSaved";
-
-    /// <summary>UE 在 Saved 下存放日志的固定子目录名。</summary>
-    public const string LogsDirectoryName = "Logs";
+    public const string DownloadRootName = "Device";
 
     private readonly IDeviceService _deviceService;
     private readonly TimeProvider _timeProvider;
@@ -34,7 +31,7 @@ public sealed class UnrealSavedService
     {
         var target = ValidateRequest(request);
         var localTime = requestedAt ?? _timeProvider.GetLocalNow();
-        var leafName = UnrealModels.GetRelativePath(request.Scope);
+        var leafName = UnrealModels.GetScopeName(request.Scope);
 
         // 目录名带时间戳、设备标识与范围三者：同一天从多台设备各取一次会按设备区分，
         // 同一秒对同一设备既取 Saved 又取 Logs 会按范围区分。少任何一项都可能撞名，
@@ -43,7 +40,9 @@ public sealed class UnrealSavedService
         var localDirectory = Path.Combine(
             request.Project.SavedDir, DownloadRootName, target.PlatformName, folderName);
 
-        return new UnrealSavedPullPlan(request.Scope, ResolveDeviceDirectory(target, request.Scope), localDirectory);
+        var devicePath = UnrealModels.ResolveDeviceDirectory(target, request.Scope);
+
+        return new UnrealSavedPullPlan(request.Scope, devicePath, localDirectory);
     }
 
     public async Task<UnrealSavedPullResult> DownloadAsync(
@@ -52,7 +51,7 @@ public sealed class UnrealSavedService
         CancellationToken cancellationToken = default)
     {
         ValidateRequest(request);
-        var leafName = UnrealModels.GetRelativePath(request.Scope);
+        var leafName = UnrealModels.GetScopeName(request.Scope);
         if (!_deviceService.Supports(DeviceCapability.PullDirectory))
         {
             throw new DeviceCapabilityNotSupportedException(
@@ -109,17 +108,6 @@ public sealed class UnrealSavedService
     }
 
 
-    /// <summary>
-    /// 该范围对应的设备端源目录。用 <see cref="PlatformTarget.CombineDevicePath"/> 拼接子目录，
-    /// 不用 <see cref="Path.Combine"/>——后者在 Windows 主机上会给 Android 路径写入反斜杠。
-    /// </summary>
-    private static string ResolveDeviceDirectory(PlatformTarget target, UnealSavedScope scope) => scope switch
-    {
-        UnealSavedScope.All => target.SavedRootPath,
-        UnealSavedScope.Logs => target.CombineDevicePath(target.SavedRootPath, LogsDirectoryName),
-        _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, "未支持的下载范围。")
-    };
-
     private static PlatformTarget ValidateRequest(UnrealSavedPullRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -133,7 +121,7 @@ public sealed class UnrealSavedService
         }
 
         // 未识别的范围在任何文件系统操作之前就要拒绝
-        UnrealModels.GetRelativePath(request.Scope);
+        UnrealModels.GetScopeName(request.Scope);
 
         var devicePlatform = PlatformNames.Parse(request.Device.Platform, nameof(request));
         return request.Project.Settings.ResolveTarget(

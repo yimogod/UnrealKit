@@ -46,10 +46,21 @@ public sealed record UnrealSavedPullResult(
 
 public class UnrealModels
 {
-    public static string GetRelativePath(UnealSavedScope scope) => scope switch
+    public static string GetScopeName(UnealSavedScope scope) => scope switch
     {
         UnealSavedScope.All => PlatformProfile.SavedDirectoryName,
-        UnealSavedScope.Logs => Path.Combine(PlatformProfile.SavedDirectoryName, "Logs"),
+        UnealSavedScope.Logs => "Logs",
+        _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, "未支持的下载范围。")
+    };
+
+    /// <summary>
+    /// 该范围对应的设备端源目录。用 <see cref="PlatformTarget.CombineDevicePath"/> 拼接子目录，
+    /// 不用 <see cref="Path.Combine"/>——后者在 Windows 主机上会给 Android 路径写入反斜杠。
+    /// </summary>
+    public static string ResolveDeviceDirectory(PlatformTarget target, UnealSavedScope scope) => scope switch
+    {
+        UnealSavedScope.All => target.SavedRootPath,
+        UnealSavedScope.Logs => target.CombineDevicePath(target.SavedRootPath, "Logs"),
         _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, "未支持的下载范围。")
     };
 }
