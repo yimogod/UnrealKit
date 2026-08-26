@@ -1,4 +1,4 @@
-<UserControl x:Class="UnrealKit.Desktop.Views.CaptureView"
+﻿<UserControl x:Class="UnrealKit.Desktop.Views.CaptureView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid>
@@ -25,13 +25,13 @@
                     <!-- 与「采集并归档」并列但语义不同：这个按钮只把设备 Saved 取到本地供翻看，
                          不写 Content 归档、不生成清单，因此提示文字必须说清落地位置。 -->
                     <Button Content="下载 Saved" Command="{Binding DownloadDeviceSavedCommand}" Padding="14,7" Margin="12,0,0,0"
-                            ToolTip="把所选设备上的 UE Saved 整目录取回本地并打开该目录。不写入 Content 归档。" />
+                            ToolTip="把所选设备上的 UE Saved 整目录取回本地并打开该目录" />
                     <!-- 单独给 Logs 一个入口：排查问题时通常只看日志，
                          而完整 Saved 可能很大（含 Profiling、截图）。 -->
                     <Button Content="下载 Log" Command="{Binding DownloadDeviceLogsCommand}" Padding="14,7" Margin="12,0,0,0"
-                            ToolTip="只把所选设备上的 UE Saved/Logs 目录取回本地并打开该目录。不写入 Content 归档。" />
+                            ToolTip="只把所选设备上的 UE Saved/Logs 目录取回本地并打开该目录" />
                 </StackPanel>
-                <TextBlock Text="「下载 Saved」与「下载 Log」分别取回设备的 Saved 整目录和其中的 Logs 子目录，落地在工程 Saved/DeviceSaved/&lt;平台&gt;/&lt;时间戳-设备-范围&gt;/ 下，每次进新目录，不覆盖上一次；这是可再生的派生数据，不是采集归档。"
+                <TextBlock Text="[下载 Saved/Log] 会下载设备Saved相关内容, 到工程 Saved/Device/&lt;平台&gt;/&lt;时间戳-设备-范围&gt;/ 下"
                            Style="{StaticResource HintTextStyle}" Margin="0,10,0,0" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding DeviceSavedDownloadSummary}" Style="{StaticResource HintTextStyle}" Margin="0,6,0,0" TextWrapping="Wrap" FontFamily="Consolas" />
             </StackPanel>
