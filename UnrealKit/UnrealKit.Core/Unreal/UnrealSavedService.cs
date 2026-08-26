@@ -70,7 +70,7 @@ public sealed class UnrealSavedService
         // 先落到 Intermediate 暂存再整体移动：中途失败或取消时留下的是暂存目录，
         // 不是一个看起来完整、实则只有一半文件的下载结果。
         var stagingRoot = Path.Combine(
-            request.Project.IntermediateDir, "SavedDownloadStaging", Guid.NewGuid().ToString("N"));
+            request.Project.IntermediateDir, "Staging", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stagingRoot);
 
         // 刻意不预先创建该目录：adb pull 在目标目录已存在时会在其下再建一层同名子目录，
