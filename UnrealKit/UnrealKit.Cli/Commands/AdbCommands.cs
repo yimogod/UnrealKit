@@ -26,13 +26,13 @@ internal static class AdbCommands
     }
 
     // 版本、连接、断开的可见输出来自 adb 自身的流式转发，这里只负责等待与退出码。
-    private static async Task<int> ShowVersionAsync(IAdbService service)
+    private static async Task<int> ShowVersionAsync(AdbService service)
     {
         await service.GetVersionAsync();
         return 0;
     }
 
-    private static async Task<int> ListDevicesAsync(IAdbService service)
+    private static async Task<int> ListDevicesAsync(AdbService service)
     {
         var devices = await service.ListDevicesAsync();
         foreach (var device in devices)
@@ -45,7 +45,7 @@ internal static class AdbCommands
 
     // 逐个接口列出，不挑一个「主」地址：哪个是想要的取决于用途（同网段调试用 WiFi，USB 网络共享用 rndis），
     // 由使用者判断比工具替其猜测可靠。
-    private static async Task<int> ShowIpAddressesAsync(IAdbService service, string serialNumber)
+    private static async Task<int> ShowIpAddressesAsync(AdbService service, string serialNumber)
     {
         try
         {
@@ -67,13 +67,13 @@ internal static class AdbCommands
     private static string FormatAddress(DeviceIpAddress address) =>
         address.PrefixLength is null ? address.Address : $"{address.Address}/{address.PrefixLength}";
 
-    private static async Task<int> ConnectAsync(IAdbService service, string endpoint)
+    private static async Task<int> ConnectAsync(AdbService service, string endpoint)
     {
         await service.ConnectAsync(endpoint);
         return 0;
     }
 
-    private static async Task<int> DisconnectAsync(IAdbService service, string endpoint)
+    private static async Task<int> DisconnectAsync(AdbService service, string endpoint)
     {
         await service.DisconnectAsync(endpoint);
         return 0;

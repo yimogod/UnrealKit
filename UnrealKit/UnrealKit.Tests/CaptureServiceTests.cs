@@ -19,7 +19,7 @@ public sealed class CaptureServiceTests : IDisposable
         var configPath = project.Project.ConfigFilePath;
         await File.WriteAllTextAsync(configPath, (await File.ReadAllTextAsync(configPath)).Replace("PackageName=", "PackageName=com.example.project", StringComparison.Ordinal));
         var configuredProject = await new ProjectService().OpenProjectAsync(project.Project.ProjectFilePath);
-        var service = new CaptureService(new AdbDeviceService(new FakeAdbService()));
+        var service = new CaptureService(new FakeDeviceService());
         var device = new AdbDevice("device-01", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, string.Empty);
 
         var result = await service.CaptureAsync(new CaptureRequest(configuredProject, device, "Nightly", "capture-001"));
@@ -54,7 +54,7 @@ public sealed class CaptureServiceTests : IDisposable
             DateTimeOffset.UtcNow);
 
         var fakeConsoleService = new FailingConsoleService(failedResult);
-        var service = new CaptureService(new AdbDeviceService(new FakeAdbService()), fakeConsoleService);
+        var service = new CaptureService(new FakeDeviceService(), fakeConsoleService);
         var device = new AdbDevice("device-01", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, string.Empty);
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -86,7 +86,7 @@ public sealed class CaptureServiceTests : IDisposable
             DateTimeOffset.UtcNow);
 
         var fakeConsoleService = new FailingConsoleService(failedResult);
-        var service = new CaptureService(new AdbDeviceService(new FakeAdbService()), fakeConsoleService);
+        var service = new CaptureService(new FakeDeviceService(), fakeConsoleService);
         var device = new AdbDevice("device-01", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, string.Empty);
 
         // 不能用 Progress<T>：它把回调 post 到线程池异步执行，断言可能早于回调到达，
@@ -136,26 +136,31 @@ public sealed class CaptureServiceTests : IDisposable
         if (Directory.Exists(_temporaryDirectory)) Directory.Delete(_temporaryDirectory, recursive: true);
     }
 
-    private sealed class FakeAdbService : IAdbService
+    private sealed class FakeDeviceService : IDeviceService
     {
-        public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result("memory report"));
-        public Task<ProcessExecutionResult> PullDirectoryAsync(string serialNumber, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { Directory.CreateDirectory(localDirectory); File.WriteAllText(Path.Combine(localDirectory, "Saved.txt"), "saved"); return Task.FromResult(Result()); }
+        public TargetPlatform Platform => TargetPlatform.Android;
+
+        public bool Supports(DeviceCapability capability) => true;
+
+        public Task<ProcessExecutionResult> CaptureMemoryAsync(IDevice device, string target, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result("memory report"));
+
+        public Task<ProcessExecutionResult> PullDirectoryAsync(IDevice device, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            Directory.CreateDirectory(localDirectory);
+            File.WriteAllText(Path.Combine(localDirectory, "Saved.txt"), "saved");
+            return Task.FromResult(Result());
+        }
+
         private static ProcessExecutionResult Result(string output = "") => new(0, output, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
-        public Task<ProcessExecutionResult> GetVersionAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
-        public Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<AdbDevice>>([]);
-        public Task<ProcessExecutionResult> StartServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
-        public Task<ProcessExecutionResult> KillServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
-        public Task<ProcessExecutionResult> ConnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
-        public Task<ProcessExecutionResult> DisconnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
-        public Task<ProcessExecutionResult> TcpIpAsync(string serialNumber, int port, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
-        public Task<ProcessExecutionResult> StartApplicationAsync(string serialNumber, string packageName, string activityName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
-        public Task<ProcessExecutionResult> PushFileAsync(string serialNumber, string localPath, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
-        public Task<ProcessExecutionResult> DeleteRemoteFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
-        public Task<ProcessExecutionResult> ReadFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
-        public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result(""));
-        public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
-        public Task<ProcessExecutionResult> InstallApkAsync(string serialNumber, string localApkPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
-        public async IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await System.Threading.Tasks.Task.CompletedTask; yield break; }
-        public Task<IReadOnlyList<DeviceIpAddress>> GetIpAddressesAsync(string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<DeviceIpAddress>>([]);
+
+        public Task<IReadOnlyList<IDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<IDevice>>([]);
+        public Task<ProcessExecutionResult> SendConsoleCommandAsync(IDevice device, string command, string? target = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
+        public async IAsyncEnumerable<string> StreamLogAsync(IDevice device, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await System.Threading.Tasks.Task.CompletedTask; yield break; }
+        public Task<ProcessExecutionResult> StartApplicationAsync(IDevice device, string target, string? activity = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
+        public Task<ProcessExecutionResult> StopApplicationAsync(IDevice device, string target, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
+        public Task<ProcessExecutionResult> PushFileAsync(IDevice device, string localPath, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
+        public Task<ProcessExecutionResult> DeleteRemoteFileAsync(IDevice device, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
+        public Task<ProcessExecutionResult> ReadFileAsync(IDevice device, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
+        public Task<ProcessExecutionResult> InstallApplicationAsync(IDevice device, string localApplicationPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
     }
 }

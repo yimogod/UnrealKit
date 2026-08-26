@@ -3,10 +3,11 @@ using UnrealKit.Core.Devices;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.Unreal;
 
 namespace UnrealKit.Tests;
 
-public sealed class SavedDownloadServiceTests : IDisposable
+public sealed class UnrealSavedServiceTests : IDisposable
 {
     private readonly string _temporaryDirectory = Path.Combine(
         Path.GetTempPath(), "UnrealKit.Tests", Guid.NewGuid().ToString("N"));
@@ -18,13 +19,13 @@ public sealed class SavedDownloadServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Config", "GameUserSettings.ini"), "[/Script/Engine]");
         await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Logs", "Game.log"), "log line");
 
-        var service = new SavedDownloadService(new Win64DeviceService());
+        var service = new UnrealSavedService(new Win64DeviceService());
 
-        var result = await service.DownloadAsync(new SavedDownloadRequest(project, new Win64Device()));
+        var result = await service.DownloadAsync(new UnrealSavedPullRequest(project, new Win64Device()));
 
         // 落地在工程 Saved/DeviceSaved 下，而不是 Content——下载没有清单，不是采集归档。
         Assert.StartsWith(
-            Path.Combine(project.SavedDir, UnrealModels.DownloadRootName, "Win64"),
+            Path.Combine(project.SavedDir, UnrealSavedService.DownloadRootName, "Win64"),
             result.Plan.LocalDirectory,
             StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(result.Plan.LocalDirectory, "Config", "GameUserSettings.ini")));
@@ -48,12 +49,12 @@ public sealed class SavedDownloadServiceTests : IDisposable
 
         // 目录名的时间戳分辨率是秒，因此显式给出两个不同时间，验证两次下载互不覆盖，
         // 而不是依赖测试执行恰好跨过一秒边界。
-        var first = await new SavedDownloadService(new Win64DeviceService(), FixedTime("2026-08-24T10:00:00+08:00"))
-            .DownloadAsync(new SavedDownloadRequest(project, new Win64Device()));
+        var first = await new UnrealSavedService(new Win64DeviceService(), FixedTime("2026-08-24T10:00:00+08:00"))
+            .DownloadAsync(new UnrealSavedPullRequest(project, new Win64Device()));
 
         await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Logs", "Game.log"), "second");
-        var second = await new SavedDownloadService(new Win64DeviceService(), FixedTime("2026-08-24T10:00:05+08:00"))
-            .DownloadAsync(new SavedDownloadRequest(project, new Win64Device()));
+        var second = await new UnrealSavedService(new Win64DeviceService(), FixedTime("2026-08-24T10:00:05+08:00"))
+            .DownloadAsync(new UnrealSavedPullRequest(project, new Win64Device()));
 
         Assert.NotEqual(first.Plan.LocalDirectory, second.Plan.LocalDirectory);
         Assert.Equal("first", await File.ReadAllTextAsync(Path.Combine(first.Plan.LocalDirectory, "Logs", "Game.log")));
@@ -66,13 +67,13 @@ public sealed class SavedDownloadServiceTests : IDisposable
         var (project, deviceSaved) = await CreateWin64ProjectAsync("Existing");
         await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Logs", "Game.log"), "log");
 
-        var service = new SavedDownloadService(new Win64DeviceService(), FixedTime("2026-08-24T10:00:00+08:00"));
-        var plan = service.CreatePlan(new SavedDownloadRequest(project, new Win64Device()));
+        var service = new UnrealSavedService(new Win64DeviceService(), FixedTime("2026-08-24T10:00:00+08:00"));
+        var plan = service.CreatePlan(new UnrealSavedPullRequest(project, new Win64Device()));
         Directory.CreateDirectory(plan.LocalDirectory);
         await File.WriteAllTextAsync(Path.Combine(plan.LocalDirectory, "Existing.txt"), "keep me");
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.DownloadAsync(new SavedDownloadRequest(project, new Win64Device())));
+            () => service.DownloadAsync(new UnrealSavedPullRequest(project, new Win64Device())));
 
         Assert.Contains(plan.LocalDirectory, exception.Message, StringComparison.Ordinal);
         Assert.Equal("keep me", await File.ReadAllTextAsync(Path.Combine(plan.LocalDirectory, "Existing.txt")));
@@ -82,23 +83,23 @@ public sealed class SavedDownloadServiceTests : IDisposable
     public async Task DownloadAsync_PullProducesNothing_ThrowsInsteadOfReportingEmptySuccess()
     {
         var (project, _) = await CreateWin64ProjectAsync("Empty");
-        var service = new SavedDownloadService(new NoOpPullDeviceService());
+        var service = new UnrealSavedService(new NoOpPullDeviceService());
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.DownloadAsync(new SavedDownloadRequest(project, new Win64Device())));
+            () => service.DownloadAsync(new UnrealSavedPullRequest(project, new Win64Device())));
 
         Assert.Contains("没有取回任何内容", exception.Message, StringComparison.Ordinal);
-        Assert.False(Directory.Exists(Path.Combine(project.SavedDir, UnrealModels.DownloadRootName)));
+        Assert.False(Directory.Exists(Path.Combine(project.SavedDir, UnrealSavedService.DownloadRootName)));
     }
 
     [Fact]
     public async Task DownloadAsync_PullDirectoryUnsupported_ThrowsCapabilityException()
     {
         var (project, _) = await CreateWin64ProjectAsync("Unsupported");
-        var service = new SavedDownloadService(new NoPullCapabilityDeviceService());
+        var service = new UnrealSavedService(new NoPullCapabilityDeviceService());
 
         var exception = await Assert.ThrowsAsync<DeviceCapabilityNotSupportedException>(
-            () => service.DownloadAsync(new SavedDownloadRequest(project, new Win64Device())));
+            () => service.DownloadAsync(new UnrealSavedPullRequest(project, new Win64Device())));
 
         Assert.Equal(DeviceCapability.PullDirectory, exception.Capability);
     }
@@ -107,9 +108,9 @@ public sealed class SavedDownloadServiceTests : IDisposable
     public async Task CreatePlan_WirelessDeviceId_ProducesValidSingleDirectoryName()
     {
         var (project, _) = await CreateWin64ProjectAsync("Wireless");
-        var service = new SavedDownloadService(new Win64DeviceService(), FixedTime("2026-08-24T10:00:00+08:00"));
+        var service = new UnrealSavedService(new Win64DeviceService(), FixedTime("2026-08-24T10:00:00+08:00"));
 
-        var plan = service.CreatePlan(new SavedDownloadRequest(project, new StubDevice("192.168.1.100:5555", "Win64")));
+        var plan = service.CreatePlan(new UnrealSavedPullRequest(project, new StubDevice("192.168.1.100:5555", "Win64")));
 
         // Wi-Fi 设备 id 含 ':'，在 Windows 上不能出现在目录名里。
         var folderName = Path.GetFileName(plan.LocalDirectory);
@@ -126,12 +127,12 @@ public sealed class SavedDownloadServiceTests : IDisposable
         // Logs 之外的内容必须留在设备上不被取回，否则「只下载日志」就名不副实。
         await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Config", "GameUserSettings.ini"), "[/Script/Engine]");
 
-        var service = new SavedDownloadService(new Win64DeviceService());
+        var service = new UnrealSavedService(new Win64DeviceService());
 
         var result = await service.DownloadAsync(
-            new SavedDownloadRequest(project, new Win64Device(), SavedDownloadScope.Logs));
+            new UnrealSavedPullRequest(project, new Win64Device(), UnealSavedScope.Logs));
 
-        Assert.Equal(SavedDownloadScope.Logs, result.Plan.Scope);
+        Assert.Equal(UnealSavedScope.Logs, result.Plan.Scope);
         Assert.Equal(Path.Combine(deviceSaved, "Logs"), result.Plan.DeviceDirectory);
         Assert.EndsWith("-Logs", result.Plan.LocalDirectory, StringComparison.Ordinal);
 
@@ -150,10 +151,10 @@ public sealed class SavedDownloadServiceTests : IDisposable
 
         // 同一时刻分别取 Saved 与 Logs：目录名的范围后缀是两者不撞名的唯一依据。
         var timeProvider = FixedTime("2026-08-24T10:00:00+08:00");
-        var all = await new SavedDownloadService(new Win64DeviceService(), timeProvider)
-            .DownloadAsync(new SavedDownloadRequest(project, new Win64Device(), SavedDownloadScope.All));
-        var logs = await new SavedDownloadService(new Win64DeviceService(), timeProvider)
-            .DownloadAsync(new SavedDownloadRequest(project, new Win64Device(), SavedDownloadScope.Logs));
+        var all = await new UnrealSavedService(new Win64DeviceService(), timeProvider)
+            .DownloadAsync(new UnrealSavedPullRequest(project, new Win64Device(), UnealSavedScope.All));
+        var logs = await new UnrealSavedService(new Win64DeviceService(), timeProvider)
+            .DownloadAsync(new UnrealSavedPullRequest(project, new Win64Device(), UnealSavedScope.Logs));
 
         Assert.NotEqual(all.Plan.LocalDirectory, logs.Plan.LocalDirectory);
         Assert.True(File.Exists(Path.Combine(all.Plan.LocalDirectory, "Logs", "Game.log")));
@@ -174,11 +175,11 @@ public sealed class SavedDownloadServiceTests : IDisposable
             Path.Combine(_temporaryDirectory, "Android"),
             UkitProjectDescriptor.CreateDefault("Sample"),
             settings);
-        var service = new SavedDownloadService(new StubAndroidDeviceService(), FixedTime("2026-08-24T10:00:00+08:00"));
+        var service = new UnrealSavedService(new StubAndroidDeviceService(), FixedTime("2026-08-24T10:00:00+08:00"));
         var device = new StubDevice("R58M123ABC", "Android");
 
-        var savedPath = service.CreatePlan(new SavedDownloadRequest(project, device)).DeviceDirectory;
-        var logsPath = service.CreatePlan(new SavedDownloadRequest(project, device, SavedDownloadScope.Logs)).DeviceDirectory;
+        var savedPath = service.CreatePlan(new UnrealSavedPullRequest(project, device)).DeviceDirectory;
+        var logsPath = service.CreatePlan(new UnrealSavedPullRequest(project, device, UnealSavedScope.Logs)).DeviceDirectory;
 
         Assert.Equal($"{savedPath}/Logs", logsPath);
         Assert.DoesNotContain('\\', logsPath);
@@ -188,13 +189,13 @@ public sealed class SavedDownloadServiceTests : IDisposable
     public async Task DownloadAsync_UnavailableDevice_ThrowsWithoutWritingAnything()
     {
         var (project, _) = await CreateWin64ProjectAsync("Unavailable");
-        var service = new SavedDownloadService(new Win64DeviceService());
+        var service = new UnrealSavedService(new Win64DeviceService());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.DownloadAsync(new SavedDownloadRequest(
+            () => service.DownloadAsync(new UnrealSavedPullRequest(
                 project, new StubDevice("localhost", "Win64", IsAvailable: false))));
 
-        Assert.False(Directory.Exists(Path.Combine(project.SavedDir, UnrealModels.DownloadRootName)));
+        Assert.False(Directory.Exists(Path.Combine(project.SavedDir, UnrealSavedService.DownloadRootName)));
     }
 
     /// <summary>

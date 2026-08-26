@@ -15,7 +15,7 @@ public sealed class DesktopShellViewModelTests
     [Fact]
     public async Task DeviceAndLaunchParameterWorkflow_UsesSelectedDeviceAndShowsTarget()
     {
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var project = CreateProject();
         var confirmation = new RecordingConfirmationService(true);
         var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), confirmation, new FakeEditorSettingStore(), new FakeUserSettingStore())
@@ -51,7 +51,7 @@ public sealed class DesktopShellViewModelTests
     [Fact]
     public async Task ReadLaunchParameters_ShowsDeviceFileContent()
     {
-        var adb = new RecordingAdbService { ReadFileContent = "-RCWebControlEnable\n-RCWebInterfaceEnable" };
+        var adb = new RecordingRunner { ReadFileContent = "-RCWebControlEnable\n-RCWebInterfaceEnable" };
         var project = CreateProject();
         var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
@@ -72,7 +72,7 @@ public sealed class DesktopShellViewModelTests
     [Fact]
     public async Task ReadLaunchParameters_MissingFile_ShowsAbsenceMessage()
     {
-        var adb = new RecordingAdbService { ReadFileMissing = true };
+        var adb = new RecordingRunner { ReadFileMissing = true };
         var project = CreateProject();
         var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
@@ -91,7 +91,7 @@ public sealed class DesktopShellViewModelTests
     [Fact]
     public async Task OperationLogs_CarryTimestampAndCategory_AndClearCommandEmptiesThem()
     {
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var project = CreateProject();
         var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
@@ -124,7 +124,7 @@ public sealed class DesktopShellViewModelTests
     [Fact]
     public async Task SaveOperationLogs_WritesOneLinePerEntry()
     {
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var project = CreateProject();
         var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
@@ -209,7 +209,7 @@ public sealed class DesktopShellViewModelTests
         var project = CreateProject();
         return new ShellViewModel(
             new StaticProjectService(project),
-            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new StaticAdbServiceFactory(new RecordingRunner()),
             new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore());
     }
 
@@ -220,7 +220,7 @@ public sealed class DesktopShellViewModelTests
         var store = new FakeEditorSettingStore();
         var viewModel = new ShellViewModel(
             new StaticProjectService(project),
-            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new StaticAdbServiceFactory(new RecordingRunner()),
             new RecordingConfirmationService(true),
             store)
         {
@@ -243,7 +243,7 @@ public sealed class DesktopShellViewModelTests
             var confirmation = new RecordingConfirmationService(true);
             var viewModel = new ShellViewModel(
                 new StaticProjectService(project),
-                new StaticAdbServiceFactory(new RecordingAdbService()),
+                new StaticAdbServiceFactory(new RecordingRunner()),
                 confirmation,
                 new FakeEditorSettingStore(projectFilePath));
 
@@ -266,7 +266,7 @@ public sealed class DesktopShellViewModelTests
         var confirmation = new RecordingConfirmationService(true);
         var viewModel = new ShellViewModel(
             new StaticProjectService(CreateProject()),
-            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new StaticAdbServiceFactory(new RecordingRunner()),
             confirmation,
             new FakeEditorSettingStore(missingPath));
 
@@ -288,7 +288,7 @@ public sealed class DesktopShellViewModelTests
             var confirmation = new RecordingConfirmationService(true);
             var viewModel = new ShellViewModel(
                 new FailingProjectService("工程描述文件缺少 ProjectName。"),
-                new StaticAdbServiceFactory(new RecordingAdbService()),
+                new StaticAdbServiceFactory(new RecordingRunner()),
                 confirmation,
                 new FakeEditorSettingStore(projectFilePath));
 
@@ -310,7 +310,7 @@ public sealed class DesktopShellViewModelTests
         var confirmation = new RecordingConfirmationService(true);
         var viewModel = new ShellViewModel(
             new StaticProjectService(CreateProject()),
-            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new StaticAdbServiceFactory(new RecordingRunner()),
             confirmation,
             new FakeEditorSettingStore());
 
@@ -327,7 +327,7 @@ public sealed class DesktopShellViewModelTests
     [Fact]
     public async Task DeleteLaunchParameters_DoesNotCallAdbWhenUserDeclines()
     {
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var project = CreateProject();
         var confirmation = new RecordingConfirmationService(false);
         var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), confirmation, new FakeEditorSettingStore(), new FakeUserSettingStore())
@@ -348,7 +348,7 @@ public sealed class DesktopShellViewModelTests
     [Fact]
     public async Task ShowDeviceIpAddresses_LogsEveryInterfaceAndSummarizesWiFi()
     {
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
 
         await ((AsyncDelegateCommand)viewModel.ShowDeviceIpAddressesCommand).ExecuteAsync();
@@ -369,7 +369,7 @@ public sealed class DesktopShellViewModelTests
     [Fact]
     public async Task ShowDeviceIpAddresses_ReportsUnavailableInsteadOfClaimingAnAddress()
     {
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         adb.IpAddresses.Clear();
         var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
 
@@ -383,7 +383,7 @@ public sealed class DesktopShellViewModelTests
     [Fact]
     public async Task ShowDeviceIpAddressesCommand_RequiresAvailableAndroidDevice()
     {
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var project = CreateProject();
         var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
@@ -406,7 +406,7 @@ public sealed class DesktopShellViewModelTests
     [Fact]
     public async Task SelectedDeviceIpSummary_ResetsWhenDeviceChanges()
     {
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
         await ((AsyncDelegateCommand)viewModel.ShowDeviceIpAddressesCommand).ExecuteAsync();
         Assert.Contains("192.168.1.23", viewModel.SelectedDeviceIpSummary, StringComparison.Ordinal);
@@ -422,7 +422,7 @@ public sealed class DesktopShellViewModelTests
     {
         // 设备 id 与别名各占一列：id 是所有操作的依据，别名只用于辨认，
         // 因此配了别名也不能把 id 换掉。
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var project = CreateProject() with
         {
             Settings = CreateProject().Settings with
@@ -458,7 +458,7 @@ public sealed class DesktopShellViewModelTests
     public async Task Devices_WithoutConfiguredAliases_ListDevicesWithoutAlias()
     {
         // 未配置别名的工程设备列表照常可用：别名是附加信息，不是列出设备的前提。
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var project = CreateProject();
         var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
@@ -530,7 +530,7 @@ public sealed class DesktopShellViewModelTests
         var store = new FakeUserSettingStore();
         var viewModel = new ShellViewModel(
             new StaticProjectService(project),
-            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new StaticAdbServiceFactory(new RecordingRunner()),
             new RecordingConfirmationService(true),
             userSettingStore: store)
         {
@@ -551,7 +551,7 @@ public sealed class DesktopShellViewModelTests
         var store = new FakeUserSettingStore();
         var viewModel = new ShellViewModel(
             new StaticProjectService(CreateProject()),
-            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new StaticAdbServiceFactory(new RecordingRunner()),
             new RecordingConfirmationService(true),
             userSettingStore: store);
 
@@ -567,7 +567,7 @@ public sealed class DesktopShellViewModelTests
         var project = CreateProject();
         var viewModel = new ShellViewModel(
             new StaticProjectService(project),
-            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new StaticAdbServiceFactory(new RecordingRunner()),
             new RecordingConfirmationService(true),
             userSettingStore: new FakeUserSettingStore(PlatformScope.For(TargetPlatform.Win64)))
         {
@@ -586,7 +586,7 @@ public sealed class DesktopShellViewModelTests
         var project = CreateProject();
         var viewModel = new ShellViewModel(
             new StaticProjectService(project),
-            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new StaticAdbServiceFactory(new RecordingRunner()),
             new RecordingConfirmationService(true),
             userSettingStore: new FakeUserSettingStore())
         {
@@ -617,7 +617,7 @@ public sealed class DesktopShellViewModelTests
         var project = CreateProject();
         var viewModel = new ShellViewModel(
             new StaticProjectService(project),
-            new StaticAdbServiceFactory(new RecordingAdbService()),
+            new StaticAdbServiceFactory(new RecordingRunner()),
             new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
         {
             ProjectFilePath = project.ProjectFilePath
@@ -628,7 +628,7 @@ public sealed class DesktopShellViewModelTests
         return viewModel;
     }
 
-    private static async Task<ShellViewModel> CreateViewModelWithSelectedAndroidDeviceAsync(RecordingAdbService adb)
+    private static async Task<ShellViewModel> CreateViewModelWithSelectedAndroidDeviceAsync(RecordingRunner adb)
     {
         var project = CreateProject();
         var viewModel = new ShellViewModel(new StaticProjectService(project), new StaticAdbServiceFactory(adb), new RecordingConfirmationService(true), new FakeEditorSettingStore(), new FakeUserSettingStore())
@@ -647,7 +647,7 @@ public sealed class DesktopShellViewModelTests
     {
         // 每次操作都新建设备服务会丢掉 AdbDeviceService 里的「已 forward 过」记录，
         // 于是每条指令都要多起一个 adb forward 进程，并把它的输出混进指令结果。
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
 
         viewModel.ConsoleCommandText = "stat fps";
@@ -665,7 +665,7 @@ public sealed class DesktopShellViewModelTests
     {
         // adb forward 随设备断开一起消失，缓存里的标记不会自己失效；
         // 沿用它会让重连后的指令打到一个已经不存在的转发上。
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
 
         viewModel.ConsoleCommandText = "stat fps";
@@ -690,7 +690,7 @@ public sealed class DesktopShellViewModelTests
     public async Task RefreshDevices_KeepsForwardWhenDeviceStaysAvailable()
     {
         // 刷新本身不该让缓存失效：设备一直在线时重复 forward 又回到每次操作起一个进程。
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
 
         viewModel.ConsoleCommandText = "stat fps";
@@ -708,7 +708,7 @@ public sealed class DesktopShellViewModelTests
     public async Task SaveProjectSettings_InvalidatesCachedDeviceServices()
     {
         // 指令通道端口与 adb 路径都来自工程配置，留着旧实例会让保存后的配置不生效。
-        var adb = new RecordingAdbService();
+        var adb = new RecordingRunner();
         var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
 
         viewModel.ConsoleCommandText = "stat fps";
@@ -753,9 +753,9 @@ public sealed class DesktopShellViewModelTests
         public Task<ProjectValidationResult> ValidateProjectAsync(string projectFilePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(new ProjectValidationResult([]));
     }
 
-    private sealed class StaticAdbServiceFactory(IAdbService adb) : IDesktopAdbServiceFactory
+    private sealed class StaticAdbServiceFactory(RecordingRunner runner) : IDesktopAdbServiceFactory
     {
-        public IAdbService Create(ProjectSettings? settings, IProgress<ProcessOutput>? output) => new OutputForwardingAdbService(adb, output);
+        public AdbService Create(ProjectSettings? settings, IProgress<ProcessOutput>? output) => new(runner, "adb", output, AdbServerLatch.CreateStarted());
         public AdbPathResolution Resolve(ProjectSettings? settings) => new(null, []);
     }
 
@@ -813,33 +813,10 @@ public sealed class DesktopShellViewModelTests
         }
     }
 
-    private sealed class OutputForwardingAdbService(IAdbService inner, IProgress<ProcessOutput>? output) : IAdbService
+    private sealed class RecordingRunner : IProcessRunner
     {
         private static ProcessExecutionResult Success => new(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
-        private void Write(string text) => output?.Report(new ProcessOutput(DateTimeOffset.UtcNow, ProcessOutputStream.StandardOutput, text));
-        public Task<ProcessExecutionResult> GetVersionAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.GetVersionAsync(progress, cancellationToken);
-        public async Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { Write("adb devices -l"); return await inner.ListDevicesAsync(progress, cancellationToken); }
-        public Task<ProcessExecutionResult> StartServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.StartServerAsync(progress, cancellationToken);
-        public Task<ProcessExecutionResult> KillServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.KillServerAsync(progress, cancellationToken);
-        public Task<ProcessExecutionResult> ConnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.ConnectAsync(endpoint, progress, cancellationToken);
-        public Task<ProcessExecutionResult> DisconnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.DisconnectAsync(endpoint, progress, cancellationToken);
-        public Task<ProcessExecutionResult> TcpIpAsync(string serialNumber, int port, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.TcpIpAsync(serialNumber, port, progress, cancellationToken);
-        public async Task<ProcessExecutionResult> StartApplicationAsync(string serialNumber, string packageName, string activityName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { Write("am start"); return await inner.StartApplicationAsync(serialNumber, packageName, activityName, progress, cancellationToken); }
-        public async Task<ProcessExecutionResult> PushFileAsync(string serialNumber, string localPath, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { Write("adb push"); return await inner.PushFileAsync(serialNumber, localPath, remotePath, progress, cancellationToken); }
-        public Task<ProcessExecutionResult> PullDirectoryAsync(string serialNumber, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.PullDirectoryAsync(serialNumber, remotePath, localDirectory, progress, cancellationToken);
-        public async Task<ProcessExecutionResult> DeleteRemoteFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { Write("adb shell rm"); return await inner.DeleteRemoteFileAsync(serialNumber, remotePath, progress, cancellationToken); }
-        public async Task<ProcessExecutionResult> ReadFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { Write("adb shell cat"); return await inner.ReadFileAsync(serialNumber, remotePath, progress, cancellationToken); }
-        public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.RunDumpsysAsync(serialNumber, packageName, progress, cancellationToken);
-        public Task<ProcessExecutionResult> InstallApkAsync(string serialNumber, string localApkPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.InstallApkAsync(serialNumber, localApkPath, progress, cancellationToken);
-        public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.ForceStopApplicationAsync(serialNumber, packageName, progress, cancellationToken);
-        public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.ForwardTcpAsync(serialNumber, hostPort, devicePort, progress, cancellationToken);
-        public IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, CancellationToken cancellationToken = default) => inner.StreamLogcatAsync(serialNumber, filter, cancellationToken);
-        public Task<IReadOnlyList<DeviceIpAddress>> GetIpAddressesAsync(string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => inner.GetIpAddressesAsync(serialNumber, progress, cancellationToken);
-    }
 
-    private sealed class RecordingAdbService : IAdbService
-    {
-        private static ProcessExecutionResult Success => new(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
         public string? PushSerialNumber { get; private set; }
         public string? PushedContent { get; private set; }
         public string? DeleteSerialNumber { get; private set; }
@@ -847,57 +824,135 @@ public sealed class DesktopShellViewModelTests
         public (string SerialNumber, string PackageName)? ForceStopRequest { get; private set; }
         /// <summary>按调用先后记录 stop/start，验证「先关后启」的顺序。</summary>
         public List<string> OperationOrder { get; } = [];
-        public Task<ProcessExecutionResult> GetVersionAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         /// <summary>可变设备列表，供「设备断开后重连」场景改写。</summary>
         public List<AdbDevice> Devices { get; } =
         [
             new("R58M123ABC", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, "R58M123ABC device model:Pixel")
         ];
-
-        public Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<AdbDevice>>(Devices.ToArray());
-        public Task<ProcessExecutionResult> StartServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> KillServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> ConnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> DisconnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> TcpIpAsync(string serialNumber, int port, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> StartApplicationAsync(string serialNumber, string packageName, string activityName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { StartRequest = (serialNumber, packageName, activityName); OperationOrder.Add("start"); return Task.FromResult(Success); }
-        public async Task<ProcessExecutionResult> PushFileAsync(string serialNumber, string localPath, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { PushSerialNumber = serialNumber; PushedContent = await File.ReadAllTextAsync(localPath, cancellationToken); return Success; }
-        public Task<ProcessExecutionResult> PullDirectoryAsync(string serialNumber, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> DeleteRemoteFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { DeleteSerialNumber = serialNumber; return Task.FromResult(Success); }
         public string? ReadSerialNumber { get; private set; }
         public string? ReadRemotePath { get; private set; }
         public string ReadFileContent { get; set; } = "-llm";
         public bool ReadFileMissing { get; set; }
-        public Task<ProcessExecutionResult> ReadFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
-        {
-            ReadSerialNumber = serialNumber;
-            ReadRemotePath = remotePath;
-            return Task.FromResult(ReadFileMissing
-                ? new ProcessExecutionResult(1, string.Empty, "No such file or directory", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
-                : new ProcessExecutionResult(0, ReadFileContent, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
-        }
-        public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> InstallApkAsync(string serialNumber, string localApkPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { ForceStopRequest = (serialNumber, packageName); OperationOrder.Add("stop"); return Task.FromResult(new ProcessExecutionResult(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)); }
-        /// <summary>adb forward 次数。每条指令都 forward 会多起一个 adb 进程，因此要能数出来。</summary>
-        public int ForwardCallCount { get; private set; }
-        public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) { ForwardCallCount++; return Task.FromResult(Success); }
-        public async IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await System.Threading.Tasks.Task.CompletedTask; yield break; }
         /// <summary>置空表示设备未联网，与真实服务一致地抛异常而不是返回空列表。</summary>
         public List<DeviceIpAddress> IpAddresses { get; } =
         [
             new("wlan0", "192.168.1.23", 24, DeviceNetworkInterfaceKind.WiFi),
             new("rmnet_data0", "10.148.22.7", 30, DeviceNetworkInterfaceKind.Cellular)
         ];
-
         public string? IpQuerySerialNumber { get; private set; }
+        /// <summary>adb forward 次数。每条指令都 forward 会多起一个 adb 进程，因此要能数出来。</summary>
+        public int ForwardCallCount { get; private set; }
 
-        public Task<IReadOnlyList<DeviceIpAddress>> GetIpAddressesAsync(string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+        public async Task<ProcessExecutionResult> RunAsync(
+            ProcessExecutionRequest request,
+            IProgress<OperationProgress>? progress = null,
+            CancellationToken cancellationToken = default)
         {
-            IpQuerySerialNumber = serialNumber;
-            return IpAddresses.Count == 0
-                ? throw new AdbDeviceAddressUnavailableException(serialNumber, [$"adb -s {serialNumber} shell ip -f inet addr"])
-                : Task.FromResult<IReadOnlyList<DeviceIpAddress>>(IpAddresses);
+            var arguments = request.Arguments;
+
+            if (arguments.Count == 1 && arguments[0] == "version")
+            {
+                return Success;
+            }
+
+            if (arguments.Count >= 2 && arguments[0] == "devices" && arguments[1] == "-l")
+            {
+                return Result(BuildDevicesOutput(Devices));
+            }
+
+            if (arguments.Count < 3 || arguments[0] != "-s")
+            {
+                return Success;
+            }
+
+            var serialNumber = arguments[1];
+
+            if (arguments[2] == "forward")
+            {
+                ForwardCallCount++;
+                return Success;
+            }
+
+            if (arguments[2] == "push")
+            {
+                PushSerialNumber = serialNumber;
+                PushedContent = await File.ReadAllTextAsync(arguments[3], cancellationToken);
+                return Success;
+            }
+
+            if (arguments[2] == "shell")
+            {
+                return HandleShell(serialNumber, arguments);
+            }
+
+            return Success;
+        }
+
+        private ProcessExecutionResult HandleShell(string serialNumber, IReadOnlyList<string> arguments)
+        {
+            // arguments = [-s, serial, shell, <子命令>, ...]。
+            var subcommand = arguments[3];
+
+            if (subcommand == "am" && arguments.Count >= 7 && arguments[4] == "start")
+            {
+                var packageAndActivity = arguments[6].Split('/', 2);
+                StartRequest = (serialNumber, packageAndActivity[0], packageAndActivity[1]);
+                OperationOrder.Add("start");
+                return Success;
+            }
+
+            if (subcommand == "am" && arguments.Count >= 6 && arguments[4] == "force-stop")
+            {
+                ForceStopRequest = (serialNumber, arguments[5]);
+                OperationOrder.Add("stop");
+                return Success;
+            }
+
+            if (subcommand == "rm")
+            {
+                DeleteSerialNumber = serialNumber;
+                return Success;
+            }
+
+            if (subcommand == "cat")
+            {
+                ReadSerialNumber = serialNumber;
+                ReadRemotePath = arguments[5];
+                return ReadFileMissing
+                    ? new ProcessExecutionResult(1, string.Empty, "No such file or directory", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+                    : new ProcessExecutionResult(0, ReadFileContent, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+            }
+
+            if (subcommand == "ip")
+            {
+                IpQuerySerialNumber = serialNumber;
+                // ip -f inet addr 给出接口名与前缀；ip route 是退路，测试里返回空即可。
+                return arguments.Count >= 5 && arguments[4] == "-f"
+                    ? Result(BuildIpAddrOutput(IpAddresses))
+                    : Result(string.Empty);
+            }
+
+            return Success;
+        }
+
+        private static ProcessExecutionResult Result(string output) =>
+            new(0, output, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+
+        private static string BuildDevicesOutput(IReadOnlyList<AdbDevice> devices) =>
+            "List of devices attached\n" + string.Join('\n', devices.Select(device => device.RawLine));
+
+        private static string BuildIpAddrOutput(IReadOnlyList<DeviceIpAddress> addresses)
+        {
+            var lines = new List<string>();
+            var index = 25;
+            foreach (var address in addresses)
+            {
+                lines.Add($"{index}: {address.InterfaceName}: <UP> mtu 1500");
+                lines.Add($"    inet {address.Address}/{address.PrefixLength ?? 24} scope global {address.InterfaceName}");
+                index++;
+            }
+
+            return string.Join('\n', lines);
         }
     }
 }

@@ -23,7 +23,7 @@ public sealed class ProcessRunner : IProcessRunner
         var operationId = $"process-{Guid.NewGuid():N}";
         var startInfo = CreateStartInfo(request);
         var startedAt = DateTimeOffset.UtcNow;
-        Report(progress, operationId, "Starting", $"正在启动外部进程: {request.FileName}");
+        Report(progress, operationId, "Starting", $"正在启动外部进程: {FormatCommandLine(request)}");
         Log(LogLevel.Information, operationId, "Starting external process", request);
 
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
@@ -148,11 +148,27 @@ public sealed class ProcessRunner : IProcessRunner
     private static void Report(IProgress<OperationProgress>? progress, string operationId, string stage, string message) =>
         progress?.Report(new OperationProgress(operationId, stage, null, null, message));
 
+    /// <summary>
+    /// 拼接可读的命令行，仅用于日志呈现，不参与 shell 执行（真正执行走
+    /// <see cref="ProcessStartInfo.ArgumentList"/> 的参数化调用）。参数含空格时加引号，
+    /// 使展示串与实际执行的命令在语义上一致。
+    /// </summary>
+    private static string FormatCommandLine(ProcessExecutionRequest request) =>
+        request.Arguments.Count == 0
+            ? request.FileName
+            : $"{request.FileName} {string.Join(' ', request.Arguments.Select(QuoteForDisplay))}";
+
+    private static string QuoteForDisplay(string argument) =>
+        argument.Any(char.IsWhiteSpace) || argument.Length == 0
+            ? $"\"{argument}\""
+            : argument;
+
     private void Log(LogLevel level, string operationId, string message, ProcessExecutionRequest request, Exception? exception = null, ProcessExecutionResult? result = null)
     {
         var properties = new Dictionary<string, string>
         {
             ["fileName"] = request.FileName,
+            ["commandLine"] = FormatCommandLine(request),
             ["argumentCount"] = request.Arguments.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
         if (result is not null)

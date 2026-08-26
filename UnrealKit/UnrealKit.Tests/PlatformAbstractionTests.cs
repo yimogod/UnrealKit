@@ -125,67 +125,67 @@ public sealed class AdbDeviceServicePortForwardTests
     public async Task SendConsoleCommand_ForwardsPortOncePerDevice()
     {
         // 指令序列每步都 forward 会多起一个 adb 进程，并把 adb 输出混进序列报告。
-        var adb = new ForwardCountingAdbService();
-        var service = new AdbDeviceService(adb, commandTransport: new RecordingCommandTransport());
+        var runner = new ForwardCountingRunner();
+        var service = CreateService(runner, new RecordingCommandTransport());
         var device = DeviceReference.Create("ABC123", TargetPlatform.Android);
 
         await service.SendConsoleCommandAsync(device, "stat fps");
         await service.SendConsoleCommandAsync(device, "stat unit");
         await service.SendConsoleCommandAsync(device, "stat rhi");
 
-        Assert.Equal(1, adb.ForwardCallCount);
+        Assert.Equal(1, runner.ForwardCallCount);
     }
 
     [Fact]
     public async Task SendConsoleCommand_ForwardsOncePerDistinctDevice()
     {
-        var adb = new ForwardCountingAdbService();
-        var service = new AdbDeviceService(adb, commandTransport: new RecordingCommandTransport());
+        var runner = new ForwardCountingRunner();
+        var service = CreateService(runner, new RecordingCommandTransport());
 
         await service.SendConsoleCommandAsync(DeviceReference.Create("ABC123", TargetPlatform.Android), "stat fps");
         await service.SendConsoleCommandAsync(DeviceReference.Create("XYZ789", TargetPlatform.Android), "stat fps");
         await service.SendConsoleCommandAsync(DeviceReference.Create("ABC123", TargetPlatform.Android), "stat unit");
 
-        Assert.Equal(2, adb.ForwardCallCount);
+        Assert.Equal(2, runner.ForwardCallCount);
     }
 
     [Fact]
     public async Task SendConsoleCommand_FailedForward_IsRetriedOnNextCall()
     {
         // 失败的转发不记录，否则设备重连后永远不会重试。
-        var adb = new ForwardCountingAdbService { FailForward = true };
-        var service = new AdbDeviceService(adb, commandTransport: new RecordingCommandTransport());
+        var runner = new ForwardCountingRunner { FailForward = true };
+        var service = CreateService(runner, new RecordingCommandTransport());
         var device = DeviceReference.Create("ABC123", TargetPlatform.Android);
 
         await Assert.ThrowsAsync<DeviceCommandException>(() => service.SendConsoleCommandAsync(device, "stat fps"));
 
-        adb.FailForward = false;
+        runner.FailForward = false;
         await service.SendConsoleCommandAsync(device, "stat fps");
 
-        Assert.Equal(2, adb.ForwardCallCount);
+        Assert.Equal(2, runner.ForwardCallCount);
     }
 
     [Fact]
     public async Task SendConsoleCommand_ForwardsThePortTheTransportConnectsTo()
     {
         // 转发端口与实际连接端口必须同源，否则改了一处就会转发到无人监听的端口。
-        var adb = new ForwardCountingAdbService();
+        var runner = new ForwardCountingRunner();
         var transport = new RecordingCommandTransport(CommandTransportKind.Http, 41234);
-        var service = new AdbDeviceService(adb, commandTransport: transport);
+        var service = CreateService(runner, transport);
 
         await service.SendConsoleCommandAsync(DeviceReference.Create("ABC123", TargetPlatform.Android), "stat unit");
 
-        Assert.Equal(41234, adb.LastForwardHostPort);
-        Assert.Equal(41234, adb.LastForwardDevicePort);
+        Assert.Equal(41234, runner.LastForwardHostPort);
+        Assert.Equal(41234, runner.LastForwardDevicePort);
     }
 
     [Fact]
     public async Task SendConsoleCommand_TransportFailure_BecomesDeviceCommandExceptionWithCode()
     {
-        var adb = new ForwardCountingAdbService();
-        var service = new AdbDeviceService(
-            adb,
-            commandTransport: new FailingCommandTransport(CommandChannelDiagnosticCodes.ConnectFailed));
+        var runner = new ForwardCountingRunner();
+        var service = CreateService(
+            runner,
+            new FailingCommandTransport(CommandChannelDiagnosticCodes.ConnectFailed));
 
         var exception = await Assert.ThrowsAsync<DeviceCommandException>(
             () => service.SendConsoleCommandAsync(DeviceReference.Create("ABC123", TargetPlatform.Android), "stat unit"));
@@ -193,7 +193,10 @@ public sealed class AdbDeviceServicePortForwardTests
         Assert.Contains(CommandChannelDiagnosticCodes.ConnectFailed, exception.Message);
     }
 
-    private sealed class ForwardCountingAdbService : IAdbService
+    private static AdbDeviceService CreateService(ForwardCountingRunner runner, ICommandTransport transport) =>
+        new(new AdbService(runner, "adb", serverLatch: AdbServerLatch.CreateStarted()), commandTransport: transport);
+
+    private sealed class ForwardCountingRunner : IProcessRunner
     {
         private static ProcessExecutionResult Success => new(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
 
@@ -205,33 +208,27 @@ public sealed class AdbDeviceServicePortForwardTests
 
         public int? LastForwardDevicePort { get; private set; }
 
-        public Task<ProcessExecutionResult> ForwardTcpAsync(string serialNumber, int hostPort, int devicePort, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+        public Task<ProcessExecutionResult> RunAsync(
+            ProcessExecutionRequest request,
+            IProgress<OperationProgress>? progress = null,
+            CancellationToken cancellationToken = default)
         {
-            ForwardCallCount++;
-            LastForwardHostPort = hostPort;
-            LastForwardDevicePort = devicePort;
-            return Task.FromResult(FailForward
-                ? new ProcessExecutionResult(1, string.Empty, "device offline", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
-                : Success);
+            // ForwardTcpAsync 展开为 [-s <serial> forward tcp:<host> tcp:<device>]。
+            if (request.Arguments.Count >= 5 && request.Arguments[2] == "forward")
+            {
+                ForwardCallCount++;
+                LastForwardHostPort = ParseTcpPort(request.Arguments[3]);
+                LastForwardDevicePort = ParseTcpPort(request.Arguments[4]);
+                return Task.FromResult(FailForward
+                    ? new ProcessExecutionResult(1, string.Empty, "device offline", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+                    : Success);
+            }
+
+            return Task.FromResult(Success);
         }
 
-        public Task<ProcessExecutionResult> GetVersionAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<AdbDevice>>([]);
-        public Task<ProcessExecutionResult> StartServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> KillServerAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> ConnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> DisconnectAsync(string endpoint, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> TcpIpAsync(string serialNumber, int port, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> StartApplicationAsync(string serialNumber, string packageName, string activityName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> PushFileAsync(string serialNumber, string localPath, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> PullDirectoryAsync(string serialNumber, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> DeleteRemoteFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> ReadFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> InstallApkAsync(string serialNumber, string localApkPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public Task<ProcessExecutionResult> ForceStopApplicationAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
-        public async IAsyncEnumerable<string> StreamLogcatAsync(string serialNumber, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await Task.CompletedTask; yield break; }
-        public Task<IReadOnlyList<DeviceIpAddress>> GetIpAddressesAsync(string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<DeviceIpAddress>>([]);
+        private static int ParseTcpPort(string argument) =>
+            int.Parse(argument.AsSpan("tcp:".Length), System.Globalization.CultureInfo.InvariantCulture);
     }
 }
 

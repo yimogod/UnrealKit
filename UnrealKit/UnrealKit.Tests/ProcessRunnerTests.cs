@@ -1,4 +1,5 @@
-﻿using UnrealKit.Core.Processes;
+﻿using UnrealKit.Core.Operations;
+using UnrealKit.Core.Processes;
 using System.Collections.Concurrent;
 
 namespace UnrealKit.Tests;
@@ -86,6 +87,22 @@ public sealed class ProcessRunnerTests
 
         Assert.Contains("before-timeout", exception.Result.StandardOutput, StringComparison.Ordinal);
         Assert.Contains("before-timeout-error", exception.Result.StandardError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RunAsync_ReportsFullCommandLineInStartingProgress()
+    {
+        var runner = new ProcessRunner();
+        var messages = new List<OperationProgress>();
+        var request = new ProcessExecutionRequest(
+            CommandProcessorPath,
+            ["/d", "/c", "echo hello world"]);
+
+        var result = await runner.RunAsync(request, new InlineProgress<OperationProgress>(messages.Add));
+
+        Assert.True(result.Succeeded);
+        var starting = Assert.Single(messages, item => item.Stage == "Starting");
+        Assert.Contains("echo hello world", starting.Message, StringComparison.Ordinal);
     }
 
     private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
