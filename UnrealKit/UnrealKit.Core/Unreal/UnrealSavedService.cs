@@ -78,10 +78,20 @@ public sealed class UnrealSavedService
         var stagingTarget = Path.Combine(stagingRoot, leafName);
         try
         {
+            var pullLabel = request.Scope == UnealSavedScope.Common ? "常用子目录" : leafName;
             progress?.Report(new OperationProgress(
-                "savedDownload", "Pull", 1, 2, $"正在从 {plan.DeviceDirectory} 取回 {leafName} 目录。"));
-            await _deviceService.PullDirectoryAsync(
-                request.Device, plan.DeviceDirectory, stagingTarget, progress, cancellationToken);
+                "savedDownload", "Pull", 1, 2, $"正在从 {plan.DeviceDirectory} 取回 {pullLabel}。"));
+            if (request.Scope == UnealSavedScope.Common)
+            {
+                await _deviceService.PullSubdirectoriesAsync(
+                    request.Device, plan.DeviceDirectory, UnrealModels.CommonSubdirectories,
+                    stagingTarget, progress, cancellationToken);
+            }
+            else
+            {
+                await _deviceService.PullDirectoryAsync(
+                    request.Device, plan.DeviceDirectory, stagingTarget, progress, cancellationToken);
+            }
 
             // 拉取报告成功但本地什么也没有，说明设备端路径不存在或为空。
             // 静默产出一个空目录会让「设备上没有该目录」看起来像「取回成功但没数据」。

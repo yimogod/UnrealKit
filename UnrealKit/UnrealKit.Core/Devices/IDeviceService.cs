@@ -53,6 +53,19 @@ public interface IDeviceService : IDeviceProvider
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 把 <paramref name="remoteDirectory"/> 下多个可选子目录拉到 <paramref name="localDirectory"/> 的同名子目录。
+    /// 设备端不存在的子目录是正常状态，跳过即可；只有真实错误（权限、设备断开）才抛异常。
+    /// 一个子目录都拉不到时不得创建 <paramref name="localDirectory"/>，交由上层「空结果即抛」兜底。
+    /// </summary>
+    Task<ProcessExecutionResult> PullSubdirectoriesAsync(
+        IDevice device,
+        string remoteDirectory,
+        IReadOnlyList<string> subdirectoryNames,
+        string localDirectory,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 向设备上运行中的 UE 进程发送控制台指令。
     /// </summary>
     Task<ProcessExecutionResult> SendConsoleCommandAsync(

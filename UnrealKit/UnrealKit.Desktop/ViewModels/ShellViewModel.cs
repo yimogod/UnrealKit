@@ -1252,7 +1252,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     /// 只是一次「拿下来看看」，落地在 Saved/DeviceSaved 这类可再生的派生数据下。
     /// 每次取回都进新的带时间戳目录，不覆盖上一次的结果。
     /// </summary>
-    private Task DownloadDeviceSavedAsync() => DownloadDeviceSavedAsync(UnealSavedScope.All, "Saved");
+    private Task DownloadDeviceSavedAsync() => DownloadDeviceSavedAsync(UnealSavedScope.Common, "Saved 常用子目录");
 
     /// <summary>
     /// 只把所选设备上的 <c>Saved/Logs</c> 取回本地并打开该目录。日志通常是排查问题时唯一要看的部分，

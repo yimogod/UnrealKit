@@ -22,16 +22,16 @@
             <StackPanel Grid.Row="1" Margin="0,16,0,0">
                 <StackPanel Orientation="Horizontal">
                     <Button Content="采集并归档" Command="{Binding RunCaptureCommand}" Padding="14,7" />
-                    <!-- 与「采集并归档」并列但语义不同：这个按钮只把设备 Saved 取到本地供翻看，
-                         不写 Content 归档、不生成清单，因此提示文字必须说清落地位置。 -->
+                    <!-- 与「采集并归档」并列但语义不同：这个按钮只把设备 Saved 的常用子目录取到本地供翻看，
+                         不写 Content 归档、不生成清单，因此提示文字必须说清落地位置与取回范围。 -->
                     <Button Content="下载Saved" Command="{Binding DownloadDeviceSavedCommand}" Padding="14,7" Margin="12,0,0,0"
-                            ToolTip="把所选设备上的 UE Saved 整目录取回本地并打开该目录" />
+                            ToolTip="只把所选设备上 UE Saved 的 Logs/Screenshots/Profiling/GPUDumps 四个子目录取回本地并打开该目录" />
                     <!-- 单独给 Logs 一个入口：排查问题时通常只看日志，
                          而完整 Saved 可能很大（含 Profiling、截图）。 -->
                     <Button Content="下载Log" Command="{Binding DownloadDeviceLogsCommand}" Padding="14,7" Margin="12,0,0,0"
                             ToolTip="只把所选设备上的 UE Saved/Logs 目录取回本地并打开该目录" />
                 </StackPanel>
-                <TextBlock Text="[下载 Saved/Log] 会下载设备Saved相关内容, 到工程 Saved/Device/&lt;平台&gt;/&lt;时间戳-设备-范围&gt;/ 下"
+                <TextBlock Text="[下载 Saved] 只取回 Logs/Screenshots/Profiling/GPUDumps 四个常用子目录；[下载 Log] 只取回 Saved/Logs。两者都下载到工程 Saved/Device/&lt;平台&gt;/&lt;范围-时间戳-设备&gt;/ 下"
                            Style="{StaticResource HintTextStyle}" Margin="0,10,0,0" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding DeviceSavedDownloadSummary}" Style="{StaticResource HintTextStyle}" Margin="0,6,0,0" TextWrapping="Wrap" FontFamily="Consolas" />
             </StackPanel>

@@ -151,6 +151,8 @@ public sealed class CaptureServiceTests : IDisposable
             return Task.FromResult(Result());
         }
 
+        public Task<ProcessExecutionResult> PullSubdirectoriesAsync(IDevice device, string remoteDirectory, IReadOnlyList<string> subdirectoryNames, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
+
         private static ProcessExecutionResult Result(string output = "") => new(0, output, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
 
         public Task<IReadOnlyList<IDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<IDevice>>([]);

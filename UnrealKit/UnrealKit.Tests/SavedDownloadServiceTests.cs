@@ -114,7 +114,7 @@ public sealed class UnrealSavedServiceTests : IDisposable
 
         // Wi-Fi 设备 id 含 ':'，在 Windows 上不能出现在目录名里。
         var folderName = Path.GetFileName(plan.LocalDirectory);
-        Assert.Equal("20260824-100000-192.168.1.100-5555-Saved", folderName);
+        Assert.Equal("Saved-20260824-100000-192.168.1.100-5555", folderName);
         Assert.True(folderName.IndexOfAny(Path.GetInvalidFileNameChars()) < 0);
     }
 
@@ -134,7 +134,7 @@ public sealed class UnrealSavedServiceTests : IDisposable
 
         Assert.Equal(UnealSavedScope.Logs, result.Plan.Scope);
         Assert.Equal(Path.Combine(deviceSaved, "Logs"), result.Plan.DeviceDirectory);
-        Assert.EndsWith("-Logs", result.Plan.LocalDirectory, StringComparison.Ordinal);
+        Assert.StartsWith("Logs-", Path.GetFileName(result.Plan.LocalDirectory), StringComparison.Ordinal);
 
         // 落地目录直接就是 Logs 的内容，不多包一层 Logs 子目录。
         Assert.Equal("log line", await File.ReadAllTextAsync(Path.Combine(result.Plan.LocalDirectory, "Game.log")));
@@ -149,7 +149,7 @@ public sealed class UnrealSavedServiceTests : IDisposable
         var (project, deviceSaved) = await CreateWin64ProjectAsync("BothScopes");
         await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Logs", "Game.log"), "log line");
 
-        // 同一时刻分别取 Saved 与 Logs：目录名的范围后缀是两者不撞名的唯一依据。
+        // 同一时刻分别取 Saved 与 Logs：目录名的范围前缀是两者不撞名的唯一依据。
         var timeProvider = FixedTime("2026-08-24T10:00:00+08:00");
         var all = await new UnrealSavedService(new Win64DeviceService(), timeProvider)
             .DownloadAsync(new UnrealSavedPullRequest(project, new Win64Device(), UnealSavedScope.All));
@@ -183,6 +183,73 @@ public sealed class UnrealSavedServiceTests : IDisposable
 
         Assert.Equal($"{savedPath}/Logs", logsPath);
         Assert.DoesNotContain('\\', logsPath);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_CommonScope_CopiesOnlyTheCommonSubdirectories()
+    {
+        var (project, deviceSaved) = await CreateWin64ProjectAsync("Common");
+        await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Logs", "Game.log"), "log line");
+        Directory.CreateDirectory(Path.Combine(deviceSaved, "Screenshots"));
+        await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Screenshots", "Shot.png"), "png");
+        Directory.CreateDirectory(Path.Combine(deviceSaved, "Profiling"));
+        await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Profiling", "profile.csv"), "csv");
+        Directory.CreateDirectory(Path.Combine(deviceSaved, "GPUDumps"));
+        await File.WriteAllTextAsync(Path.Combine(deviceSaved, "GPUDumps", "dump.bin"), "bin");
+        // 常用子目录之外的内容（Config）必须留在设备上不被取回。
+        await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Config", "GameUserSettings.ini"), "[/Script/Engine]");
+
+        var service = new UnrealSavedService(new Win64DeviceService());
+
+        var result = await service.DownloadAsync(
+            new UnrealSavedPullRequest(project, new Win64Device(), UnealSavedScope.Common));
+
+        Assert.Equal(UnealSavedScope.Common, result.Plan.Scope);
+        Assert.StartsWith("Common-", Path.GetFileName(result.Plan.LocalDirectory), StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(result.Plan.LocalDirectory, "Logs", "Game.log")));
+        Assert.True(File.Exists(Path.Combine(result.Plan.LocalDirectory, "Screenshots", "Shot.png")));
+        Assert.True(File.Exists(Path.Combine(result.Plan.LocalDirectory, "Profiling", "profile.csv")));
+        Assert.True(File.Exists(Path.Combine(result.Plan.LocalDirectory, "GPUDumps", "dump.bin")));
+        Assert.Equal(4, result.FileCount);
+        Assert.False(Directory.Exists(Path.Combine(result.Plan.LocalDirectory, "Config")));
+    }
+
+    [Fact]
+    public async Task DownloadAsync_CommonScope_SkipsMissingSubdirectories()
+    {
+        var (project, deviceSaved) = await CreateWin64ProjectAsync("CommonPartial");
+        // 只生成其中两个子目录：GPUDumps、Screenshots 尚不存在是常态，不能因此失败。
+        await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Logs", "Game.log"), "log line");
+        Directory.CreateDirectory(Path.Combine(deviceSaved, "Profiling"));
+        await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Profiling", "profile.csv"), "csv");
+
+        var service = new UnrealSavedService(new Win64DeviceService());
+
+        var result = await service.DownloadAsync(
+            new UnrealSavedPullRequest(project, new Win64Device(), UnealSavedScope.Common));
+
+        Assert.True(File.Exists(Path.Combine(result.Plan.LocalDirectory, "Logs", "Game.log")));
+        Assert.True(File.Exists(Path.Combine(result.Plan.LocalDirectory, "Profiling", "profile.csv")));
+        Assert.False(Directory.Exists(Path.Combine(result.Plan.LocalDirectory, "Screenshots")));
+        Assert.False(Directory.Exists(Path.Combine(result.Plan.LocalDirectory, "GPUDumps")));
+        Assert.Equal(2, result.FileCount);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_CommonScope_AllSubdirectoriesMissing_ThrowsInsteadOfEmptySuccess()
+    {
+        var (project, deviceSaved) = await CreateWin64ProjectAsync("CommonNone");
+        // 设备 Saved 下只有 Config，没有任何常用子目录：应复用「没有取回任何内容」契约。
+        Directory.Delete(Path.Combine(deviceSaved, "Logs"));
+        await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Config", "GameUserSettings.ini"), "[/Script/Engine]");
+
+        var service = new UnrealSavedService(new Win64DeviceService());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.DownloadAsync(
+                new UnrealSavedPullRequest(project, new Win64Device(), UnealSavedScope.Common)));
+
+        Assert.Contains("没有取回任何内容", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -277,6 +344,7 @@ public sealed class UnrealSavedServiceTests : IDisposable
         public Task<IReadOnlyList<IDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<IDevice>>([new Win64Device()]);
         public Task<ProcessExecutionResult> CaptureMemoryAsync(IDevice device, string target, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public virtual Task<ProcessExecutionResult> PullDirectoryAsync(IDevice device, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public virtual Task<ProcessExecutionResult> PullSubdirectoriesAsync(IDevice device, string remoteDirectory, IReadOnlyList<string> subdirectoryNames, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> SendConsoleCommandAsync(IDevice device, string command, string? target = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public async IAsyncEnumerable<string> StreamLogAsync(IDevice device, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await Task.CompletedTask; yield break; }
         public Task<ProcessExecutionResult> StartApplicationAsync(IDevice device, string target, string? activity = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);

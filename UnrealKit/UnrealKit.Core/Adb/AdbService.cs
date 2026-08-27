@@ -134,6 +134,18 @@ public sealed class AdbService
     }
 
     /// <summary>
+    /// 从设备拉取目录到本地，但远端路径不存在等非零退出码不抛异常、原样返回结果。
+    /// 供「拉取一组可选子目录、缺失可接受」的场景使用；调用方必须自己检查 <see cref="ProcessExecutionResult.Succeeded"/>。
+    /// </summary>
+    public Task<ProcessExecutionResult> TryPullDirectoryAsync(string serialNumber, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ValidateSerialNumber(serialNumber);
+        ValidateRemotePath(remotePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(localDirectory);
+        return RunAllowingFailureAsync(["-s", serialNumber, "pull", remotePath, Path.GetFullPath(localDirectory)], progress, cancellationToken);
+    }
+
+    /// <summary>
     /// 从设备删除指定的文件
     /// </summary>
     public Task<ProcessExecutionResult> DeleteRemoteFileAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)

@@ -14,7 +14,13 @@ public enum UnealSavedScope
     All,
 
     /// <summary>只取 <c>Saved/Logs</c>。</summary>
-    Logs
+    Logs,
+
+    /// <summary>
+    /// 只取一组常用子目录（<see cref="UnrealModels.CommonSubdirectories"/>）：
+    /// 比「整个 Saved」小得多，又覆盖了排查问题通常要看的日志、截图、Profiling 与 GPU dump。
+    /// </summary>
+    Common
 }
 
 
@@ -46,21 +52,32 @@ public sealed record UnrealSavedPullResult(
 
 public class UnrealModels
 {
+    /// <summary>
+    /// 「常用子目录」范围要拉取的 Saved 子目录名集合，相对 <c>Saved/</c>。
+    /// 内置固定预设：不随工程配置变化，与 <see cref="LaunchParameterPresetDefaults"/> 同理。
+    /// </summary>
+    public static readonly IReadOnlyList<string> CommonSubdirectories =
+        ["Logs", "Screenshots", "Profiling", "GPUDumps"];
+
     public static string GetScopeName(UnealSavedScope scope) => scope switch
     {
         UnealSavedScope.All => PlatformProfile.SavedDirectoryName,
         UnealSavedScope.Logs => "Logs",
+        UnealSavedScope.Common => "Common",
         _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, "未支持的下载范围。")
     };
 
     /// <summary>
     /// 该范围对应的设备端源目录。用 <see cref="PlatformTarget.CombineDevicePath"/> 拼接子目录，
     /// 不用 <see cref="Path.Combine"/>——后者在 Windows 主机上会给 Android 路径写入反斜杠。
+    /// <see cref="UnealSavedScope.Common"/> 返回 <c>Saved/</c> 本身（子目录集合的父目录），
+    /// 子目录名见 <see cref="CommonSubdirectories"/>。
     /// </summary>
     public static string ResolveDeviceDirectory(PlatformTarget target, UnealSavedScope scope) => scope switch
     {
         UnealSavedScope.All => target.SavedRootPath,
         UnealSavedScope.Logs => target.CombineDevicePath(target.SavedRootPath, "Logs"),
+        UnealSavedScope.Common => target.SavedRootPath,
         _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, "未支持的下载范围。")
     };
 }

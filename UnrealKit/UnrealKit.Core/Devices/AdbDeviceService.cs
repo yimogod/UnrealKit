@@ -73,6 +73,69 @@ public sealed class AdbDeviceService : IDeviceService
         return RunRequiredAsync(_adb.PullDirectoryAsync(device.Id, remotePath, localDirectory, progress, cancellationToken));
     }
 
+    /// <summary>
+    /// 拉取多个可选子目录。远端子目录不存在不是错误（GPUDumps/Screenshots 等可能尚未生成），
+    /// 由 adb 报错文本识别「不存在」后跳过；权限、设备断开等真实错误仍抛 <see cref="DeviceCommandException"/>。
+    /// </summary>
+    public async Task<ProcessExecutionResult> PullSubdirectoriesAsync(
+        IDevice device,
+        string remoteDirectory,
+        IReadOnlyList<string> subdirectoryNames,
+        string localDirectory,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(remoteDirectory);
+        ArgumentNullException.ThrowIfNull(subdirectoryNames);
+        ArgumentException.ThrowIfNullOrWhiteSpace(localDirectory);
+
+        var remoteRoot = remoteDirectory.TrimEnd('/');
+        var pulled = 0;
+
+        foreach (var name in subdirectoryNames)
+        {
+            var remotePath = $"{remoteRoot}/{name}";
+            var localTarget = Path.Combine(localDirectory, name);
+
+            ProcessExecutionResult result;
+            try
+            {
+                result = await _adb.TryPullDirectoryAsync(device.Id, remotePath, localTarget, progress, cancellationToken);
+            }
+            catch (AdbCommandException adbEx)
+            {
+                throw new DeviceCommandException(adbEx.Message, adbEx.Result, adbEx);
+            }
+            catch (AdbPathResolutionException pathEx)
+            {
+                throw new DeviceCommandException(pathEx.Message,
+                    new ProcessExecutionResult(1, string.Empty, pathEx.Message, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+                    pathEx);
+            }
+
+            if (result.Succeeded)
+            {
+                pulled++;
+                continue;
+            }
+
+            // 远端子目录不存在是可接受的正常状态；其它失败（权限、设备断开）必须具体报错。
+            if (result.StandardError.Contains("does not exist", StringComparison.OrdinalIgnoreCase)
+                || result.StandardError.Contains("no such file", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            throw new DeviceCommandException(
+                $"Device operation failed with exit code {result.ExitCode}: {result.StandardError}", result);
+        }
+
+        return new ProcessExecutionResult(
+            0, $"Pulled {pulled} of {subdirectoryNames.Count} subdirectories from {remoteRoot}.", string.Empty,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+    }
+
     public async Task<ProcessExecutionResult> SendConsoleCommandAsync(
         IDevice device,
         string command,

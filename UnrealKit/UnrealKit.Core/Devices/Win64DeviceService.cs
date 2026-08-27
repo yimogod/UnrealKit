@@ -200,6 +200,59 @@ public sealed class Win64DeviceService : IDeviceService
     }
 
     /// <summary>
+    /// 拉取多个可选子目录。与单目录拉取不同，源子目录不存在不是错误——「还没生成 GPUDumps」是常态，
+    /// 因此按 <see cref="Directory.Exists"/> 判断后跳过，而不是让整次取回失败。
+    /// </summary>
+    public Task<ProcessExecutionResult> PullSubdirectoriesAsync(
+        IDevice device,
+        string remoteDirectory,
+        IReadOnlyList<string> subdirectoryNames,
+        string localDirectory,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(remoteDirectory);
+        ArgumentNullException.ThrowIfNull(subdirectoryNames);
+        ArgumentException.ThrowIfNullOrWhiteSpace(localDirectory);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            var sourceRoot = Path.GetFullPath(remoteDirectory);
+            var destRoot = Path.GetFullPath(localDirectory);
+            var copied = 0;
+
+            foreach (var name in subdirectoryNames)
+            {
+                var source = Path.Combine(sourceRoot, name);
+                if (!Directory.Exists(source))
+                {
+                    continue;
+                }
+
+                var dest = Path.Combine(destRoot, name);
+                CopyDirectoryRecursive(source, dest);
+                copied++;
+            }
+
+            return Task.FromResult(new ProcessExecutionResult(
+                0, $"Copied {copied} of {subdirectoryNames.Count} subdirectories from {sourceRoot}.", string.Empty,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        }
+        catch (DeviceCommandException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new DeviceCommandException($"Failed to pull subdirectories under '{remoteDirectory}': {ex.Message}",
+                new ProcessExecutionResult(1, string.Empty, ex.Message,
+                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), ex);
+        }
+    }
+
+    /// <summary>
     /// Win64 上发送 UE 控制台指令走本机的 Web Remote Control HTTP 通道。
     /// 「设备」就是本机，因此不需要端口转发。
     /// </summary>
