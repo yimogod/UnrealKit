@@ -232,6 +232,87 @@ public sealed class AdbDeviceServicePortForwardTests
     }
 }
 
+public sealed class AdbDeviceServicePullSubdirectoriesTests
+{
+    private sealed class PullScriptedRunner(params ProcessExecutionResult[] results) : IProcessRunner
+    {
+        private int _callCount;
+
+        public List<ProcessExecutionRequest> Requests { get; } = [];
+
+        public Task<ProcessExecutionResult> RunAsync(
+            ProcessExecutionRequest request,
+            IProgress<OperationProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return Task.FromResult(results[Math.Min(_callCount++, results.Length - 1)]);
+        }
+    }
+
+    private static ProcessExecutionResult Success() =>
+        new(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+
+    [Fact]
+    public async Task PullSubdirectories_CreatesLocalContainerSoAdbPullSucceeds()
+    {
+        // adb pull 要求本地父目录已存在；缺失时报「cannot create file/directory ... No such file or directory」，
+        // 且该文本会被缺失跳过判断误判为「远端不存在」。容器必须先建好。
+        var runner = new PullScriptedRunner(Success(), Success());
+        var service = new AdbDeviceService(new AdbService(runner, "adb", serverLatch: AdbServerLatch.CreateStarted()));
+        var local = Path.Combine(Path.GetTempPath(), "UnrealKit.Tests", Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var result = await service.PullSubdirectoriesAsync(
+                DeviceReference.Create("ABC123", TargetPlatform.Android),
+                "/sdcard/Android/data/pkg/files/UnrealGame/Game/Game/Saved",
+                ["Logs", "Profiling"],
+                local);
+
+            Assert.True(result.Succeeded);
+            // 两个子目录都成功拉取，容器保留供最终移动使用。
+            Assert.True(Directory.Exists(local));
+            // 每条 pull 的目标路径都在刚建好的容器目录内。
+            Assert.Equal(2, runner.Requests.Count);
+            Assert.All(runner.Requests, request => Assert.StartsWith(local + Path.DirectorySeparatorChar, (string)request.Arguments[^1]));
+        }
+        finally
+        {
+            if (Directory.Exists(local)) Directory.Delete(local, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task PullSubdirectories_AllMissing_RemovesContainerAndReportsSkips()
+    {
+        // 全部子目录都不存在时，容器必须撤掉，让调用方仍能用「stagingTarget 不存在」判定「没取回任何内容」。
+        var missing = new ProcessExecutionResult(
+            1, string.Empty, "adb: error: failed to stat remote object '.../Screenshots': No such file or directory",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        var runner = new PullScriptedRunner(missing, missing);
+        var service = new AdbDeviceService(new AdbService(runner, "adb", serverLatch: AdbServerLatch.CreateStarted()));
+        var local = Path.Combine(Path.GetTempPath(), "UnrealKit.Tests", Guid.NewGuid().ToString("N"));
+        var messages = new List<OperationProgress>();
+
+        var result = await service.PullSubdirectoriesAsync(
+            DeviceReference.Create("ABC123", TargetPlatform.Android),
+            "/sdcard/Android/data/pkg/files/UnrealGame/Game/Game/Saved",
+            ["Screenshots", "GPUDumps"],
+            local,
+            new InlineProgress<OperationProgress>(messages.Add));
+
+        Assert.True(result.Succeeded);
+        Assert.False(Directory.Exists(local));
+        Assert.Equal(2, messages.Count(message => message.Stage == "Skip"));
+    }
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
+    }
+}
+
 public sealed class DeviceReferenceTests
 {
     [Fact]

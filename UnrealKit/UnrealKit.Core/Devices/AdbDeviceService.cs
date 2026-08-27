@@ -93,6 +93,12 @@ public sealed class AdbDeviceService : IDeviceService
         var remoteRoot = remoteDirectory.TrimEnd('/');
         var pulled = 0;
 
+        // adb pull 要求本地目标目录的父目录已存在，否则报
+        // 「cannot create file/directory ... No such file or directory」，而这串文本又会被下面的
+        // 缺失跳过判断误当成「远端不存在」，导致连存在的子目录都被静默跳过。
+        // 因此先建好容器目录，让每个子目录能落到 localDirectory/<name> 下。
+        Directory.CreateDirectory(localDirectory);
+
         foreach (var name in subdirectoryNames)
         {
             var remotePath = $"{remoteRoot}/{name}";
@@ -131,6 +137,13 @@ public sealed class AdbDeviceService : IDeviceService
 
             throw new DeviceCommandException(
                 $"Device operation failed with exit code {result.ExitCode}: {result.StandardError}", result);
+        }
+
+        // 一个子目录都没取回时撤掉刚建的容器，保持「stagingTarget 不存在」=「没取回任何内容」的判定。
+        // 容器只在本方法里为空目录，撤掉它是安全的。
+        if (pulled == 0 && Directory.Exists(localDirectory))
+        {
+            Directory.Delete(localDirectory, recursive: true);
         }
 
         return new ProcessExecutionResult(
