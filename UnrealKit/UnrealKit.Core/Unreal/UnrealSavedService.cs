@@ -97,8 +97,13 @@ public sealed class UnrealSavedService
             // 静默产出一个空目录会让「设备上没有该目录」看起来像「取回成功但没数据」。
             if (!Directory.Exists(stagingTarget))
             {
+                // Common 是「常用子目录」的范围名而非真实目录，直接写进错误会让人误以为
+                // 设备上有个叫 Common 的目录；这里换成可读描述并列出实际要取的子目录。
+                var scopeDescription = request.Scope == UnealSavedScope.Common
+                    ? $"常用子目录（{string.Join("/", UnrealModels.CommonSubdirectories)}）"
+                    : $"{leafName} 目录";
                 throw new InvalidOperationException(
-                    $"设备上的 {leafName} 目录没有取回任何内容：{plan.DeviceDirectory}。" +
+                    $"设备上的 {scopeDescription} 没有取回任何内容：{plan.DeviceDirectory}。" +
                     "请确认游戏已在该设备上运行过，且平台配置中的游戏根目录正确。");
             }
 

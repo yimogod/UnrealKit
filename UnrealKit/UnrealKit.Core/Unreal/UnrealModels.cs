@@ -13,14 +13,14 @@ public enum UnealSavedScope
     /// <summary>整个 Saved 目录。</summary>
     All,
 
-    /// <summary>只取 <c>Saved/Logs</c>。</summary>
-    Logs,
-
     /// <summary>
     /// 只取一组常用子目录（<see cref="UnrealModels.CommonSubdirectories"/>）：
     /// 比「整个 Saved」小得多，又覆盖了排查问题通常要看的日志、截图、Profiling 与 GPU dump。
     /// </summary>
-    Common
+    Common,
+
+    /// <summary>只取 <c>Saved/Logs</c>。</summary>
+    Logs,
 }
 
 

@@ -228,6 +228,8 @@ public sealed class Win64DeviceService : IDeviceService
                 var source = Path.Combine(sourceRoot, name);
                 if (!Directory.Exists(source))
                 {
+                    progress?.Report(new OperationProgress(
+                        "pull", "Skip", null, null, $"本机不存在子目录 {name}，跳过。"));
                     continue;
                 }
 

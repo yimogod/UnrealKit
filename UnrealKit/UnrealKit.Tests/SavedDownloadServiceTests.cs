@@ -224,15 +224,21 @@ public sealed class UnrealSavedServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(deviceSaved, "Profiling", "profile.csv"), "csv");
 
         var service = new UnrealSavedService(new Win64DeviceService());
+        var messages = new List<OperationProgress>();
+        var progress = new InlineProgress<OperationProgress>(messages.Add);
 
         var result = await service.DownloadAsync(
-            new UnrealSavedPullRequest(project, new Win64Device(), UnealSavedScope.Common));
+            new UnrealSavedPullRequest(project, new Win64Device(), UnealSavedScope.Common),
+            progress);
 
         Assert.True(File.Exists(Path.Combine(result.Plan.LocalDirectory, "Logs", "Game.log")));
         Assert.True(File.Exists(Path.Combine(result.Plan.LocalDirectory, "Profiling", "profile.csv")));
         Assert.False(Directory.Exists(Path.Combine(result.Plan.LocalDirectory, "Screenshots")));
         Assert.False(Directory.Exists(Path.Combine(result.Plan.LocalDirectory, "GPUDumps")));
         Assert.Equal(2, result.FileCount);
+        // 缺失子目录要写一条跳过日志，而不是当作错误抛出来。
+        Assert.Contains(messages, m => m.Stage == "Skip" && m.Message.Contains("Screenshots", StringComparison.Ordinal));
+        Assert.Contains(messages, m => m.Stage == "Skip" && m.Message.Contains("GPUDumps", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -250,6 +256,9 @@ public sealed class UnrealSavedServiceTests : IDisposable
                 new UnrealSavedPullRequest(project, new Win64Device(), UnealSavedScope.Common)));
 
         Assert.Contains("没有取回任何内容", exception.Message, StringComparison.Ordinal);
+        // Common 是范围名而非真实目录，错误信息不得把它当成目录名报给用户。
+        Assert.DoesNotContain("Common 目录", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("常用子目录", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -297,6 +306,11 @@ public sealed class UnrealSavedServiceTests : IDisposable
 
     private static TimeProvider FixedTime(string timestamp) =>
         new FixedTimeProvider(DateTimeOffset.Parse(timestamp, System.Globalization.CultureInfo.InvariantCulture));
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
+    }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {

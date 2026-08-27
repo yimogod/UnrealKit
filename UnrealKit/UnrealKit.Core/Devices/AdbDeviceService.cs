@@ -124,6 +124,8 @@ public sealed class AdbDeviceService : IDeviceService
             if (result.StandardError.Contains("does not exist", StringComparison.OrdinalIgnoreCase)
                 || result.StandardError.Contains("no such file", StringComparison.OrdinalIgnoreCase))
             {
+                progress?.Report(new OperationProgress(
+                    "pull", "Skip", null, null, $"设备上不存在子目录 {name}，跳过。"));
                 continue;
             }
 
