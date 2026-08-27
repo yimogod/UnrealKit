@@ -1,0 +1,39 @@
+<UserControl x:Class="UnrealKit.Desktop.Views.ConsoleSequenceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="指令序列" Style="{StaticResource SectionTitleTextStyle}" />
+        <Grid Grid.Row="1" Margin="0,8,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="从工程预设中选择序列或直接输入内联指令（格式: cmd1; wait 2000; cmd2）。" Style="{StaticResource HintTextStyle}" />
+            <Grid Grid.Row="1" Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="工程预设序列" Style="{StaticResource FieldLabelTextStyle}" />
+                    <ComboBox ItemsSource="{Binding ConsoleSequencePresets}" SelectedValue="{Binding ConsoleSequenceName}" DisplayMemberPath="Name" SelectedValuePath="Name" Padding="8,6" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="内联指令 (cmds)" Style="{StaticResource FieldLabelTextStyle}" />
+                    <TextBox Text="{Binding ConsoleSequenceInlineCmds, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" ToolTip="例如: stat fps; wait 2000; stat unit" />
+                </StackPanel>
+            </Grid>
+            <Button Grid.Row="2" Content="运行序列" Command="{Binding RunConsoleSequenceCommand}" Padding="18,8" HorizontalAlignment="Left" Margin="0,12,0,0" />
+            <ScrollViewer Grid.Row="3" Margin="0,12,0,0" VerticalScrollBarVisibility="Auto" MinHeight="120">
+                <TextBox Text="{Binding ConsoleSequenceOutput}" Style="{StaticResource ConsoleEchoTextBoxStyle}" />
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

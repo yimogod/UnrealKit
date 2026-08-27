@@ -260,7 +260,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         "设备" => "刷新设备列表（Win64 本机与 ADB 设备）并明确选择目标设备；不会依赖默认第一台设备。",
         "启动参数" => "选择预设并预览 uecommandline.txt，然后推送到已明确选择的设备。",
-        "控制台" => "向运行中的 UE Android 应用发送控制台指令，支持序列编排和 logcat 条件执行。",
+        "控制台" => "向运行中的 UE Android 应用发送单条控制台指令。",
+        "指令序列" => "按顺序执行指令序列（指令 → 等待 → 标记），支持工程预设和内联输入。",
         "采集归档" => "将采集数据归档到新的 Content Capture，避免覆盖历史数据。",
         "RenderDoc" => "调用独立的 RenderDoc Python 脚本，查看退出码与输出目录。",
         "内存解析" => "离线解析 meminfo 与 memreport，导出结果，或浏览工程内已归档的 Capture。",
