@@ -1,3 +1,4 @@
+using UnrealKit.Core.CommandChannel;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Launch;
 using UnrealKit.Core.Operations;
@@ -212,6 +213,7 @@ public sealed class LaunchParameterServiceTests
         public Task<ProcessExecutionResult> PullSubdirectoriesAsync(IDevice device, string remoteDirectory, IReadOnlyList<string> subdirectoryNames, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
 
         public Task<ProcessExecutionResult> SendConsoleCommandAsync(IDevice device, string command, string? target = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> QueryConsoleVariableAsync(IDevice device, string variableName, ConsoleVariableType variableType, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
 
         public async IAsyncEnumerable<string> StreamLogAsync(IDevice device, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await System.Threading.Tasks.Task.CompletedTask; yield break; }
 

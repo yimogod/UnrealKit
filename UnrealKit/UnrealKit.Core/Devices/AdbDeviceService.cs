@@ -1,4 +1,4 @@
-﻿using UnrealKit.Core.Adb;
+using UnrealKit.Core.Adb;
 using UnrealKit.Core.CommandChannel;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
@@ -166,6 +166,32 @@ public sealed class AdbDeviceService : IDeviceService
         try
         {
             return await _commandTransport.SendConsoleCommandAsync(command, progress, cancellationToken);
+        }
+        catch (CommandTransportException exception)
+        {
+            throw new DeviceCommandException(exception.Message, exception.Result, exception);
+        }
+    }
+
+    /// <summary>
+    /// 读回 cvar。复用与发送指令相同的端口转发，不为读回再起一次 <c>adb forward</c>。
+    /// </summary>
+    public async Task<ProcessExecutionResult> QueryConsoleVariableAsync(
+        IDevice device,
+        string variableName,
+        ConsoleVariableType variableType,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(variableName);
+
+        await EnsurePortForwardedAsync(device, progress, cancellationToken);
+
+        try
+        {
+            return await _commandTransport.QueryConsoleVariableAsync(
+                variableName, variableType, progress, cancellationToken);
         }
         catch (CommandTransportException exception)
         {

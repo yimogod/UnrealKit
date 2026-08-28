@@ -31,4 +31,15 @@ public interface ICommandTransport
         string command,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 读回一个 cvar 的当前值。返回值原始 body 落在
+    /// <see cref="ProcessExecutionResult.StandardOutput"/>，解析交给上层。
+    /// 失败与 <see cref="SendConsoleCommandAsync"/> 同构：一律 <see cref="CommandTransportException"/> 带 <c>UKC*</c> 码。
+    /// </summary>
+    Task<ProcessExecutionResult> QueryConsoleVariableAsync(
+        string variableName,
+        ConsoleVariableType variableType,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
 }

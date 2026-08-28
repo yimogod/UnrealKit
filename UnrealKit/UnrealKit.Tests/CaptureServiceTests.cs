@@ -1,3 +1,4 @@
+using UnrealKit.Core.CommandChannel;
 using UnrealKit.Core.Adb;
 using UnrealKit.Core.Console;
 using UnrealKit.Core.Devices;
@@ -124,6 +125,9 @@ public sealed class CaptureServiceTests : IDisposable
         public Task<ConsoleCommandResult> SendAsync(string serialNumber, ConsoleCommand command, string? packageName = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
             => Task.FromResult(new ConsoleCommandResult(command, 1, string.Empty, "error", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
 
+        public Task<ConsoleVariableValue> QueryVariableAsync(string serialNumber, string variableName, ConsoleVariableType variableType, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(ConsoleVariableValue.Failed("stub"));
+
         public Task<SequenceExecutionResult> RunSequenceAsync(SequenceExecutionRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
             => Task.FromResult(_resultToReturn);
 
@@ -157,6 +161,8 @@ public sealed class CaptureServiceTests : IDisposable
 
         public Task<IReadOnlyList<IDevice>> ListDevicesAsync(IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<IDevice>>([]);
         public Task<ProcessExecutionResult> SendConsoleCommandAsync(IDevice device, string command, string? target = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
+
+        public Task<ProcessExecutionResult> QueryConsoleVariableAsync(IDevice device, string variableName, ConsoleVariableType variableType, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result("""{"ReturnValue":0}"""));
         public async IAsyncEnumerable<string> StreamLogAsync(IDevice device, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await System.Threading.Tasks.Task.CompletedTask; yield break; }
         public Task<ProcessExecutionResult> StartApplicationAsync(IDevice device, string target, string? activity = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
         public Task<ProcessExecutionResult> StopApplicationAsync(IDevice device, string target, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());

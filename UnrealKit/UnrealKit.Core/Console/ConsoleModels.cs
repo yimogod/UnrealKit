@@ -1,4 +1,4 @@
-﻿namespace UnrealKit.Core.Console;
+namespace UnrealKit.Core.Console;
 
 /// <summary>
 /// 单条控制台指令。
@@ -15,6 +15,34 @@ public sealed record ConsoleCommand(
 /// <summary>
 /// 单条指令的执行结果。
 /// </summary>
+
+/// <summary>
+/// 一次 cvar 读回的结果。
+///
+/// 不用「返回 double? / bool? 加约定 null 表示失败」：读回失败的原因（UE 未启动、
+/// 响应里没有 <c>ReturnValue</c>）必须带到界面上，null 说不出是哪一种。
+/// </summary>
+public sealed record ConsoleVariableValue(
+    bool Succeeded,
+    double? NumberValue,
+    bool? BoolValue,
+    string? Error)
+{
+    public static ConsoleVariableValue Number(double value) => new(true, value, null, null);
+
+    public static ConsoleVariableValue Bool(bool value) => new(true, null, value, null);
+
+    public static ConsoleVariableValue Failed(string error) => new(false, null, null, error);
+
+    /// <summary>用于界面展示的文本。数值去掉多余小数位，bool 用 cvar 惯用的 0/1。</summary>
+    public string Display => this switch
+    {
+        { Succeeded: false } => Error ?? "读取失败。",
+        { BoolValue: { } flag } => flag ? "1" : "0",
+        { NumberValue: { } number } => number.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture),
+        _ => string.Empty
+    };
+}
 
 /// <summary>
 /// 条件动作类型。

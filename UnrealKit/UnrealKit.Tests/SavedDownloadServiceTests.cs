@@ -1,4 +1,5 @@
-﻿using UnrealKit.Core.Capture;
+using UnrealKit.Core.CommandChannel;
+using UnrealKit.Core.Capture;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
@@ -360,6 +361,7 @@ public sealed class UnrealSavedServiceTests : IDisposable
         public virtual Task<ProcessExecutionResult> PullDirectoryAsync(IDevice device, string remotePath, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public virtual Task<ProcessExecutionResult> PullSubdirectoriesAsync(IDevice device, string remoteDirectory, IReadOnlyList<string> subdirectoryNames, string localDirectory, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> SendConsoleCommandAsync(IDevice device, string command, string? target = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> QueryConsoleVariableAsync(IDevice device, string variableName, ConsoleVariableType variableType, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public async IAsyncEnumerable<string> StreamLogAsync(IDevice device, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await Task.CompletedTask; yield break; }
         public Task<ProcessExecutionResult> StartApplicationAsync(IDevice device, string target, string? activity = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> StopApplicationAsync(IDevice device, string target, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);

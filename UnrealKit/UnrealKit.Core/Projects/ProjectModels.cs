@@ -1,4 +1,4 @@
-﻿using UnrealKit.Core.Diagnostics;
+using UnrealKit.Core.Diagnostics;
 
 namespace UnrealKit.Core.Projects;
 
@@ -166,6 +166,81 @@ public sealed record FtpSettings(string Host, int Port, string Username, string 
 }
 
 /// <summary>
+/// 控制台预设指令的类型，决定界面用什么控件、以及能否读回当前值。
+/// </summary>
+public enum ConsoleCommandKind
+{
+    /// <summary>开关型 cvar，界面出复选框，发送 <c>&lt;cvar&gt; 0|1</c>。</summary>
+    Bool,
+
+    /// <summary>数值型 cvar，界面出输入框，发送 <c>&lt;cvar&gt; &lt;值&gt;</c>。</summary>
+    Value,
+
+    /// <summary>动作指令（如 <c>stat unit</c>），无参数，也没有「当前值」可读。</summary>
+    Action
+}
+
+/// <summary>
+/// 一条控制台预设指令。
+///
+/// <see cref="Cvar"/> 与 <see cref="Command"/> 分开而不是共用一个字段：Bool/Value 需要
+/// 光秃秃的 cvar 名去读回当前值（读回函数的参数就是 cvar 名），发送时才拼上值；
+/// Action 是一整条指令文本，没有可读回的变量。共用一个字段会让「该读哪个名字」无从判断。
+/// </summary>
+public sealed record ConsoleCommandPreset(
+    string Name,
+    ConsoleCommandKind Kind,
+    string Group,
+    string? Cvar,
+    string? Command,
+    string? DefaultValue,
+    string Description)
+{
+    /// <summary>Bool/Value 有当前值可读；Action 没有。</summary>
+    public bool SupportsReadBack => Kind is ConsoleCommandKind.Bool or ConsoleCommandKind.Value;
+
+    /// <summary>
+    /// 合成要发送的指令文本。
+    /// Value 型的 <paramref name="value"/> 为空时回落到 <see cref="DefaultValue"/>——
+    /// 界面初值就是 DefaultValue，用户清空输入框不应变成发一条缺参数的指令。
+    /// </summary>
+    public string BuildCommand(bool boolValue = false, string? value = null) => Kind switch
+    {
+        ConsoleCommandKind.Bool => $"{RequireCvar()} {(boolValue ? 1 : 0)}",
+        ConsoleCommandKind.Value => $"{RequireCvar()} {ResolveValue(value)}",
+        ConsoleCommandKind.Action => RequireCommand(),
+        _ => throw new ArgumentOutOfRangeException(nameof(Kind), Kind, "Unsupported console command kind.")
+    };
+
+    /// <summary>
+    /// 读回当前值时使用的取值类型。Action 无值可读，调用方应先查 <see cref="SupportsReadBack"/>。
+    ///
+    /// 是方法而不是属性：<c>ProjectSettings</c> 会被整体序列化进 <c>CaptureManifest.json</c>，
+    /// 序列化器会读取每个公开属性，一个对 Action 型抛异常的属性会让整次采集归档失败。
+    /// </summary>
+    public CommandChannel.ConsoleVariableType ResolveVariableType() => Kind switch
+    {
+        ConsoleCommandKind.Bool => CommandChannel.ConsoleVariableType.Bool,
+        ConsoleCommandKind.Value => CommandChannel.ConsoleVariableType.Number,
+        _ => throw new InvalidOperationException(
+            $"预设 '{Name}' 是 {Kind} 型，没有可读回的控制台变量。请先检查 {nameof(SupportsReadBack)}。")
+    };
+
+    private string RequireCvar() => string.IsNullOrWhiteSpace(Cvar)
+        ? throw new InvalidOperationException($"预设 '{Name}' 是 {Kind} 型，必须配置 Cvar。")
+        : Cvar.Trim();
+
+    private string RequireCommand() => string.IsNullOrWhiteSpace(Command)
+        ? throw new InvalidOperationException($"预设 '{Name}' 是 Action 型，必须配置 Command。")
+        : Command.Trim();
+
+    private string ResolveValue(string? value) =>
+        !string.IsNullOrWhiteSpace(value) ? value.Trim()
+        : !string.IsNullOrWhiteSpace(DefaultValue) ? DefaultValue.Trim()
+        : throw new InvalidOperationException($"预设 '{Name}' 是 Value 型，需要一个取值。");
+}
+
+/// <summary>
 /// 项目设置。平台相关配置放在 <see cref="Android"/> / <see cref="Win64"/> 等 profile 中，
 /// 各平台并存互不排斥——同一工程同时跑多个平台是常态。
 ///
@@ -180,6 +255,7 @@ public sealed record ProjectSettings(
     IReadOnlyList<LaunchParameterPreset> LaunchParameterPresets,
     IReadOnlyList<LaunchParameterPresetGroup> LaunchParameterGroups,
     IReadOnlyList<ConsoleSequencePreset> ConsoleSequences,
+    IReadOnlyList<ConsoleCommandPreset> ConsoleCommandPresets,
     string? PreCaptureSequence,
     string? PostCaptureSequence,
     AndroidPlatformProfile? Android = null,
@@ -203,6 +279,7 @@ public sealed record ProjectSettings(
         LaunchParameterPresets: LaunchParameterPresetDefaults.All,
         LaunchParameterGroups: LaunchParameterPresetDefaults.Groups,
         ConsoleSequences: [],
+        ConsoleCommandPresets: ConsoleCommandPresetDefaults.All,
         PreCaptureSequence: null,
         PostCaptureSequence: null,
         Android: AndroidPlatformProfile.CreateDefaults(),
@@ -300,6 +377,54 @@ public static class LaunchParameterPresetDefaults
     public static IReadOnlyList<LaunchParameterPresetGroup> Groups { get; } =
     [
         new("Render", LaunchParameterGroupMode.Exclusive, ["Render.OpenGL", "Render.Vulkan"])
+    ];
+}
+
+/// <summary>
+/// 控制台预设指令的内置默认值。
+///
+/// 与 <see cref="LaunchParameterPresetDefaults"/> 同构：这里是打底值，
+/// <c>Config/DefaultGame.ini</c> 的 <c>[UnrealKit.ConsoleCommandPresets]</c> 按名覆盖或追加，
+/// 因此团队改预设不需要改代码。
+/// </summary>
+public static class ConsoleCommandPresetDefaults
+{
+    private const string Rendering = "Rendering";
+    private const string Lod = "LOD";
+    private const string Memory = "Memory";
+    private const string Gc = "GC";
+    private const string Stats = "Stats";
+
+    private static ConsoleCommandPreset Toggle(string group, string cvar, string description) =>
+        new(cvar, ConsoleCommandKind.Bool, group, cvar, null, null, description);
+
+    private static ConsoleCommandPreset Value(string group, string cvar, string defaultValue, string description) =>
+        new(cvar, ConsoleCommandKind.Value, group, cvar, null, defaultValue, description);
+
+    private static ConsoleCommandPreset Action(string group, string command, string description) =>
+        new(command, ConsoleCommandKind.Action, group, null, command, null, description);
+
+    public static IReadOnlyList<ConsoleCommandPreset> All { get; } =
+    [
+        Toggle(Rendering, "showflag.Fog", "雾效开关."),
+        Toggle(Rendering, "showflag.Lighting", "光照开关."),
+        Toggle(Rendering, "showflag.PostProcessing", "后处理开关."),
+        Toggle(Rendering, "r.Shadow.Virtual.Enable", "虚拟阴影图开关."),
+        Value(Rendering, "r.ScreenPercentage", "100", "渲染分辨率百分比."),
+        Value(Rendering, "r.MobileContentScaleFactor", "1", "移动端内容缩放系数."),
+        Value(Lod, "r.ForceLOD", "0", "强制所有静态网格使用指定 LOD, -1 关闭强制."),
+        Value(Lod, "r.SkeletalMeshLODBias", "0", "骨骼网格 LOD 偏移."),
+        Value(Lod, "r.StaticMeshLODDistanceScale", "1", "静态网格 LOD 切换距离缩放."),
+        Value(Memory, "r.Streaming.PoolSize", "1024", "纹理流送池上限 (MB)."),
+        Toggle(Memory, "r.Streaming.LimitPoolSizeToVRAM", "限制流送池不超过显存."),
+        Value(Gc, "gc.TimeBetweenPurgingPendingKillObjects", "60", "两次 GC 之间的间隔 (秒)."),
+        Toggle(Gc, "gc.AllowParallelGC", "并行 GC 开关."),
+        Action(Stats, "stat unit", "显示帧耗时分解 (game/draw/gpu)."),
+        Action(Stats, "stat fps", "显示帧率."),
+        Action(Stats, "stat memory", "显示内存统计."),
+        Action(Stats, "stat rhi", "显示 RHI 统计."),
+        Action(Stats, "stat none", "关闭所有 stat 显示."),
+        Action(Memory, "memreport -full", "输出完整 memreport 到设备 Saved 目录.")
     ];
 }
 

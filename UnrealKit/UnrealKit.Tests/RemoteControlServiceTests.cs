@@ -152,6 +152,93 @@ public sealed class RemoteControlServiceTests
         }
     }
 
+    [Fact]
+    public async Task QueryConsoleVariableAsync_Bool_CallsBoolGetterWithoutTransaction()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ReturnValue":true}""", Encoding.UTF8, "application/json")
+        });
+        var service = new RemoteControlService(new HttpClient(handler));
+
+        var result = await service.QueryConsoleVariableAsync(new RemoteControlVariableQueryRequest(
+            30010,
+            "/Script/Engine.Default__KismetSystemLibrary",
+            "showflag.Fog",
+            RemoteControlVariableType.Bool));
+
+        Assert.True(result.Succeeded);
+        // 返回值原样落在 StandardOutput，解析留给上层。
+        Assert.Contains("""{"ReturnValue":true}""", result.StandardOutput);
+        Assert.Equal(HttpMethod.Put, handler.CapturedRequest!.Method);
+        // 读回与发指令是同一个端点。
+        Assert.Equal(new Uri("http://127.0.0.1:30010/remote/object/call"), handler.CapturedRequest.RequestUri);
+
+        using var document = JsonDocument.Parse(handler.CapturedContent!);
+        var root = document.RootElement;
+        Assert.Equal("/Script/Engine.Default__KismetSystemLibrary", root.GetProperty("objectPath").GetString());
+        Assert.Equal("GetConsoleVariableBoolValue", root.GetProperty("functionName").GetString());
+        Assert.Equal("showflag.Fog", root.GetProperty("parameters").GetProperty("VariableName").GetString());
+        Assert.False(root.GetProperty("generateTransaction").GetBoolean());
+    }
+
+    [Fact]
+    public async Task QueryConsoleVariableAsync_Number_CallsFloatGetter()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ReturnValue":80.0}""", Encoding.UTF8, "application/json")
+        });
+        var service = new RemoteControlService(new HttpClient(handler));
+
+        await service.QueryConsoleVariableAsync(new RemoteControlVariableQueryRequest(
+            30010,
+            "/Script/Engine.Default__KismetSystemLibrary",
+            "r.ScreenPercentage",
+            RemoteControlVariableType.Number));
+
+        using var document = JsonDocument.Parse(handler.CapturedContent!);
+        var root = document.RootElement;
+        Assert.Equal("GetConsoleVariableFloatValue", root.GetProperty("functionName").GetString());
+        Assert.Equal("r.ScreenPercentage", root.GetProperty("parameters").GetProperty("VariableName").GetString());
+    }
+
+    [Fact]
+    public async Task QueryConsoleVariableAsync_NonSuccess_ThrowsRemoteControlExceptionWithResult()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+        {
+            Content = new StringContent("boom", Encoding.UTF8, "text/plain")
+        });
+        var service = new RemoteControlService(new HttpClient(handler));
+
+        var exception = await Assert.ThrowsAsync<RemoteControlException>(() =>
+            service.QueryConsoleVariableAsync(new RemoteControlVariableQueryRequest(
+                30010,
+                "/Script/Engine.Default__KismetSystemLibrary",
+                "r.ScreenPercentage",
+                RemoteControlVariableType.Number)));
+
+        Assert.Equal(500, exception.Result.ExitCode);
+        Assert.Contains("boom", exception.Result.StandardOutput);
+    }
+
+    [Fact]
+    public async Task QueryConsoleVariableAsync_BlankVariableName_RejectsBeforeNetworkCall()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var service = new RemoteControlService(new HttpClient(handler));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.QueryConsoleVariableAsync(new RemoteControlVariableQueryRequest(
+                30010,
+                "/Script/Engine.Default__KismetSystemLibrary",
+                "   ",
+                RemoteControlVariableType.Bool)));
+
+        Assert.Null(handler.CapturedRequest);
+    }
+
     private sealed class ThrowingHttpMessageHandler(Exception exception) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

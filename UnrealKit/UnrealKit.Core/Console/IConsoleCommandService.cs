@@ -1,4 +1,4 @@
-﻿using UnrealKit.Core.Adb;
+using UnrealKit.Core.Adb;
 using UnrealKit.Core.Operations;
 
 namespace UnrealKit.Core.Console;
@@ -15,6 +15,18 @@ public interface IConsoleCommandService
         string serialNumber,
         ConsoleCommand command,
         string? packageName = null,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 读回一个 cvar 在运行中的 UE 进程里的当前值。
+    /// 通道失败与响应格式异常都归到 <see cref="ConsoleVariableValue.Failed"/>，不抛异常——
+    /// 批量刷新时单个 cvar 读不到不应中断其余项。
+    /// </summary>
+    Task<ConsoleVariableValue> QueryVariableAsync(
+        string serialNumber,
+        string variableName,
+        CommandChannel.ConsoleVariableType variableType,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
 

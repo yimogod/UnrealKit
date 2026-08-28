@@ -164,6 +164,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         OpenRenderDocOutputDirCommand = new DelegateCommand(OpenRenderDocOutputDir, () => !string.IsNullOrWhiteSpace(_renderDocOutputDir) && Directory.Exists(_renderDocOutputDir));
         _sendConsoleCommandCommand = new AsyncDelegateCommand(SendConsoleCommandAsync, () => !IsBusy && _selectedDevice is not null && !string.IsNullOrWhiteSpace(_consoleCommandText));
         _runConsoleSequenceCommand = new AsyncDelegateCommand(RunConsoleSequenceAsync, () => !IsBusy && _selectedDevice is not null);
+        _applyConsoleCommandPresetCommand = new ParameterizedAsyncDelegateCommand<ConsoleCommandPresetOption>(
+            ApplyConsoleCommandPresetAsync, () => !IsBusy && _selectedDevice is not null);
+        _refreshConsoleCommandPresetValuesCommand = new AsyncDelegateCommand(
+            RefreshConsoleCommandPresetValuesAsync, () => !IsBusy && _selectedDevice is not null);
         ExportCaptureDataCommand = new AsyncDelegateCommand(ExportCaptureDataAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ExportInputPath) && !string.IsNullOrWhiteSpace(ExportOutputPath));
         _clearOperationLogsCommand = new DelegateCommand(ClearOperationLogs, () => OperationLogs.Count > 0);
         DownloadCommand = new AsyncDelegateCommand(DownloadLatestAsync, CanDownloadLatest);
@@ -188,6 +192,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     /// <summary>当前平台作用域内的设备，供设备列表绑定。</summary>
     public ObservableCollection<DeviceDisplayInfo> ScopedDevices { get; } = [];
     public ObservableCollection<ConsoleSequencePreset> ConsoleSequencePresets { get; } = [];
+
+    /// <summary>
+    /// 控制台预设指令。界面用 <c>CollectionViewSource</c> 按 <c>Group</c> 分组显示，
+    /// 因此这里是单一平铺集合而不是按组嵌套。
+    /// </summary>
+    public ObservableCollection<ConsoleCommandPresetOption> ConsoleCommandPresets { get; } = [];
     public ObservableCollection<LaunchParameterPresetOption> LaunchParameterPresets { get; } = [];
     public ObservableCollection<MemInfoMetricOption> MemInfoMetrics { get; } = [];
     public ObservableCollection<MemInfoPssOption> MemInfoPssEntries { get; } = [];
@@ -260,7 +270,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         "设备" => "刷新设备列表（Win64 本机与 ADB 设备）并明确选择目标设备；不会依赖默认第一台设备。",
         "启动参数" => "选择预设并预览 uecommandline.txt，然后推送到已明确选择的设备。",
-        "控制台" => "向运行中的 UE Android 应用发送单条控制台指令。",
+        "控制台" => "向运行中的 UE 应用发送控制台指令。预设指令按分组列出，开关与数值型可读回游戏中的当前值。",
         "指令序列" => "按顺序执行指令序列（指令 → 等待 → 标记），支持工程预设和内联输入。",
         "采集归档" => "将采集数据归档到新的 Content Capture，避免覆盖历史数据。",
         "RenderDoc" => "调用独立的 RenderDoc Python 脚本，查看退出码与输出目录。",
@@ -1020,6 +1030,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         CaptureTag = project.Settings.DefaultCaptureTag;
         ConsoleSequencePresets.Clear();
         foreach (var preset in project.Settings.ConsoleSequences) ConsoleSequencePresets.Add(preset);
+        ConsoleCommandPresets.Clear();
+        foreach (var preset in project.Settings.ConsoleCommandPresets)
+        {
+            ConsoleCommandPresets.Add(new ConsoleCommandPresetOption(preset));
+        }
         ConsoleSequenceName = ConsoleSequencePresets.Count > 0 ? ConsoleSequencePresets[0].Name : string.Empty;
         UnrealProjectName = project.Settings.UnrealProjectName;
 
@@ -2198,6 +2213,148 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand SendConsoleCommandCommand => _sendConsoleCommandCommand;
     private readonly AsyncDelegateCommand _sendConsoleCommandCommand;
 
+    public ICommand ApplyConsoleCommandPresetCommand => _applyConsoleCommandPresetCommand;
+    private readonly ParameterizedAsyncDelegateCommand<ConsoleCommandPresetOption> _applyConsoleCommandPresetCommand;
+
+    public ICommand RefreshConsoleCommandPresetValuesCommand => _refreshConsoleCommandPresetValuesCommand;
+    private readonly AsyncDelegateCommand _refreshConsoleCommandPresetValuesCommand;
+
+    /// <summary>
+    /// 应用一条预设指令：Bool/Value 把值写下去并读回确认，Action 只执行。
+    /// 写完立刻读回一次而不是信任「发送成功即已生效」：cvar 可能被引擎钳制到合法区间
+    /// （例如 r.ScreenPercentage 有下限），读回才能显示真正落地的值。
+    /// </summary>
+    private async Task ApplyConsoleCommandPresetAsync(ConsoleCommandPresetOption option)
+    {
+        if (option is null || _selectedDevice is null) return;
+
+        if (option.Kind == ConsoleCommandKind.Value && !IsNumeric(option.Value))
+        {
+            var invalid = $"「{option.Value}」不是有效数值，未发送。";
+            option.SetStatus(invalid);
+            ConsoleOutput = $"[SKIP] {option.Name}: {invalid}";
+            return;
+        }
+
+        string command;
+        try
+        {
+            command = option.Preset.BuildCommand(option.IsChecked, option.Value);
+        }
+        catch (InvalidOperationException exception)
+        {
+            // 预设配置本身不完整（缺 Cvar / Command / 取值）。就地提示，不发一条残缺指令出去。
+            option.SetStatus(exception.Message);
+            ConsoleOutput = exception.Message;
+            return;
+        }
+
+        ConsoleIsSending = true;
+        try
+        {
+            var consoleService = new ConsoleCommandService(ResolveDeviceServiceForDevice(_selectedDevice.Device));
+            if (!consoleService.IsSupported)
+            {
+                ConsoleOutput = $"[SKIP] {_selectedDevice.Platform} 平台暂不支持发送 UE 控制台指令。";
+                return;
+            }
+
+            var result = await consoleService.SendAsync(
+                _selectedDevice.Id,
+                ConsoleCommand.Create(command),
+                TryResolveSelectedTarget(out _)?.ProcessIdentity,
+                cancellationToken: OperationCancellationToken);
+
+            ConsoleOutput = result.Succeeded
+                ? $"[OK] {command}"
+                : $"[FAIL] {command}{Environment.NewLine}Exit: {result.ExitCode}{Environment.NewLine}{result.StandardError}";
+
+            if (result.Succeeded && option.SupportsReadBack)
+            {
+                await ReadBackAsync(consoleService, option);
+            }
+        }
+        catch (Exception exception)
+        {
+            // 带上指令文本：连接层失败时只报「连不上」，用户无从判断这一条究竟发的是什么。
+            ConsoleOutput = $"[ERROR] {command}{Environment.NewLine}{exception.Message}";
+            option.SetStatus(exception.Message);
+        }
+        finally
+        {
+            ConsoleIsSending = false;
+        }
+    }
+
+    /// <summary>
+    /// 批量读回全部 Bool/Value 预设的当前值。
+    /// 单项失败只写进那一项的当前值栏，不中断其余项：一个读不到的 cvar 不该让整次刷新作废。
+    /// </summary>
+    private async Task RefreshConsoleCommandPresetValuesAsync()
+    {
+        if (_selectedDevice is null) return;
+
+        var readable = ConsoleCommandPresets.Where(option => option.SupportsReadBack).ToArray();
+        if (readable.Length == 0)
+        {
+            ConsoleOutput = "没有可读回当前值的预设指令（Action 型没有当前值）。";
+            return;
+        }
+
+        ConsoleIsSending = true;
+        try
+        {
+            var consoleService = new ConsoleCommandService(ResolveDeviceServiceForDevice(_selectedDevice.Device));
+            if (!consoleService.IsSupported)
+            {
+                ConsoleOutput = $"[SKIP] {_selectedDevice.Platform} 平台暂不支持读取 UE 控制台变量。";
+                return;
+            }
+
+            var failed = 0;
+            foreach (var option in readable)
+            {
+                OperationCancellationToken.ThrowIfCancellationRequested();
+                if (!await ReadBackAsync(consoleService, option))
+                {
+                    failed++;
+                }
+            }
+
+            ConsoleOutput = failed == 0
+                ? $"已读回 {readable.Length} 项当前值。"
+                : $"已读回 {readable.Length - failed} / {readable.Length} 项，{failed} 项读取失败（见各项当前值栏）。";
+        }
+        catch (OperationCanceledException)
+        {
+            ConsoleOutput = "读回已取消。";
+        }
+        catch (Exception exception)
+        {
+            ConsoleOutput = $"Error: {exception.Message}";
+        }
+        finally
+        {
+            ConsoleIsSending = false;
+        }
+    }
+
+    /// <summary>读回一项并写回界面。返回是否成功，供批量刷新统计。</summary>
+    private async Task<bool> ReadBackAsync(ConsoleCommandService consoleService, ConsoleCommandPresetOption option)
+    {
+        var value = await consoleService.QueryVariableAsync(
+            _selectedDevice!.Id,
+            option.Preset.Cvar!,
+            option.Preset.ResolveVariableType(),
+            cancellationToken: OperationCancellationToken);
+        option.ApplyReadBack(value);
+        return value.Succeeded;
+    }
+
+    private static bool IsNumeric(string text) =>
+        double.TryParse(text?.Trim(), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out _);
+
     private async Task SendConsoleCommandAsync()
     {
         if (string.IsNullOrWhiteSpace(_consoleCommandText) || _selectedDevice is null) return;
@@ -2303,10 +2460,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
+
+        // 参数化命令不是 AsyncDelegateCommand，上面的 OfType 过滤覆盖不到它。
+        _applyConsoleCommandPresetCommand.RaiseCanExecuteChanged();
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
@@ -2335,6 +2495,34 @@ public sealed class AsyncDelegateCommand(Func<Task> execute, Func<bool> canExecu
     public bool CanExecute(object? parameter) => canExecute();
     public async void Execute(object? parameter) => await ExecuteAsync();
     public Task ExecuteAsync() => execute();
+    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+}
+
+/// <summary>
+/// 接受 <c>CommandParameter</c> 的异步命令。
+///
+/// 与 <see cref="AsyncDelegateCommand"/> 分开而不是给它加参数重载：那个类的调用点遍布全局，
+/// 且都不需要参数，改签名会波及全部调用而无收益。列表项按钮用
+/// <c>CommandParameter="{Binding}"</c> 把项自身传回来，故此处需要参数。
+/// </summary>
+public sealed class ParameterizedAsyncDelegateCommand<T>(Func<T, Task> execute, Func<bool> canExecute) : ICommand
+{
+    public event EventHandler? CanExecuteChanged;
+
+    public bool CanExecute(object? parameter) => canExecute();
+
+    public async void Execute(object? parameter)
+    {
+        // 参数类型不符时静默返回：XAML 绑定写错不该让界面崩，
+        // 由「点了没反应」暴露绑定问题，而不是抛成未处理异常。
+        if (parameter is T typed)
+        {
+            await execute(typed);
+        }
+    }
+
+    public Task ExecuteAsync(T parameter) => execute(parameter);
+
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }
 

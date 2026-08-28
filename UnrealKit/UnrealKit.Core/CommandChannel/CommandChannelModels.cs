@@ -19,6 +19,21 @@ public enum CommandTransportKind
 }
 
 /// <summary>
+/// 读回 cvar 时的取值类型。
+///
+/// 定义在 CommandChannel 而不是 Console：<c>Devices</c> 与 <c>Console</c> 都要引用它，
+/// 放 <c>Console</c> 会造成 <c>Devices → Console</c> 的命名空间环。
+/// </summary>
+public enum ConsoleVariableType
+{
+    /// <summary>开关型 cvar，如 <c>showflag.Fog</c>。</summary>
+    Bool,
+
+    /// <summary>数值型 cvar，如 <c>r.screenpercentage</c>。整数 cvar 也归这里。</summary>
+    Number
+}
+
+/// <summary>
 /// <c>UKC</c> 域诊断码：控制台指令通道。向后追加，不复用已发布编号。
 /// </summary>
 public static class CommandChannelDiagnosticCodes

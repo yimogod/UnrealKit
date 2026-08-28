@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using UnrealKit.Core.Console;
 using UnrealKit.Core.Projects;
 
 namespace UnrealKit.Desktop.Models;
@@ -60,6 +61,86 @@ public sealed class LaunchParameterPresetOption(LaunchParameterPreset preset, La
             _isSelected = value;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
         }
+    }
+}
+
+/// <summary>
+/// 一条控制台预设指令的界面投影。
+///
+/// 三种类型共用一个类而不是分三个：列表要按分组混排显示，分成三个类型就得三个集合，
+/// 分组标签会被切碎。界面用 <see cref="Kind"/> 上的 DataTrigger 切换控件。
+/// </summary>
+public sealed class ConsoleCommandPresetOption(ConsoleCommandPreset preset) : INotifyPropertyChanged
+{
+    private bool _isChecked;
+    private string _value = preset.DefaultValue ?? string.Empty;
+    private string _currentValueDisplay = string.Empty;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>底层预设，命令处理时据此合成指令文本与读回参数。</summary>
+    public ConsoleCommandPreset Preset => preset;
+
+    public string Name => preset.Name;
+    public ConsoleCommandKind Kind => preset.Kind;
+    public string Group => preset.Group;
+    public string Description => preset.Description;
+    public bool SupportsReadBack => preset.SupportsReadBack;
+
+    /// <summary>Bool 型的目标状态，界面上的复选框。</summary>
+    public bool IsChecked
+    {
+        get => _isChecked;
+        set => Set(ref _isChecked, value, nameof(IsChecked));
+    }
+
+    /// <summary>Value 型的输入值，初值取预设的 DefaultValue。</summary>
+    public string Value
+    {
+        get => _value;
+        set => Set(ref _value, value ?? string.Empty, nameof(Value));
+    }
+
+    /// <summary>
+    /// 从 UE 读回的当前值，或读取失败的原因。
+    /// 与 <see cref="Value"/> 分开：输入框里是「要设成什么」，这里是「现在是什么」，
+    /// 合成一个字段会让用户改了输入框就看不到改之前的值。
+    /// </summary>
+    public string CurrentValueDisplay
+    {
+        get => _currentValueDisplay;
+        private set => Set(ref _currentValueDisplay, value, nameof(CurrentValueDisplay));
+    }
+
+    /// <summary>Bool/Value 型显示当前值一栏；Action 型没有当前值。</summary>
+    public bool ShowsCurrentValue => preset.SupportsReadBack;
+
+    /// <summary>按钮文案：Action 是执行一次，Bool/Value 是把值写下去。</summary>
+    public string ActionLabel => preset.Kind == ConsoleCommandKind.Action ? "运行" : "应用";
+
+    /// <summary>
+    /// 写入读回结果。Bool 型同时把复选框同步到实际值，让界面显示的是引擎当前状态，
+    /// 而不是上次点击留下的目标状态。
+    /// </summary>
+    public void ApplyReadBack(ConsoleVariableValue value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        CurrentValueDisplay = value.Display;
+
+        if (value is { Succeeded: true, BoolValue: { } flag })
+        {
+            IsChecked = flag;
+        }
+    }
+
+    /// <summary>写入一条读取失败或校验失败的说明。</summary>
+    public void SetStatus(string message) => CurrentValueDisplay = message;
+
+    private void Set<T>(ref T field, T value, string propertyName)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
 

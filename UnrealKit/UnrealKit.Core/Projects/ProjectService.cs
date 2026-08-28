@@ -1,4 +1,4 @@
-﻿using UnrealKit.Core.Diagnostics;
+using UnrealKit.Core.Diagnostics;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Runtime;
 
@@ -14,6 +14,7 @@ public sealed class ProjectService : IProjectService
     private const string PresetsSection = "UnrealKit.LaunchPresets";
     private const string LaunchPresetGroupsSection = "UnrealKit.LaunchPresetGroups";
     private const string ConsoleSequencesSection = "UnrealKit.ConsoleSequences";
+    private const string ConsoleCommandPresetsSection = "UnrealKit.ConsoleCommandPresets";
     private const string DeviceAliasesSection = "UnrealKit.DeviceAliases";
     private const string FtpSection = "UnrealKit.Ftp";
     private const string BaseGameIniFileName = "BaseGame.ini";
@@ -222,6 +223,11 @@ public sealed class ProjectService : IProjectService
             document.SetValue(ConsoleSequencesSection, sequence.Name, sequence.StepsDefinition);
         }
 
+        foreach (var preset in settings.ConsoleCommandPresets)
+        {
+            document.SetValue(ConsoleCommandPresetsSection, preset.Name, FormatConsoleCommandPreset(preset));
+        }
+
         // 别名键是设备标识，可能含 `:`（Wi-Fi 的 ip:port），INI 的分隔符是首个 `=`，因此无需转义。
         foreach (var (deviceId, alias) in settings.Aliases.Entries)
         {
@@ -270,6 +276,8 @@ public sealed class ProjectService : IProjectService
             .Select(kvp => new ConsoleSequencePreset(kvp.Key, kvp.Value, string.Empty))
             .ToList();
 
+        var consoleCommandPresets = MergeConsoleCommandPresets(layered.GetSection(ConsoleCommandPresetsSection));
+
         return new ProjectSettings(
             layered.GetValue(SettingsSection, "UnrealProjectName") ?? defaults.UnrealProjectName,
             layered.GetValue(SettingsSection, "LocalWorkingDirectory") ?? defaults.LocalWorkingDirectory,
@@ -278,6 +286,7 @@ public sealed class ProjectService : IProjectService
             presets,
             launchGroups,
             sequences,
+            consoleCommandPresets,
             layered.GetValue(SettingsSection, "PreCaptureSequence"),
             layered.GetValue(SettingsSection, "PostCaptureSequence"),
             PlatformProfileIni.Read<AndroidPlatformProfile>(layered, TargetPlatform.Android),
@@ -420,6 +429,103 @@ public sealed class ProjectService : IProjectService
     /// 把分组写回 INI：<c>组名=模式:成员1,成员2</c>。模式用稳定标识 <c>Exclusive</c> /
     /// <c>Coexist</c>，读写对称，手写配置时也只需记住这两个词。
     /// </summary>
+    /// <summary>
+    /// 控制台预设指令的 INI 值格式: <c>Kind|Group|Cvar|DefaultValue|Command</c>。
+    /// 五段定长而不是「按类型只写用到的段」：定长让手写配置时段位固定，
+    /// 也让 Bool 改成 Value 时不必重排字段顺序。
+    /// </summary>
+    private static string FormatConsoleCommandPreset(ConsoleCommandPreset preset) =>
+        string.Join(ConsoleCommandPresetSeparator,
+            preset.Kind.ToString(),
+            preset.Group,
+            preset.Cvar ?? string.Empty,
+            preset.DefaultValue ?? string.Empty,
+            preset.Command ?? string.Empty);
+
+    private const char ConsoleCommandPresetSeparator = '|';
+
+    /// <summary>
+    /// 合并内置默认预设与配置文件里的预设，语义与启动参数预设一致：
+    /// 内置默认打底，配置按名覆盖，配置中的新名字追加，最后按分组和名字排序。
+    ///
+    /// 覆盖时保留内置默认的 <c>Description</c>：INI 格式里没有说明文本的段位，
+    /// 用配置里的空串覆盖会把默认说明清掉，界面上就少了这一行提示。
+    /// </summary>
+    private static IReadOnlyList<ConsoleCommandPreset> MergeConsoleCommandPresets(
+        IReadOnlyDictionary<string, string> section)
+    {
+        var configured = section
+            .Select(pair => ParseConsoleCommandPreset(pair.Key, pair.Value))
+            .ToArray();
+
+        var merged = ConsoleCommandPresetDefaults.All
+            .Select(defaultPreset => configured.FirstOrDefault(preset =>
+                    string.Equals(preset.Name, defaultPreset.Name, StringComparison.OrdinalIgnoreCase))
+                is { } configuredPreset
+                ? configuredPreset with { Description = defaultPreset.Description }
+                : defaultPreset)
+            .Concat(configured.Where(preset => !ConsoleCommandPresetDefaults.All.Any(defaultPreset =>
+                string.Equals(defaultPreset.Name, preset.Name, StringComparison.OrdinalIgnoreCase))));
+
+        return merged
+            .OrderBy(preset => preset.Group, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(preset => preset.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// 解析一条 <c>[UnrealKit.ConsoleCommandPresets]</c> 条目。
+    /// Kind 无法识别、或该 Kind 必需的字段留空时报错而不是回退默认：
+    /// 静默把笔误的 <c>Boolean</c> 读成 Action 会让预设点下去发出一条空指令。
+    /// </summary>
+    private static ConsoleCommandPreset ParseConsoleCommandPreset(string name, string value)
+    {
+        var fields = value.Split(ConsoleCommandPresetSeparator);
+        if (fields.Length is < 2 or > 5)
+        {
+            throw new InvalidDataException(
+                $"控制台预设指令 {name} 格式无效: 需要 \"Kind|Group|Cvar|DefaultValue|Command\"，收到 \"{value}\"。");
+        }
+
+        if (!Enum.TryParse<ConsoleCommandKind>(fields[0].Trim(), ignoreCase: true, out var kind))
+        {
+            throw new InvalidDataException(
+                $"控制台预设指令 {name} 的类型 \"{fields[0].Trim()}\" 无法识别。可选值: "
+                + string.Join(", ", Enum.GetNames<ConsoleCommandKind>()) + "。");
+        }
+
+        string Field(int index) => index < fields.Length ? fields[index].Trim() : string.Empty;
+
+        var group = Field(1);
+        var cvar = Field(2);
+        var defaultValue = Field(3);
+        var command = Field(4);
+
+        if (group.Length == 0)
+        {
+            throw new InvalidDataException($"控制台预设指令 {name} 未指定分组 (第 2 段)。");
+        }
+
+        if (kind is ConsoleCommandKind.Bool or ConsoleCommandKind.Value && cvar.Length == 0)
+        {
+            throw new InvalidDataException($"控制台预设指令 {name} 是 {kind} 型，必须在第 3 段给出 Cvar。");
+        }
+
+        if (kind is ConsoleCommandKind.Action && command.Length == 0)
+        {
+            throw new InvalidDataException($"控制台预设指令 {name} 是 Action 型，必须在第 5 段给出 Command。");
+        }
+
+        return new ConsoleCommandPreset(
+            name.Trim(),
+            kind,
+            group,
+            cvar.Length == 0 ? null : cvar,
+            command.Length == 0 ? null : command,
+            defaultValue.Length == 0 ? null : defaultValue,
+            string.Empty);
+    }
+
     private static string FormatLaunchParameterGroup(LaunchParameterPresetGroup group) =>
         $"{FormatLaunchParameterGroupMode(group.Mode)}:{string.Join(",", group.Members)}";
 

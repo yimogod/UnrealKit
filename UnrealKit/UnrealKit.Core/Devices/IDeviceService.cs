@@ -1,4 +1,4 @@
-﻿using UnrealKit.Core.Operations;
+using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 
 namespace UnrealKit.Core.Devices;
@@ -72,6 +72,19 @@ public interface IDeviceService : IDeviceProvider
         IDevice device,
         string command,
         string? target = null,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 从设备上运行中的 UE 进程读回一个 cvar 的当前值。
+    /// 与发送指令共用 <see cref="DeviceCapability.SendConsoleCommand"/> 能力：同一条通道，
+    /// 能发就能读，单独再立一个能力位只会多出一个永远与它同值的开关。
+    /// 返回值原始 body 落在 <see cref="ProcessExecutionResult.StandardOutput"/>。
+    /// </summary>
+    Task<ProcessExecutionResult> QueryConsoleVariableAsync(
+        IDevice device,
+        string variableName,
+        CommandChannel.ConsoleVariableType variableType,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
 

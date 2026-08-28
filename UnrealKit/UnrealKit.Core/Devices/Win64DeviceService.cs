@@ -279,6 +279,30 @@ public sealed class Win64DeviceService : IDeviceService
     }
 
     /// <summary>
+    /// 读回 cvar。「设备」就是本机，与发送指令一样不需要端口转发。
+    /// </summary>
+    public async Task<ProcessExecutionResult> QueryConsoleVariableAsync(
+        IDevice device,
+        string variableName,
+        ConsoleVariableType variableType,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(variableName);
+
+        try
+        {
+            return await _commandTransport.QueryConsoleVariableAsync(
+                variableName, variableType, progress, cancellationToken);
+        }
+        catch (CommandTransportException exception)
+        {
+            throw new DeviceCommandException(exception.Message, exception.Result, exception);
+        }
+    }
+
+    /// <summary>
     /// Win64 上流式读取日志暂不支持。抛出而不是返回空流：
     /// 空流会被调用方误读为「已连接但暂无日志」。
     /// </summary>

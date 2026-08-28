@@ -19,6 +19,12 @@ internal sealed class RecordingCommandTransport(
 
     public List<string> Commands { get; } = [];
 
+    /// <summary>收到的 cvar 读回请求，按顺序记录。</summary>
+    public List<(string VariableName, ConsoleVariableType VariableType)> Queries { get; } = [];
+
+    /// <summary>读回时返回的响应 body。默认是 Remote Control 对数值 cvar 的回包形状。</summary>
+    public string QueryResponseBody { get; set; } = """{"ReturnValue":80.0}""";
+
     public Task<ProcessExecutionResult> SendConsoleCommandAsync(
         string command,
         IProgress<OperationProgress>? progress = null,
@@ -27,6 +33,17 @@ internal sealed class RecordingCommandTransport(
         Commands.Add(command);
         return Task.FromResult(new ProcessExecutionResult(
             0, "ok", string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+    }
+
+    public Task<ProcessExecutionResult> QueryConsoleVariableAsync(
+        string variableName,
+        ConsoleVariableType variableType,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        Queries.Add((variableName, variableType));
+        return Task.FromResult(new ProcessExecutionResult(
+            0, QueryResponseBody, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
     }
 }
 
@@ -46,8 +63,17 @@ internal sealed class FailingCommandTransport(
         string command,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default) =>
-        throw new CommandTransportException(
-            code,
-            $"[{code}] 通道替身按约定失败: {command}",
+        throw Failure(command);
+
+    public Task<ProcessExecutionResult> QueryConsoleVariableAsync(
+        string variableName,
+        ConsoleVariableType variableType,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        throw Failure(variableName);
+
+    private CommandTransportException Failure(string subject) =>
+        new(code,
+            $"[{code}] 通道替身按约定失败: {subject}",
             new ProcessExecutionResult(-1, string.Empty, "fake failure", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
 }

@@ -1,4 +1,6 @@
-﻿using UnrealKit.Core.Adb;
+using System.Text.Json;
+using UnrealKit.Core.Adb;
+using UnrealKit.Core.CommandChannel;
 using UnrealKit.Core.Devices;
 using UnrealKit.Core.Operations;
 
@@ -59,6 +61,111 @@ public sealed class ConsoleCommandService : IConsoleCommandService
             startedAt,
             completedAt);
     }
+
+    /// <summary>
+    /// 读回 cvar 当前值。
+    ///
+    /// 设备层只把 HTTP 响应 body 原样带回（<see cref="Processes.ProcessExecutionResult.StandardOutput"/>），
+    /// 这里做唯一一次解析：取顶层 <c>ReturnValue</c>——UE 的
+    /// <c>GetConsoleVariable*Value</c> 的返回值就装在这个字段里。
+    ///
+    /// 注意 UE 侧的局限：cvar 不存在时这两个 getter 返回 0 / false，与合法的 0 / false 无法区分，
+    /// 因此这里不做「cvar 不存在」的判定，只如实返回读到的值。
+    /// </summary>
+    public async Task<ConsoleVariableValue> QueryVariableAsync(
+        string serialNumber,
+        string variableName,
+        ConsoleVariableType variableType,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serialNumber);
+        ArgumentException.ThrowIfNullOrWhiteSpace(variableName);
+
+        progress?.Report(new OperationProgress(
+            "console-query", "Querying", null, null, $"Reading {variableName}"));
+
+        Processes.ProcessExecutionResult result;
+        try
+        {
+            result = await _deviceService.QueryConsoleVariableAsync(
+                ResolveDevice(serialNumber), variableName, variableType, progress, cancellationToken);
+        }
+        catch (DeviceCommandException exception)
+        {
+            return ConsoleVariableValue.Failed($"读取 {variableName} 失败: {exception.Message}");
+        }
+
+        if (!result.Succeeded)
+        {
+            return ConsoleVariableValue.Failed(
+                $"读取 {variableName} 失败 (退出码 {result.ExitCode}): "
+                + (string.IsNullOrWhiteSpace(result.StandardError) ? result.StandardOutput : result.StandardError));
+        }
+
+        return ParseReturnValue(variableName, variableType, result.StandardOutput);
+    }
+
+    /// <summary>
+    /// 从 <c>PUT /remote/object/call</c> 的响应 body 里取出函数返回值。
+    /// 期望形如 <c>{"ReturnValue": 80.0}</c> / <c>{"ReturnValue": true}</c>。
+    /// 缺字段或类型不符按具体原因失败，不静默替成 0/false。
+    /// </summary>
+    private static ConsoleVariableValue ParseReturnValue(
+        string variableName,
+        ConsoleVariableType variableType,
+        string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return ConsoleVariableValue.Failed($"读取 {variableName} 失败: Remote Control 返回空响应。");
+        }
+
+        JsonElement returnValue;
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty(
+                    RemoteControl.RemoteControlVariableQueryRequest.ReturnValuePropertyName,
+                    out var property))
+            {
+                return ConsoleVariableValue.Failed(
+                    $"读取 {variableName} 失败: 响应缺少 "
+                    + $"{RemoteControl.RemoteControlVariableQueryRequest.ReturnValuePropertyName} 字段: {Truncate(body)}");
+            }
+
+            // JsonDocument 释放后 JsonElement 会失效，先克隆再出 using 作用域。
+            returnValue = property.Clone();
+        }
+        catch (JsonException exception)
+        {
+            return ConsoleVariableValue.Failed(
+                $"读取 {variableName} 失败: 响应不是合法 JSON ({exception.Message}): {Truncate(body)}");
+        }
+
+        if (variableType == ConsoleVariableType.Bool)
+        {
+            // UE 对 bool cvar 也可能回 0/1 而不是 true/false，两种都接受。
+            return returnValue.ValueKind switch
+            {
+                JsonValueKind.True => ConsoleVariableValue.Bool(true),
+                JsonValueKind.False => ConsoleVariableValue.Bool(false),
+                JsonValueKind.Number when returnValue.TryGetDouble(out var number) =>
+                    ConsoleVariableValue.Bool(number != 0),
+                _ => ConsoleVariableValue.Failed(
+                    $"读取 {variableName} 失败: 期望 bool 返回值，实际为 {returnValue.ValueKind}。")
+            };
+        }
+
+        return returnValue.ValueKind == JsonValueKind.Number && returnValue.TryGetDouble(out var value)
+            ? ConsoleVariableValue.Number(value)
+            : ConsoleVariableValue.Failed(
+                $"读取 {variableName} 失败: 期望数值返回值，实际为 {returnValue.ValueKind}。");
+    }
+
+    private static string Truncate(string text) =>
+        text.Length <= 200 ? text : text[..200] + "…";
 
     public async Task<SequenceExecutionResult> RunSequenceAsync(
         SequenceExecutionRequest request,

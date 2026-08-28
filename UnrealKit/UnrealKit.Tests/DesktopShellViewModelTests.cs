@@ -728,6 +728,108 @@ public sealed class DesktopShellViewModelTests
         Assert.Equal(2, adb.ForwardCallCount);
     }
 
+    [Fact]
+    public async Task ConsoleCommandPresets_LoadFromProjectSettingsWithGroups()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.ProjectFilePath = CreateProject().ProjectFilePath;
+
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+
+        Assert.NotEmpty(viewModel.ConsoleCommandPresets);
+        // 分组是界面按 Group 分组显示的依据，每项都得有值。
+        Assert.All(viewModel.ConsoleCommandPresets, option => Assert.False(string.IsNullOrWhiteSpace(option.Group)));
+        Assert.Contains(viewModel.ConsoleCommandPresets, option => option.Kind == ConsoleCommandKind.Bool);
+        Assert.Contains(viewModel.ConsoleCommandPresets, option => option.Kind == ConsoleCommandKind.Value);
+        Assert.Contains(viewModel.ConsoleCommandPresets, option => option.Kind == ConsoleCommandKind.Action);
+    }
+
+    /// <summary>Value 型的输入框初值取预设的 DefaultValue，Action 型没有当前值一栏。</summary>
+    [Fact]
+    public async Task ConsoleCommandPresets_ValueOptionsStartAtDefaultValue()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.ProjectFilePath = CreateProject().ProjectFilePath;
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+
+        var valueOption = viewModel.ConsoleCommandPresets.First(option => option.Kind == ConsoleCommandKind.Value);
+        Assert.Equal(valueOption.Preset.DefaultValue, valueOption.Value);
+        Assert.True(valueOption.ShowsCurrentValue);
+
+        var actionOption = viewModel.ConsoleCommandPresets.First(option => option.Kind == ConsoleCommandKind.Action);
+        Assert.False(actionOption.ShowsCurrentValue);
+        Assert.Equal("运行", actionOption.ActionLabel);
+    }
+
+    [Fact]
+    public async Task ApplyConsoleCommandPreset_BoolChecked_SendsCvarWithOne()
+    {
+        var adb = new RecordingRunner();
+        var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
+        var option = viewModel.ConsoleCommandPresets.First(candidate => candidate.Kind == ConsoleCommandKind.Bool);
+        option.IsChecked = true;
+
+        await ExecuteApplyAsync(viewModel, option);
+
+        // 通道未通时也应把合成出的指令文本回显出来，便于核对拼装是否正确。
+        Assert.Contains($"{option.Preset.Cvar} 1", viewModel.ConsoleOutput);
+    }
+
+    [Fact]
+    public async Task ApplyConsoleCommandPreset_ValueNotNumeric_SkipsSendAndReportsOnTheRow()
+    {
+        var adb = new RecordingRunner();
+        var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
+        var option = viewModel.ConsoleCommandPresets.First(candidate => candidate.Kind == ConsoleCommandKind.Value);
+        option.Value = "abc";
+
+        await ExecuteApplyAsync(viewModel, option);
+
+        Assert.Contains("[SKIP]", viewModel.ConsoleOutput);
+        Assert.Contains("不是有效数值", option.CurrentValueDisplay);
+        // 校验不过就不该起端口转发去发这条指令。
+        Assert.Equal(0, adb.ForwardCallCount);
+    }
+
+    [Fact]
+    public async Task ApplyAndRefreshCommands_DisabledUntilDeviceSelected()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.ProjectFilePath = CreateProject().ProjectFilePath;
+        await ((AsyncDelegateCommand)viewModel.OpenProjectCommand).ExecuteAsync();
+
+        Assert.False(viewModel.ApplyConsoleCommandPresetCommand.CanExecute(
+            viewModel.ConsoleCommandPresets.First()));
+        Assert.False(viewModel.RefreshConsoleCommandPresetValuesCommand.CanExecute(null));
+
+        await ((AsyncDelegateCommand)viewModel.RefreshDevicesCommand).ExecuteAsync();
+        viewModel.SelectedDevice = viewModel.Devices.First(device => device.Platform == "Android");
+
+        Assert.True(viewModel.ApplyConsoleCommandPresetCommand.CanExecute(
+            viewModel.ConsoleCommandPresets.First()));
+        Assert.True(viewModel.RefreshConsoleCommandPresetValuesCommand.CanExecute(null));
+    }
+
+    /// <summary>读回失败只写进各项的当前值栏并汇总计数，不中断整次刷新。</summary>
+    [Fact]
+    public async Task RefreshConsoleCommandPresetValues_ReadBackFailure_ReportsPerRowAndContinues()
+    {
+        var adb = new RecordingRunner();
+        var viewModel = await CreateViewModelWithSelectedAndroidDeviceAsync(adb);
+        var readable = viewModel.ConsoleCommandPresets.Where(option => option.SupportsReadBack).ToArray();
+
+        await ((AsyncDelegateCommand)viewModel.RefreshConsoleCommandPresetValuesCommand).ExecuteAsync();
+
+        // 测试环境没有在跑的 UE，读回必然失败；关键是每一项都被尝试过并各自留下了原因。
+        Assert.All(readable, option => Assert.False(string.IsNullOrWhiteSpace(option.CurrentValueDisplay)));
+        Assert.Contains("读取失败", viewModel.ConsoleOutput);
+        Assert.False(viewModel.ConsoleIsSending);
+    }
+
+    private static Task ExecuteApplyAsync(ShellViewModel viewModel, ConsoleCommandPresetOption option) =>
+        ((ParameterizedAsyncDelegateCommand<ConsoleCommandPresetOption>)viewModel.ApplyConsoleCommandPresetCommand)
+            .ExecuteAsync(option);
+
     private static UkitProject CreateProject()
     {
         var settings = ProjectSettings.CreateDefaults("Sample") with

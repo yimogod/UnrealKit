@@ -28,13 +28,13 @@ public sealed class RemoteControlService : IRemoteControlService
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
-    public async Task<ProcessExecutionResult> SendConsoleCommandAsync(
+    public Task<ProcessExecutionResult> SendConsoleCommandAsync(
         RemoteControlCommandRequest request,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ValidateRequest(request);
+        ValidateCommandRequest(request);
 
         progress?.Report(new OperationProgress(
             "remote-control-send",
@@ -43,10 +43,68 @@ public sealed class RemoteControlService : IRemoteControlService
             null,
             $"Sending console command via Remote Control: {request.Command}"));
 
+        return CallAsync(
+            request.HttpPort,
+            request.ObjectPath,
+            request.FunctionName,
+            new Dictionary<string, string> { [request.CommandParameterName] = request.Command },
+            // 发指令会改变引擎状态，建立事务让引擎侧可撤销。
+            generateTransaction: true,
+            cancellationToken);
+    }
+
+    public Task<ProcessExecutionResult> QueryConsoleVariableAsync(
+        RemoteControlVariableQueryRequest request,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateQueryRequest(request);
+
+        progress?.Report(new OperationProgress(
+            "remote-control-query",
+            "Querying",
+            null,
+            null,
+            $"Reading console variable via Remote Control: {request.VariableName}"));
+
+        return CallAsync(
+            request.HttpPort,
+            request.ObjectPath,
+            request.FunctionName,
+            new Dictionary<string, string>
+            {
+                [RemoteControlVariableQueryRequest.VariableParameterName] = request.VariableName
+            },
+            // 读回是只读调用，不需要在引擎里留一个可撤销事务。
+            generateTransaction: false,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// 一次 <c>PUT /remote/object/call</c>。发指令与读 cvar 只在 functionName/parameters 上不同，
+    /// 请求构造、超时与状态码的错误映射都在这里一处实现。
+    /// 成功时把响应 body 原样放进 <see cref="ProcessExecutionResult.StandardOutput"/>：
+    /// 函数返回值（顶层 <c>ReturnValue</c>）的解析属于调用方语义，不在传输层做。
+    /// </summary>
+    private async Task<ProcessExecutionResult> CallAsync(
+        int httpPort,
+        string objectPath,
+        string functionName,
+        IReadOnlyDictionary<string, string> parameters,
+        bool generateTransaction,
+        CancellationToken cancellationToken)
+    {
         var startedAt = _timeProvider.GetUtcNow();
-        var uri = BuildUri(request.HttpPort);
+        var uri = BuildUri(httpPort);
         using var content = new StringContent(
-            JsonSerializer.Serialize(BuildPayload(request)),
+            JsonSerializer.Serialize(new
+            {
+                objectPath,
+                functionName,
+                parameters,
+                generateTransaction
+            }),
             Encoding.UTF8,
             "application/json");
 
@@ -112,28 +170,28 @@ public sealed class RemoteControlService : IRemoteControlService
             new ProcessExecutionResult(-1, string.Empty, exception.Message, startedAt, _timeProvider.GetUtcNow()),
             exception);
 
-    private static object BuildPayload(RemoteControlCommandRequest request) => new
-    {
-        objectPath = request.ObjectPath,
-        functionName = request.FunctionName,
-        parameters = new Dictionary<string, string>
-        {
-            [request.CommandParameterName] = request.Command
-        },
-        generateTransaction = true
-    };
-
     private static Uri BuildUri(int httpPort) =>
         new($"http://127.0.0.1:{httpPort}/remote/object/call");
 
-    private static void ValidateRequest(RemoteControlCommandRequest request)
+    private static void ValidateCommandRequest(RemoteControlCommandRequest request)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(request.HttpPort);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(request.HttpPort, 65535);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.ObjectPath);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.FunctionName);
+        ValidateEndpoint(request.HttpPort, request.ObjectPath, request.FunctionName);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.CommandParameterName);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Command);
+    }
+
+    private static void ValidateQueryRequest(RemoteControlVariableQueryRequest request)
+    {
+        ValidateEndpoint(request.HttpPort, request.ObjectPath, request.FunctionName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.VariableName);
+    }
+
+    private static void ValidateEndpoint(int httpPort, string objectPath, string functionName)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(httpPort);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(httpPort, 65535);
+        ArgumentException.ThrowIfNullOrWhiteSpace(objectPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(functionName);
     }
 }
 
