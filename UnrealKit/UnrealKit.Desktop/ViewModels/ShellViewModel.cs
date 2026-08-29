@@ -93,7 +93,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _renderDocStandardError = string.Empty;
     private string _renderDocSummary = "Configure Python and RenderDoc script paths, then execute.";
     private string _consoleCommandText = string.Empty;
-    private string _consoleOutput = "Send a console command to the selected device.";
+    private string _consoleOutput = string.Empty;
     private bool _consoleIsSending;
     private string _consoleSequenceName = string.Empty;
     private string _consoleSequenceInlineCmds = string.Empty;
@@ -2171,11 +2171,24 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         set { if (SetField(ref _consoleCommandText, value)) _sendConsoleCommandCommand.RaiseCanExecuteChanged(); }
     }
 
+    /// <summary>
+    /// 指令回显与失败原因。空串表示「还没发过指令」，界面据此整块折叠，
+    /// 把纵向空间让给预设列表——占位说明文字不值得常驻一行。
+    /// </summary>
     public string ConsoleOutput
     {
         get => _consoleOutput;
-        set => SetField(ref _consoleOutput, value ?? "Send a console command to the selected device.");
+        set
+        {
+            if (SetField(ref _consoleOutput, value ?? string.Empty))
+            {
+                OnPropertyChanged(nameof(HasConsoleOutput));
+            }
+        }
     }
+
+    /// <summary>回显区是否有内容。为 false 时界面隐藏整块回显区。</summary>
+    public bool HasConsoleOutput => !string.IsNullOrWhiteSpace(_consoleOutput);
 
     public bool ConsoleIsSending
     {

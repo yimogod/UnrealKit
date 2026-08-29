@@ -114,38 +114,35 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
+            <!-- 快速指令 / 预设标题栏各占一行，列表吃掉全部剩余高度，回显区无内容时整块折叠. -->
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBlock Text="快速指令" Style="{StaticResource SectionTitleTextStyle}" />
-        <StackPanel Grid.Row="1" Margin="0,8,0,12">
-            <TextBlock Text="向已选设备的 UE 应用发送单条控制台指令。" Style="{StaticResource HintTextStyle}" />
-            <DockPanel Margin="0,10,0,0" LastChildFill="True">
-                <Button Content="发送" Command="{Binding SendConsoleCommandCommand}" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
-                <TextBox Text="{Binding ConsoleCommandText, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" ToolTip="例如: stat fps" />
-            </DockPanel>
-        </StackPanel>
+        <!-- 快速指令与预设区各自的说明文字都移到控件 ToolTip 上: 常驻的说明行会挤占预设列表的高度. -->
+        <DockPanel Margin="0,0,0,10" LastChildFill="True">
+            <TextBlock DockPanel.Dock="Left" Text="快速指令" VerticalAlignment="Center" Margin="0,0,10,0"
+                       Style="{StaticResource SectionTitleTextStyle}" />
+            <Button Content="发送" Command="{Binding SendConsoleCommandCommand}" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+            <TextBox Text="{Binding ConsoleCommandText, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center"
+                     ToolTip="向已选设备的 UE 应用发送单条控制台指令，例如: stat fps" />
+        </DockPanel>
 
-        <TextBlock Grid.Row="2" Text="预设指令" Style="{StaticResource SectionTitleTextStyle}" Margin="0,6,0,0" />
-        <DockPanel Grid.Row="3" Margin="0,8,0,8" LastChildFill="False">
-            <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center"
-                       Text="开关与数值型预设可从运行中的游戏读回当前值；动作型只执行一次。"
-                       Style="{StaticResource HintTextStyle}" />
+        <DockPanel Grid.Row="1" Margin="0,0,0,6" LastChildFill="False">
+            <TextBlock DockPanel.Dock="Left" Text="预设指令" VerticalAlignment="Center"
+                       Style="{StaticResource SectionTitleTextStyle}" />
             <Button DockPanel.Dock="Right" Content="刷新当前值" Padding="14,6"
                     Command="{Binding RefreshConsoleCommandPresetValuesCommand}"
-                    ToolTip="从运行中的 UE 逐项读回开关与数值型预设的当前值" />
+                    ToolTip="从运行中的 UE 逐项读回开关与数值型预设的当前值；动作型没有当前值" />
         </DockPanel>
 
         <!--
             HorizontalContentAlignment=Stretch: 默认 Left 会让行内容缩到自身宽度，
             各行的列就不再纵向对齐.
         -->
-        <ListBox Grid.Row="4"
+        <ListBox Grid.Row="2"
                  ItemsSource="{Binding Source={StaticResource GroupedConsoleCommandPresets}}"
                  ItemTemplate="{StaticResource ConsoleCommandPresetTemplate}"
                  HorizontalContentAlignment="Stretch"
@@ -157,7 +154,8 @@
             </ListBox.GroupStyle>
         </ListBox>
 
-        <ScrollViewer Grid.Row="5" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" MaxHeight="90">
+        <ScrollViewer Grid.Row="3" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" MaxHeight="90"
+                      Visibility="{Binding HasConsoleOutput, Converter={StaticResource BoolToVisibilityConverter}}">
             <TextBox Text="{Binding ConsoleOutput}" Style="{StaticResource ConsoleEchoTextBoxStyle}" />
         </ScrollViewer>
     </Grid>
