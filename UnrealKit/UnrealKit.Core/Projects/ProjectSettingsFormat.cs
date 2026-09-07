@@ -66,7 +66,7 @@ public static class ProjectSettingsFormat
          [{PlatformProfileIni.SectionName(TargetPlatform.Android)}]
          PackageName=<原 PackageName>
          Activity=<原 Activity>
-         GameRootTemplate=<原 DeviceGameRootTemplate>
+         GameRoot=<原 DeviceGameRootTemplate>
          AdbPath=<原 AdbPath>
 
          [{PlatformProfileIni.SectionName(TargetPlatform.Win64)}]

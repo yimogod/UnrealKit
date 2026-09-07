@@ -86,12 +86,12 @@ public abstract record PlatformProfile
 public sealed record AndroidPlatformProfile(
     string PackageName,
     string Activity,
-    string GameRootTemplate,
+    string GameRoot,
     string AdbPath,
     string FtpPath = "") : PlatformProfile
 {
     /// <summary>设备端游戏根目录模板的默认值，与旧工具的 UE Saved 路径规则一致。</summary>
-    public const string DefaultGameRootTemplate =
+    public const string DefaultGameRoot =
         "/sdcard/Android/data/{PackageName}/files/UnrealGame/{UnrealProjectName}/{UnrealProjectName}";
 
     public override TargetPlatform Platform => TargetPlatform.Android;
@@ -101,7 +101,7 @@ public sealed record AndroidPlatformProfile(
     public static AndroidPlatformProfile CreateDefaults() => new(
         PackageName: string.Empty,
         Activity: string.Empty,
-        GameRootTemplate: DefaultGameRootTemplate,
+        GameRoot: DefaultGameRoot,
         AdbPath: string.Empty,
         FtpPath: string.Empty);
 
@@ -116,7 +116,7 @@ public sealed record AndroidPlatformProfile(
         // Saved 目录由 Game 目录派生，与 Win64 一致：UE 自身把 Saved 固定放在
         // 游戏根目录下，单独配置只会让两者对不上，且错开的路径会让采集拉到空目录。
         var gameRoot = ValidateDevicePath(
-            Expand(GameRootTemplate, unrealProjectName), PathStyle, nameof(GameRootTemplate));
+            Expand(GameRoot, unrealProjectName), PathStyle, nameof(GameRoot));
 
         return new PlatformTarget(
             Platform,
@@ -130,11 +130,11 @@ public sealed record AndroidPlatformProfile(
 
     public override void Validate()
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(GameRootTemplate, nameof(GameRootTemplate));
+        ArgumentException.ThrowIfNullOrWhiteSpace(GameRoot, nameof(GameRoot));
 
         // 模板含未展开的占位符，只校验风格：占位符值可能尚未填写，
         // 但模板本身写成 Windows 路径一定是错的。
-        ValidateDevicePath(GameRootTemplate, PathStyle, nameof(GameRootTemplate));
+        ValidateDevicePath(GameRoot, PathStyle, nameof(GameRoot));
     }
 
     private string Expand(string template, string unrealProjectName) => template

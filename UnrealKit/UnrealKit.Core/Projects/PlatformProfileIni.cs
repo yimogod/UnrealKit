@@ -66,7 +66,7 @@ internal static class PlatformProfileIni
             case AndroidPlatformProfile android:
                 document.SetValue(section, "PackageName", android.PackageName);
                 document.SetValue(section, "Activity", android.Activity);
-                document.SetValue(section, "GameRootTemplate", android.GameRootTemplate);
+                document.SetValue(section, "GameRoot", android.GameRoot);
                 document.SetValue(section, "AdbPath", android.AdbPath);
                 document.SetValue(section, "FtpPath", android.FtpPath);
                 break;
@@ -89,7 +89,7 @@ internal static class PlatformProfileIni
         return new AndroidPlatformProfile(
             PackageName: value("PackageName", defaults.PackageName),
             Activity: value("Activity", defaults.Activity),
-            GameRootTemplate: value("GameRootTemplate", defaults.GameRootTemplate),
+            GameRoot: value("GameRoot", defaults.GameRoot),
             AdbPath: value("AdbPath", defaults.AdbPath),
             FtpPath: value("FtpPath", defaults.FtpPath));
     }

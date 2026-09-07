@@ -35,7 +35,7 @@
                         <TextBlock Text="启动 Activity" Style="{StaticResource StackedFieldLabelTextStyle}" />
                         <TextBox Text="{Binding Activity, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
                         <TextBlock Text="设备 UE Game 路径模板" Style="{StaticResource StackedFieldLabelTextStyle}" />
-                        <TextBox Text="{Binding DeviceGameRootTemplate, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
+                        <TextBox Text="{Binding DeviceGameRoot, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
                         <!-- Saved 目录不单独配置：UE 固定把它放在 Game 目录下，
                              两处分别填写只会让它们对不上。此处只回显派生结果。 -->
                         <TextBlock Text="{Binding DeviceSavedRootPreview, StringFormat='Saved 目录：{0}'}"

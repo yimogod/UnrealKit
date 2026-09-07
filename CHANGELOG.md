@@ -67,7 +67,7 @@ All notable changes to UnrealKit.
 - `InstallApplication` capability added to `DeviceCapability`/`IDeviceService`; `AdbDeviceService` forwards to `adb -s <serial> install -r <apk>` (parameterized), `Win64DeviceService` reports it unsupported. GUI confirms before installing, showing the full device and package path
 
 ### Launch Parameter Remote Path Is Fixed Per Platform
-- **Breaking:** removed `commandline push/delete --remote-path` and the GUI "远端 uecommandline.txt 路径" field. `uecommandline.txt` always lives at the platform's fixed game root (`{GameRootPath}/uecommandline.txt`), which UE itself decides — Android and Win64 already resolve this from `GameRootTemplate`/`WorkingDirectory`. A free-form override invited a path that diverged from the engine's actual read location, so push/delete silently missed the file the game was reading. `LaunchParameterRequest.RemotePathOverride`, `ILaunchParameterService.GetRemotePath`/`DeleteAsync` override parameters, and `LaunchParameterService.ValidateOverridePath` are removed.
+- **Breaking:** removed `commandline push/delete --remote-path` and the GUI "远端 uecommandline.txt 路径" field. `uecommandline.txt` always lives at the platform's fixed game root (`{GameRootPath}/uecommandline.txt`), which UE itself decides — Android and Win64 already resolve this from `GameRoot`/`WorkingDirectory`. A free-form override invited a path that diverged from the engine's actual read location, so push/delete silently missed the file the game was reading. `LaunchParameterRequest.RemotePathOverride`, `ILaunchParameterService.GetRemotePath`/`DeleteAsync` override parameters, and `LaunchParameterService.ValidateOverridePath` are removed.
 
 ### Platform Scope
 
@@ -112,7 +112,7 @@ A single analysis session targets one platform — this run looks at the Windows
 - The GUI Devices page has a 获取 IP button, enabled only for a selected Android device in `device` state. Every interface goes to the operation log (`DeviceIp` category); the inline summary shows the WiFi address, falling back to all interfaces when there is no WiFi. The summary resets when the selected device changes, so one device's address is never read as another's
 
 ### Saved Directory Derived From Game Directory (breaking)
-- **Breaking:** `AndroidPlatformProfile.SavedRootTemplate` and its `[UnrealKit.Platform.Android] SavedRootTemplate` INI key are removed, along with `AndroidPlatformProfile.DefaultSavedRootTemplate`. The device Saved path is now `GameRootTemplate` + `/Saved`, matching what Win64 already did and what UE itself lays out on disk. Two independently-configured paths could drift apart, and a Saved path pointing outside the game directory makes a capture pull an empty directory while reporting success
+- **Breaking:** `AndroidPlatformProfile.SavedRootTemplate` and its `[UnrealKit.Platform.Android] SavedRootTemplate` INI key are removed, along with `AndroidPlatformProfile.DefaultSavedRootTemplate`. The device Saved path is now `GameRoot` + `/Saved`, matching what Win64 already did and what UE itself lays out on disk. Two independently-configured paths could drift apart, and a Saved path pointing outside the game directory makes a capture pull an empty directory while reporting success
 - `PlatformProfile.SavedDirectoryName` (`"Saved"`) is the single definition of that subdirectory name, shared by both platforms
 - A leftover `SavedRootTemplate=` line in an existing `Config/DefaultGame.ini` is ignored, not an error — no rewrite is required. If it pointed somewhere other than `<GameRoot>/Saved`, the effective capture source changes, so check it before the next capture
 - GUI settings show 设备 UE Game 路径模板 in place of the Saved template, with the derived Saved path displayed read-only underneath so the actual capture location stays visible
@@ -217,6 +217,9 @@ Platform differences now have a single exit point: `PlatformProfile.Resolve` ret
 - Trend coverage: chronological ordering, tag/device/date filtering, missing points, deltas across a gap, ambiguous and absent input files, unparsable captures, single-capture ranges, inverted date ranges
 - Export coverage: CSV and TSV delimiters, published column names, sheet names, summary-only versus point output, and missing values rendered as `missing`
 - New `TestData/Baseline/` samples provide the "current" side, deliberately containing a metric missing on one side and a renamed camera. Trend tests assemble these samples into multi-capture project trees rather than adding more samples
+
+### Rename GameRootTemplate → GameRoot (breaking)
+- **Breaking:** `AndroidPlatformProfile.GameRootTemplate` is renamed to `GameRoot`; `DefaultGameRootTemplate` to `DefaultGameRoot`. The INI key `[UnrealKit.Platform.Android] GameRootTemplate` is renamed to `GameRoot`. Existing `Config/DefaultGame.ini` files with `GameRootTemplate=` must be updated to `GameRoot=`
 
 ## [0.1.0] — 2026-08-09
 

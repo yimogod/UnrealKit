@@ -26,7 +26,7 @@ public sealed class PlatformProfileTests
         var profile = AndroidPlatformProfile.CreateDefaults() with
         {
             PackageName = "com.example.game",
-            GameRootTemplate = "/sdcard/Custom/{PackageName}/{UnrealProjectName}"
+            GameRoot = "/sdcard/Custom/{PackageName}/{UnrealProjectName}"
         };
 
         var target = profile.Resolve("Sample");
@@ -74,7 +74,7 @@ public sealed class PlatformProfileTests
     [Fact]
     public void AndroidProfile_Validate_RejectsWindowsStyleTemplate()
     {
-        var profile = AndroidPlatformProfile.CreateDefaults() with { GameRootTemplate = @"C:\sdcard\Game" };
+        var profile = AndroidPlatformProfile.CreateDefaults() with { GameRoot = @"C:\sdcard\Game" };
 
         Assert.Throws<ArgumentException>(() => profile.Validate());
     }

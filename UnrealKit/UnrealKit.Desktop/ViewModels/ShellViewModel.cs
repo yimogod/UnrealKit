@@ -46,7 +46,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _packageName = string.Empty;
     private string _unrealProjectName = string.Empty;
     private string _activity = string.Empty;
-    private string _deviceGameRootTemplate = string.Empty;
+    private string _deviceGameRoot = string.Empty;
     private string _adbPath = string.Empty;
     private string _memInfoInputPath = string.Empty;
     private string _memInfoProcessDescription = "Select a meminfo text file to begin offline parsing.";
@@ -305,15 +305,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     /// 设备端游戏根目录模板。Saved 目录不单独配置，由该目录 + <c>Saved</c> 派生，
     /// 见 <see cref="DeviceSavedRootPreview"/>。
     /// </summary>
-    public string DeviceGameRootTemplate
+    public string DeviceGameRoot
     {
-        get => _deviceGameRootTemplate;
-        set { if (SetField(ref _deviceGameRootTemplate, value)) OnPropertyChanged(nameof(DeviceSavedRootPreview)); }
+        get => _deviceGameRoot;
+        set { if (SetField(ref _deviceGameRoot, value)) OnPropertyChanged(nameof(DeviceSavedRootPreview)); }
     }
 
     /// <summary>由 Game 目录派生的 Saved 目录，只读展示，让用户看到实际采集位置。</summary>
     public string DeviceSavedRootPreview =>
-        DeviceGameRootTemplate.Trim() is { Length: > 0 } template
+        DeviceGameRoot.Trim() is { Length: > 0 } template
             ? $"{template.TrimEnd('/')}/{PlatformProfile.SavedDirectoryName}"
             : string.Empty;
 
@@ -1045,7 +1045,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var androidValues = android ?? AndroidPlatformProfile.CreateDefaults();
         PackageName = androidValues.PackageName;
         Activity = androidValues.Activity;
-        DeviceGameRootTemplate = androidValues.GameRootTemplate;
+        DeviceGameRoot = androidValues.GameRoot;
         AdbPath = androidValues.AdbPath;
         AndroidFtpPath = androidValues.FtpPath;
 
@@ -1088,7 +1088,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 ? new AndroidPlatformProfile(
                     PackageName: PackageName.Trim(),
                     Activity: Activity.Trim(),
-                    GameRootTemplate: DeviceGameRootTemplate.Trim(),
+                    GameRoot: DeviceGameRoot.Trim(),
                     AdbPath: AdbPath.Trim(),
                     FtpPath: AndroidFtpPath.Trim())
                 : null,
