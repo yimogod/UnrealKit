@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO;
 using UnrealKit.Core.Console;
 using UnrealKit.Core.Projects;
 
@@ -171,8 +172,16 @@ public sealed record DownloadedPackageOption(string FolderName, string? LocalApk
     /// <summary>该包是否可直接安装（有唯一本地 APK 且无阻塞原因）。</summary>
     public bool IsInstallable => LocalApkPath is not null;
 
-    /// <summary>列表展示的说明：可直接安装的包显示版本目录名，不可安装的在目录名后追加原因。</summary>
-    public string Display => InstallBlockReason is null ? FolderName : $"{FolderName}（{InstallBlockReason}）";
+    /// <summary>列表展示的说明：有 APK 时在目录名后追加文件名；不可安装的再追加原因。</summary>
+    public string Display
+    {
+        get
+        {
+            var apkName = LocalApkPath is not null ? Path.GetFileName(LocalApkPath) : null;
+            var label = apkName is not null ? $"{FolderName} / {apkName}" : FolderName;
+            return InstallBlockReason is null ? label : $"{label}（{InstallBlockReason}）";
+        }
+    }
 }
 
 public sealed record TrendChartAxisLabel(double X, double Y, string Label);

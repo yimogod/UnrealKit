@@ -10,12 +10,19 @@ public sealed record RemoteControlOptions(
     int HttpPort,
     string ObjectPath,
     string FunctionName,
-    string CommandParameterName)
+    string CommandParameterName,
+    int LocalForwardPort = 0)
 {
     public const int DefaultHttpPort = 30010;
     public const string DefaultObjectPath = "/Script/Engine.Default__KismetSystemLibrary";
     public const string DefaultFunctionName = "ExecuteConsoleCommand";
     public const string DefaultCommandParameterName = "Command";
+
+    /// <summary>
+    /// adb forward 时绑定的本地端口。0 表示与 <see cref="HttpPort"/> 相同（不冲突时的默认行为）。
+    /// 本机同时跑 UE Editor 并占用 <see cref="HttpPort"/> 时，设为其他空闲端口以避免 10048 冲突。
+    /// </summary>
+    public int EffectiveForwardPort => LocalForwardPort > 0 ? LocalForwardPort : HttpPort;
 
     public static RemoteControlOptions Default { get; } = new(
         DefaultHttpPort,
@@ -34,7 +41,8 @@ public sealed record RemoteControlOptions(
             settings.RemoteControlHttpPort,
             settings.RemoteControlObjectPath,
             settings.RemoteControlFunctionName,
-            settings.RemoteControlCommandParameter);
+            settings.RemoteControlCommandParameter,
+            settings.RemoteControlLocalForwardPort);
     }
 }
 

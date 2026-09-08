@@ -16,11 +16,15 @@ public interface ICommandTransport
     CommandTransportKind Kind { get; }
 
     /// <summary>
-    /// 通道在设备上监听的端口。Android 侧的 <c>adb forward</c> 需要它——
-    /// 由通道自己给出，调用方不必按 <see cref="Kind"/> 再选一次端口，
-    /// 否则转发的端口与实际连接的端口会各自取值而对不上。
+    /// 通道在设备上监听的端口。HTTP 连接用这个端口。
     /// </summary>
     int Port { get; }
+
+    /// <summary>
+    /// <c>adb forward</c> 绑定的本地端口。通常与 <see cref="Port"/> 相同；
+    /// 本机同时运行 UE Editor 且占用 <see cref="Port"/> 时可配置为不同值以避免 10048 冲突。
+    /// </summary>
+    int ForwardPort { get; }
 
     /// <summary>
     /// 发送一条控制台指令。

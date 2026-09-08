@@ -265,7 +265,8 @@ public sealed record ProjectSettings(
     int RemoteControlHttpPort = 30010,
     string RemoteControlObjectPath = "/Script/Engine.Default__KismetSystemLibrary",
     string RemoteControlFunctionName = "ExecuteConsoleCommand",
-    string RemoteControlCommandParameter = "Command")
+    string RemoteControlCommandParameter = "Command",
+    int RemoteControlLocalForwardPort = 0)
 {
     /// <summary>
     /// 新建工程时两个平台都给出默认 profile：多平台工程是默认假设，

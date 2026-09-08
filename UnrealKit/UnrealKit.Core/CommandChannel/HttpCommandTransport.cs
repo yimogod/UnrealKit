@@ -28,6 +28,8 @@ public sealed class HttpCommandTransport : ICommandTransport
 
     public int Port => _options.HttpPort;
 
+    public int ForwardPort => _options.EffectiveForwardPort;
+
     public Task<ProcessExecutionResult> SendConsoleCommandAsync(
         string command,
         IProgress<OperationProgress>? progress = null,

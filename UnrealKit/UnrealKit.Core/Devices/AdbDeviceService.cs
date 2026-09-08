@@ -294,11 +294,11 @@ public sealed class AdbDeviceService : IDeviceService
                 "Forwarding",
                 null,
                 null,
-                $"Forwarding TCP port {_commandTransport.Port} ({_commandTransport.Kind}) for {device.Id}."));
+                $"Forwarding TCP {_commandTransport.ForwardPort}→{_commandTransport.Port} ({_commandTransport.Kind}) for {device.Id}."));
 
             await RunRequiredAsync(_adb.ForwardTcpAsync(
                 device.Id,
-                _commandTransport.Port,
+                _commandTransport.ForwardPort,
                 _commandTransport.Port,
                 progress,
                 cancellationToken));

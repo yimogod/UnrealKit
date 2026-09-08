@@ -1,4 +1,4 @@
-namespace UnrealKit.Core.Projects;
+﻿namespace UnrealKit.Core.Projects;
 
 /// <summary>
 /// 设备端路径风格。平台差异中真正影响路径拼接的只有这一个维度，
@@ -26,7 +26,7 @@ public enum DevicePathStyle
 /// <param name="ProcessIdentity">内存采集的目标进程标识。Android 为包名，Win64 为进程名。</param>
 /// <param name="LaunchTarget">启动目标。Android 为包名，Win64 为可执行文件路径。</param>
 /// <param name="LaunchActivity">启动 Activity。仅 Android 有值，其他平台为 null。</param>
-/// <param name="GameRootPath">设备端游戏根目录，uecommandline.txt 所在位置。</param>
+/// <param name="GameRootPath">设备端游戏根目录，Saved目录 所在位置。</param>
 /// <param name="SavedRootPath">设备端 UE Saved 目录。</param>
 public sealed record PlatformTarget(
     TargetPlatform Platform,
@@ -39,6 +39,18 @@ public sealed record PlatformTarget(
 {
     /// <summary>平台的稳定字符串标识，用于归档目录名与 CaptureManifest。</summary>
     public string PlatformName => PlatformNames.ToName(Platform);
+
+    /// <summary>
+    /// 设备端引擎根目录，即 <see cref="GameRootPath"/> 的父目录。
+    /// uecommandline.txt 放在此处而不是 GameRootPath 下。
+    /// </summary>
+    public string EngineRootPath => PathStyle switch
+    {
+        DevicePathStyle.Unix => GameRootPath.Contains('/') ? GameRootPath[..GameRootPath.TrimEnd('/').LastIndexOf('/')] : GameRootPath,
+        DevicePathStyle.Windows => Path.GetDirectoryName(GameRootPath) ?? GameRootPath,
+        _ => throw new ArgumentOutOfRangeException(nameof(PathStyle), PathStyle, "Unsupported device path style.")
+    };
+
 
     /// <summary>
     /// 在设备端路径下拼接文件名。按 <see cref="PathStyle"/> 分派，

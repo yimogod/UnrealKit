@@ -198,6 +198,7 @@ public sealed class ProjectService : IProjectService
         document.SetValue(SettingsSection, "RemoteControlObjectPath", settings.RemoteControlObjectPath);
         document.SetValue(SettingsSection, "RemoteControlFunctionName", settings.RemoteControlFunctionName);
         document.SetValue(SettingsSection, "RemoteControlCommandParameter", settings.RemoteControlCommandParameter);
+        document.SetValue(SettingsSection, "RemoteControlLocalForwardPort", settings.RemoteControlLocalForwardPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
         document.SetValue(SettingsSection, "DefaultCaptureTag", settings.DefaultCaptureTag);
         document.SetValue(SettingsSection, "DefaultExportDirectory", settings.DefaultExportDirectory);
 
@@ -297,7 +298,8 @@ public sealed class ProjectService : IProjectService
             ParsePort(layered.GetValue(SettingsSection, "RemoteControlHttpPort"), defaults.RemoteControlHttpPort, "RemoteControlHttpPort"),
             RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlObjectPath"), defaults.RemoteControlObjectPath),
             RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlFunctionName"), defaults.RemoteControlFunctionName),
-            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlCommandParameter"), defaults.RemoteControlCommandParameter));
+            RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlCommandParameter"), defaults.RemoteControlCommandParameter),
+            ParseOptionalPort(layered.GetValue(SettingsSection, "RemoteControlLocalForwardPort"), "RemoteControlLocalForwardPort"));
     }
 
     private static string RequireValue(IniDocument document, string key)
@@ -343,6 +345,11 @@ public sealed class ProjectService : IProjectService
         if (settings.RemoteControlHttpPort is < 1 or > 65535)
         {
             throw new ArgumentException("RemoteControlHttpPort must be between 1 and 65535.", nameof(settings));
+        }
+
+        if (settings.RemoteControlLocalForwardPort is not 0 and (< 1 or > 65535))
+        {
+            throw new ArgumentException("RemoteControlLocalForwardPort must be 0 (same as HttpPort) or between 1 and 65535.", nameof(settings));
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(settings.RemoteControlObjectPath);
@@ -396,6 +403,25 @@ public sealed class ProjectService : IProjectService
             || port is < 1 or > 65535)
         {
             throw new InvalidDataException($"{fieldName} 配置无效: {value}。必须是 1 到 65535 之间的整数。");
+        }
+
+        return port;
+    }
+
+    /// <summary>
+    /// 解析可选端口。未配置或空白返回 0（表示「不覆盖」）；配置了但非法报错。
+    /// </summary>
+    private static int ParseOptionalPort(string? value, string fieldName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return 0;
+        }
+
+        if (!int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var port)
+            || port is < 1 or > 65535)
+        {
+            throw new InvalidDataException($"{fieldName} 配置无效: {value}。必须是 1 到 65535 之间的整数，或留空表示与 RemoteControlHttpPort 相同。");
         }
 
         return port;

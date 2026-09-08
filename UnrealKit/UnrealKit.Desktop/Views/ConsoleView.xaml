@@ -47,7 +47,7 @@
             <Grid Margin="10,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="260" />
-                    <ColumnDefinition Width="120" />
+                    <ColumnDefinition Width="400" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="150" />
                     <ColumnDefinition Width="*" />
@@ -57,7 +57,7 @@
                            ToolTip="{Binding Description}" />
 
                 <!-- 输入区: Bool 出复选框, Value 出输入框, Action 两者皆无. -->
-                <ContentControl Grid.Column="1" VerticalAlignment="Center">
+                <ContentControl Grid.Column="1" VerticalAlignment="Center" Content="{Binding}">
                     <ContentControl.Style>
                         <Style TargetType="ContentControl">
                             <Style.Triggers>
