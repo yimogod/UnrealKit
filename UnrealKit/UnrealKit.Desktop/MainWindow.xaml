@@ -155,7 +155,7 @@
                                 </ScrollViewer>
                             </Border>
 
-                            <Grid Grid.Column="1" Margin="28">
+                            <Grid Grid.Column="1" Margin="2">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
@@ -163,7 +163,7 @@
                                 </Grid.RowDefinitions>
                                 <TextBlock Text="{Binding SelectedNavigationItem}" Style="{StaticResource PageHeaderTextStyle}" />
                                 <TextBlock Grid.Row="1" Text="{Binding PageDescription}" Style="{StaticResource HintTextStyle}" Margin="0,8,0,0" />
-                                <Border Grid.Row="2" Background="White" CornerRadius="6" BorderBrush="#FFE2E6EA" BorderThickness="1" Padding="20">
+                                <Border Grid.Row="2" Background="White" CornerRadius="6" BorderBrush="#FFE2E6EA" BorderThickness="1" Padding="6">
                                     <!--
                                         直接取 SelectedItem.View，不用 ContentSource="SelectedContent": 
                                         ItemsSource 承载的是 NavigationPage 而非 TabItem，
@@ -246,7 +246,7 @@
             </TabControl.ItemsPanel>
         </TabControl>
 
-        <Border Grid.Row="2" Background="White" BorderBrush="#FFE2E6EA" BorderThickness="0,1,0,0" Padding="12,8">
+        <Border Grid.Row="2" Background="White" BorderBrush="#FFE2E6EA" BorderThickness="0,1,0,0" Padding="12,4">
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource HintTextStyle}" />
         </Border>
     </Grid>
