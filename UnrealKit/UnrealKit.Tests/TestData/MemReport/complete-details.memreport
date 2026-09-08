@@ -1,12 +1,525 @@
-Changelist: 123456
+Changelist: 0
+Config: Development
+Device Name: Android_Adreno64x_Vulkan
+Device Profile: None
+CommandLine Options:  /Game/Maps/BaseWorld -nosound -GameMode=/Game/Logic/ThirdPersonDebug/Blueprints/ThirdPersonDebug.ThirdPersonDebug_C -tracehost=10.0.81.94 -trace=default,memory -ProfilingServerIP=10.0.81.94 -ProfilingServerPort=8800
+Time Since Boot: 279.74 Seconds
 
+
+MemReport: Begin command "r.DumpRenderTargetPoolMemory"
+Pooled Render Targets:
+   0.023MB  768x   8           1mip(s) AsciiTexture (R8) Unused frames: 0
+   0.051MB   66x  64           1mip(s) SSProfiles (A16B16G16R16) Unused frames: 0
+   1.641MB  916x 436           1mip(s) SceneVelocity (G16R16) Unused frames: 1
+   0.129MB 1024x  32           1mip(s) CombineLUTs (A2B10G10R10) Unused frames: 0
+   8.473MB 1520x 720           1mip(s) TAA.History (FloatRGBA) Unused frames: 0
+   0.055MB  229x 109           1mip(s) BloomSetup_EyeAdaptation (PF_R16F) Unused frames: 0
+   1.648MB  916x 436           1mip(s) SceneDepthZ (DepthStencil) Unused frames: 0
+   0.031MB   32x  32x  4       1mip(s) SkyAtmosphere.CameraAPVolume1 (FloatRGBA) Unused frames: 0
+   0.031MB   32x  32x  4       1mip(s) SkyAtmosphere.CameraAPVolume0 (FloatRGBA) Unused frames: 0
+   1.648MB  916x 436           1mip(s) GBufferB (R8G8B8A8) Unused frames: 1
+   1.648MB  916x 436           1mip(s) GBufferC (R8G8B8A8) Unused frames: 1
+   1.648MB  916x 436           1mip(s) GBufferA (A2B10G10R10) Unused frames: 1
+   1.648MB  916x 436           1mip(s) SceneColor (FloatR11G11B10) Unused frames: 1
+   0.001MB    1x   1           1mip(s) DummyOverdrawUAV (R32_UINT) Unused frames: 1
+  48.984MB  128x 128cube[ 38]  8mip(s) ReflectionEnvs (FloatRGBA) Unused frames: 0
+   0.059MB   64x  64    [  3]  1mip(s) SSProfilePreIntegratedTexture (A2B10G10R10) Unused frames: 0
+   0.062MB  256x  64           1mip(s) SkyAtmosphere.TransmittanceLut (R8G8B8A8) Unused frames: 0
+   0.008MB   32x  32           1mip(s) SkyAtmosphere.MultiScatteredLuminanceLut (FloatRGBA) Unused frames: 0
+   0.001MB    1x   1           1mip(s) SkyAtmosphere.DistantSkyLightLut (FloatRGBA) Unused frames: 0
+   0.047MB   96x  50           1mip(s) SkyAtmosphere.SkyViewLut (FloatRGBA) Unused frames: 0
+   1.008MB 1024x 512           1mip(s) MobileCSMAndSpotLightShadowmap (ShadowDepth) Unused frames: 0
+   0.055MB  229x 109           1mip(s) BloomSetup_EyeAdaptation (PF_R16F) Unused frames: 0
+   8.473MB 1520x 720           1mip(s) TAA.History (FloatRGBA) Unused frames: 0
+77.373MB total, 59.556MB used, 0.000MB unused, 23 render targets
+Deferred Render Targets:
+0.000MB Deferred total
+MemReport: End command "r.DumpRenderTargetPoolMemory"
+
+MemReport: Begin command "ListTextures"
 Listing all textures.
-Name | Dimensions | Format | Memory
-Texture2D /Game/Textures/T_Stone | 2048x1024 | PF_DXT1 | 1.5 MB
+Cooked/OnDisk: Width x Height (Size in KB, Authored Bias), Current/InMem: Width x Height (Size in KB), Format, LODGroup, Name, Streaming, UnknownRef, VT, Usage Count, NumMips, Uncompressed
+1024x1024 (8224 KB, ?), 1024x1024 (8224 KB), PF_FloatRGBA, TEXTUREGROUP_16BitData, /Game/Tutorial/Effect/Textures/T_Big_Cube_Stage03_VAT_Pos.T_Big_Cube_Stage03_VAT_Pos, NO, NO, NO, 0, 1, YES
+1024x1024 (8224 KB, ?), 1024x1024 (8224 KB), PF_FloatRGBA, TEXTUREGROUP_16BitData, /Game/Tutorial/Effect/Textures/T_Big_Cube_Stage03_VAT_Rot.T_Big_Cube_Stage03_VAT_Rot, NO, NO, NO, 0, 1, YES
+1024x1024 (8192 KB, ?), 1024x1024 (8192 KB), PF_FloatRGBA, TEXTUREGROUP_UI, /Game/Logic/RenderTarget/RT_Weapon.RT_Weapon, NO, NO, NO, 0, 1, NO
+256x256 (4416 KB, ?), 256x256 (4416 KB), PF_FloatRGBA, TEXTUREGROUP_Skybox, /Game/Logic/Travel/Textures/TC_DS360_011_2048.TC_DS360_011_2048, NO, NO, NO, 0, 9, NO
+256x256 (4416 KB, ?), 256x256 (4416 KB), PF_FloatRGBA, TEXTUREGROUP_World, /Game/Tutorial/Environment/Nature/FarView/TC_Tutorial_Nature_01_Tex.TC_Tutorial_Nature_01_Tex, NO, NO, NO, 0, 9, NO
+1024x512 (4112 KB, ?), 1024x512 (4112 KB), PF_FloatRGBA, TEXTUREGROUP_16BitData, /Game/Tutorial/Effect/Textures/T_Door_VAT_Pos.T_Door_VAT_Pos, NO, NO, NO, 0, 1, YES
+1024x512 (4112 KB, ?), 1024x512 (4112 KB), PF_FloatRGBA, TEXTUREGROUP_16BitData, /Game/Tutorial/Effect/Textures/T_Door_VAT_Rot.T_Door_VAT_Rot, NO, NO, NO, 0, 1, YES
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/Mask/T_VX_Mask_054_D.T_VX_Mask_054_D, NO, NO, NO, 0, 1, NO
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/Mask/T_VX_Mask_068_D.T_VX_Mask_068_D, NO, NO, NO, 0, 1, NO
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/Mask/T_VX_Mask_082_D.T_VX_Mask_082_D, NO, NO, NO, 0, 1, NO
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/Mask/T_VX_Mask_083_D.T_VX_Mask_083_D, NO, NO, NO, 0, 1, NO
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/Mask/T_VX_Mask_091_D.T_VX_Mask_091_D, NO, NO, NO, 0, 1, NO
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_Central_Img_LevelBG002_D.T_Central_Img_LevelBG002_D, NO, NO, NO, 0, 1, NO
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_Com_PlusBG7_D.T_Com_PlusBG7_D, NO, NO, NO, 0, 1, NO
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_ComButtonMask_D.T_ComButtonMask_D, NO, NO, NO, 0, 1, NO
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_FAQMask_D.T_FAQMask_D, NO, NO, NO, 0, 1, NO
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_Mail_MailNameBG_D.T_Mail_MailNameBG_D, NO, NO, NO, 0, 1, NO
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_Newbiedies_BG_Small.T_Newbiedies_BG_Small, NO, NO, NO, 0, 1, NO
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_NuclearWarnMask06_D.T_NuclearWarnMask06_D, NO, NO, NO, 0, 1, NO
+64x64 (1 KB, ?), 64x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_VX_CommonReady_D.T_VX_CommonReady_D, NO, NO, NO, 0, 1, NO
+256x16 (1 KB, ?), 256x16 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_WorkShop01_D.T_WorkShop01_D, NO, NO, NO, 0, 1, NO
+256x128 (11 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_Burst_08_Explosion.T_Burst_08_Explosion, YES, NO, NO, 0, 9, NO
+256x128 (11 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_BurstSmoke_01_D.T_BurstSmoke_01_D, YES, NO, NO, 0, 9, NO
+256x128 (11 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_BurstSmoke_02_D.T_BurstSmoke_02_D, YES, NO, NO, 0, 9, NO
+256x128 (11 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_Electricity_02_E.T_Electricity_02_E, YES, NO, NO, 0, 9, NO
+256x128 (11 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_Fire_01_E.T_Fire_01_E, YES, NO, NO, 0, 9, NO
+256x128 (11 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_Lensflare_04_E.T_Lensflare_04_E, YES, NO, NO, 0, 9, NO
+256x128 (11 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_Muzzle_05_E.T_Muzzle_05_E, YES, NO, NO, 2, 9, NO
+256x128 (11 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_Muzzle_06_E.T_Muzzle_06_E, YES, NO, NO, 2, 9, NO
+256x128 (11 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_Muzzle_07_E.T_Muzzle_07_E, YES, NO, NO, 2, 9, NO
+256x128 (11 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_WaveSmoke_01_M.T_WaveSmoke_01_M, YES, NO, NO, 0, 9, NO
+128x64 (3 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_World, /Game/VX/Textures/Mask/T_VX_Mask_088_D.T_VX_Mask_088_D, YES, NO, NO, 0, 8, NO
+128x64 (3 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_World, /Game/VX/Textures/Teature_World/T_VX_ST_W018_D.T_VX_ST_W018_D, YES, NO, NO, 0, 8, NO
+32x32 (1 KB, ?), 32x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_World, /Engine/EngineResources/AICON-Green.AICON-Green, NO, NO, NO, 0, 6, NO
+64x16 (1 KB, ?), 64x16 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_World, /Engine/Functions/Engine_MaterialFunctions02/ExampleContent/Gradient.Gradient, NO, NO, NO, 0, 7, NO
+256x64 (6 KB, ?), 64x16 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_Medium_Explosion_03_Baked_E.T_Medium_Explosion_03_Baked_E, YES, NO, NO, 0, 9, NO
+256x64 (6 KB, ?), 64x16 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_Muzzle_03_E.T_Muzzle_03_E, YES, NO, NO, 8, 9, NO
+256x64 (6 KB, ?), 64x16 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_PathTrail_01_M.T_PathTrail_01_M, YES, NO, NO, 0, 9, NO
+256x32 (3 KB, ?), 64x8 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_Bullet_01_E.T_Bullet_01_E, YES, NO, NO, 0, 9, NO
+8x8 (1 KB, ?), 8x8 (1 KB), PF_FloatRGBA, TEXTUREGROUP_World, /Game/UI/VX/Curve/CurveAtlas_Common.CurveAtlas_Common, NO, NO, NO, 0, 1, YES
+8x8 (1 KB, ?), 8x8 (1 KB), PF_FloatRGBA, TEXTUREGROUP_World, /Game/UI/VX/Curve/CurveAtlas_CommonBtn.CurveAtlas_CommonBtn, NO, NO, NO, 0, 1, YES
+16x64 (1 KB, ?), 16x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/Mask/T_VX_Mask_043_D.T_VX_Mask_043_D, NO, NO, NO, 0, 1, NO
+128x16 (1 KB, ?), 128x16 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/Mask/T_VX_Mask_055_D.T_VX_Mask_055_D, NO, NO, NO, 0, 1, NO
+32x64 (1 KB, ?), 32x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_BaseRelocation_Line02_D.T_BaseRelocation_Line02_D, NO, NO, NO, 0, 1, NO
+16x64 (1 KB, ?), 16x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_BaseRelocation_Line_D.T_BaseRelocation_Line_D, NO, NO, NO, 0, 1, NO
+32x64 (1 KB, ?), 32x64 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_Download_Btn_D.T_Download_Btn_D, NO, NO, NO, 0, 1, NO
+256x8 (1 KB, ?), 256x8 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_Mail_Line_D.T_Mail_Line_D, NO, NO, NO, 0, 1, NO
+128x16 (1 KB, ?), 128x16 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_TrophyTips_D.T_TrophyTips_D, NO, NO, NO, 0, 1, NO
+64x32 (1 KB, ?), 64x32 (1 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_VX_WindWarning_D.T_VX_WindWarning_D, NO, NO, NO, 0, 1, NO
+16x16 (0 KB, ?), 16x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_World, /Engine/EngineResources/Black.Black, NO, NO, NO, 0, 5, NO
+16x16 (0 KB, ?), 16x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_World, /Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture, NO, NO, NO, 0, 5, NO
+16x16 (0 KB, ?), 16x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_World, /Game/Common/Textures/T_Default_Black_M.T_Default_Black_M, NO, NO, NO, 0, 5, NO
+8x16 (0 KB, ?), 8x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_Effects, /Game/Effect/Textures/T_FX_087_M.T_FX_087_M, NO, NO, NO, 0, 5, NO
+16x16 (0 KB, ?), 16x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_World, /Water/Textures/Black.Black, NO, NO, NO, 0, 5, NO
+8x8 (0 KB, ?), 8x8 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_World, /Engine/EngineMaterials/BlendFunc_DefBase.BlendFunc_DefBase, NO, NO, NO, 0, 4, NO
+8x8 (0 KB, ?), 8x8 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_World, /Engine/EngineMaterials/BlendFunc_DefBlend.BlendFunc_DefBlend, NO, NO, NO, 0, 4, NO
+16x32 (0 KB, ?), 16x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/Effect/Textures/T_FX_088_M.T_FX_088_M, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/UI/UIBlueprints/MouseCursor/T_PC_MouseCursor.T_PC_MouseCursor, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/AmmoTexture/T_Ammobox_BGBlock.T_Ammobox_BGBlock, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/CharCustomMainTexture/T_CharCustom_11_D.T_CharCustom_11_D, NO, NO, NO, 0, 1, NO
+64x16 (0 KB, ?), 64x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/CharCustomMainTexture/T_CharCustom_18_D.T_CharCustom_18_D, NO, NO, NO, 0, 1, NO
+128x8 (0 KB, ?), 128x8 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/CommonWidgetTexture/T_GradientH_D.T_GradientH_D, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/Mask/T_VX_Mask_027_D.T_VX_Mask_027_D, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/Mask/T_VX_Mask_051_D.T_VX_Mask_051_D, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/Mask/T_VX_Mask_052_D.T_VX_Mask_052_D, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/Mask/T_VX_Mask_056_D.T_VX_Mask_056_D, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/Mask/T_VX_Mask_084_D.T_VX_Mask_084_D, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_Central_Img_LevelBG006_D.T_Central_Img_LevelBG006_D, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_Com_PlusBG2_D.T_Com_PlusBG2_D, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_Com_PlusBG4_D.T_Com_PlusBG4_D, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_MapMovingArrow01.T_MapMovingArrow01, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_NuclearWarnMask03_D.T_NuclearWarnMask03_D, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_NuclearWarnMask04_D.T_NuclearWarnMask04_D, NO, NO, NO, 0, 1, NO
+64x16 (0 KB, ?), 64x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_RecyclerPrototype02.T_RecyclerPrototype02, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_Tasks_List_Selected_D.T_Tasks_List_Selected_D, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_VX_ComRhombus01_D.T_VX_ComRhombus01_D, NO, NO, NO, 0, 1, NO
+32x32 (0 KB, ?), 32x32 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_WarSettlementSqure_D.T_WarSettlementSqure_D, NO, NO, NO, 0, 1, NO
+4x4 (0 KB, ?), 4x4 (0 KB), PF_B8G8R8A8, TEXTUREGROUP_UI, /LGUI/Textures/LGUIPreset_WhiteSolid.LGUIPreset_WhiteSolid, NO, NO, NO, 0, 1, YES
+2x2 (0 KB, ?), 2x2 (0 KB), PF_B8G8R8A8, TEXTUREGROUP_World, /Engine/EngineMaterials/WeightMapArrayPlaceholderTexture.WeightMapArrayPlaceholderTexture, NO, NO, NO, 0, 1, NO
+16x16 (0 KB, ?), 16x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/CharCustomMainTexture/T_CharCustom_03_D.T_CharCustom_03_D, NO, NO, NO, 0, 1, NO
+16x16 (0 KB, ?), 16x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_Central_Img_LevelBG005_D.T_Central_Img_LevelBG005_D, NO, NO, NO, 0, 1, NO
+32x16 (0 KB, ?), 32x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_Com_PlusBG6_D.T_Com_PlusBG6_D, NO, NO, NO, 0, 1, NO
+16x16 (0 KB, ?), 16x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_MapMovingArrow02.T_MapMovingArrow02, NO, NO, NO, 0, 1, NO
+16x16 (0 KB, ?), 16x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_NuclearWarnMask05_D.T_NuclearWarnMask05_D, NO, NO, NO, 0, 1, NO
+32x16 (0 KB, ?), 32x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_TrophyTips2_D.T_TrophyTips2_D, NO, NO, NO, 0, 1, NO
+16x16 (0 KB, ?), 16x16 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_WarSettlementMarkLine_D.T_WarSettlementMarkLine_D, NO, NO, NO, 0, 1, NO
+1x1 (0 KB, ?), 1x1 (0 KB), PF_B8G8R8A8, TEXTUREGROUP_World, /Engine/EngineMaterials/DefaultWhiteGrid_Low.DefaultWhiteGrid_Low, NO, NO, NO, 0, 1, NO
+1x1 (0 KB, ?), 1x1 (0 KB), PF_B8G8R8A8, TEXTUREGROUP_World, /Engine/EngineMaterials/WeightMapPlaceholderTexture.WeightMapPlaceholderTexture, NO, NO, NO, 0, 1, NO
+16x8 (0 KB, ?), 16x8 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_World, /Engine/EngineSky/VolumetricClouds/CloudGradientTexture.CloudGradientTexture, NO, NO, NO, 0, 1, NO
+1x1 (0 KB, ?), 1x1 (0 KB), PF_FloatRGBA, TEXTUREGROUP_World, /Engine/Functions/Engine_MaterialFunctions02/PivotPainter2/Black_1x1_EXR_Texture.Black_1x1_EXR_Texture, NO, NO, NO, 0, 1, YES
+1x1 (0 KB, ?), 1x1 (0 KB), PF_B8G8R8A8, TEXTUREGROUP_World, /Game/Environment/Common/Lamp/Textures/T_Lamp_06_D.T_Lamp_06_D, NO, NO, NO, 0, 1, NO
+1x1 (0 KB, ?), 1x1 (0 KB), PF_B8G8R8A8, TEXTUREGROUP_World, /Game/Environment/Common/Lamp/Textures/T_Lamp_06_D1.T_Lamp_06_D1, NO, NO, NO, 0, 1, NO
+32x8 (0 KB, ?), 32x8 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_FirstMissionHUDLine01_D.T_FirstMissionHUDLine01_D, NO, NO, NO, 0, 1, NO
+16x8 (0 KB, ?), 16x8 (0 KB), PF_ASTC_8x8, TEXTUREGROUP_UI, /Game/VX/Textures/UITexture/T_WorkShop03_D.T_WorkShop03_D, NO, NO, NO, 0, 1, NO
+2x2 (0 KB, ?), 2x2 (0 KB), PF_Unknown, TEXTUREGROUP_World, /CommonUI/DefaultMediaTexture.DefaultMediaTexture, NO, NO, NO, 0, 1, NO
+2x2 (0 KB, ?), 2x2 (0 KB), PF_Unknown, TEXTUREGROUP_World, /WebBrowserWidget/WebTexture_T.WebTexture_T, NO, NO, NO, 0, 1, NO
+720x720 (0 KB, ?), 720x720 (0 KB), PF_Unknown, TEXTUREGROUP_RenderTarget, /Game/Editor/ScriptTools/PanoramicCapture/TC_CubemapCapture.TC_CubemapCapture, NO, NO, NO, 0, 1, NO
+1x1 (0 KB, ?), 1x1 (0 KB), PF_Unknown, TEXTUREGROUP_World, /Script/LevelSequence.Default__LevelSequenceMediaController:MediaComponent.MediaTexture, NO, NO, NO, 0, 1, NO
 
-Render target memory:
-Name | Dimensions | Format | Memory
-TextureRenderTarget2D /Game/UI/RT_Minimap | 1024x1024 | PF_B8G8R8A8 | 4 MB
+Total size: InMem= 155.18 MB  OnDisk= 225.03 MB  Count=1689, CountApplicableToMin=1221
+Total PF_Unknown size: InMem= 3.52 MB  OnDisk= 3.52 MB 
+Total PF_B8G8R8A8 size: InMem= 6.86 MB  OnDisk= 8.19 MB 
+Total PF_G8 size: InMem= 3.33 MB  OnDisk= 3.41 MB 
+Total PF_FloatRGBA size: InMem= 71.56 MB  OnDisk= 71.56 MB 
+Total PF_ASTC_4x4 size: InMem= 5.69 MB  OnDisk= 7.02 MB 
+Total PF_ASTC_6x6 size: InMem= 10.47 MB  OnDisk= 39.79 MB 
+Total PF_ASTC_8x8 size: InMem= 53.76 MB  OnDisk= 91.56 MB 
+Total TEXTUREGROUP_World size: InMem= 20.05 MB  OnDisk= 42.70 MB 
+Total TEXTUREGROUP_WorldNormalMap size: InMem= 3.67 MB  OnDisk= 19.72 MB 
+Total TEXTUREGROUP_WorldSpecular size: InMem= 0.18 MB  OnDisk= 0.67 MB 
+Total TEXTUREGROUP_Character size: InMem= 3.57 MB  OnDisk= 11.55 MB 
+Total TEXTUREGROUP_CharacterNormalMap size: InMem= 5.07 MB  OnDisk= 16.94 MB 
+Total TEXTUREGROUP_CharacterSpecular size: InMem= 1.01 MB  OnDisk= 2.34 MB 
+Total TEXTUREGROUP_Weapon size: InMem= 3.44 MB  OnDisk= 5.43 MB 
+Total TEXTUREGROUP_Effects size: InMem= 1.63 MB  OnDisk= 2.85 MB 
+Total TEXTUREGROUP_Skybox size: InMem= 4.31 MB  OnDisk= 4.31 MB 
+Total TEXTUREGROUP_UI size: InMem= 54.01 MB  OnDisk= 54.01 MB 
+Total TEXTUREGROUP_RenderTarget size: InMem= 6.00 MB  OnDisk= 6.00 MB 
+Total TEXTUREGROUP_ColorLookupTable size: InMem= 0.04 MB  OnDisk= 0.04 MB 
+Total TEXTUREGROUP_Bokeh size: InMem= 0.02 MB  OnDisk= 0.02 MB 
+Total TEXTUREGROUP_Pixels2D size: InMem= 0.01 MB  OnDisk= 1.33 MB 
+Total TEXTUREGROUP_Impostor size: InMem= 0.68 MB  OnDisk= 1.34 MB 
+Total TEXTUREGROUP_ImpostorNormalDepth size: InMem= 0.68 MB  OnDisk= 1.34 MB 
+Total TEXTUREGROUP_16BitData size: InMem= 43.38 MB  OnDisk= 43.38 MB 
+Total TEXTUREGROUP_Project01 size: InMem= 0.21 MB  OnDisk= 0.46 MB 
+Total TEXTUREGROUP_Project06 size: InMem= 4.03 MB  OnDisk= 4.91 MB 
+Total TEXTUREGROUP_Project07 size: InMem= 1.66 MB  OnDisk= 2.36 MB 
+Total TEXTUREGROUP_Project08 size: InMem= 1.02 MB  OnDisk= 1.55 MB 
+Total TEXTUREGROUP_Project12 size: InMem= 0.00 MB  OnDisk= 0.17 MB 
+Total TEXTUREGROUP_Project13 size: InMem= 0.01 MB  OnDisk= 0.31 MB 
+Total TEXTUREGROUP_Project14 size: InMem= 0.00 MB  OnDisk= 0.17 MB 
+Total TEXTUREGROUP_Project15 size: InMem= 0.11 MB  OnDisk= 0.27 MB 
+Total TEXTUREGROUP_Project16 size: InMem= 0.20 MB  OnDisk= 0.51 MB 
+Total TEXTUREGROUP_Project17 size: InMem= 0.17 MB  OnDisk= 0.33 MB 
+MemReport: End command "ListTextures"
 
-Obj List:
-Class=Texture2D, Count=42, NumKBytes=8192
+MemReport: Begin command "ListParticleSystems -alphasort"
+ParticleSystems:
+Size,Name,PSysSize,ModuleSize,ComponentSize,ComponentCount,CompResSize,CompTrueResSize
+     46016,/Game/Effect/FX/Buff/NS_Charge_01.NS_Charge_01,46016,0,0,0,0,0
+     42096,/Game/Effect/FX/Common/NS_Charge_02.NS_Charge_02,42096,0,0,0,0,0
+     61068,/Game/Effect/FX/Common/NS_Charge_05.NS_Charge_05,61068,0,0,0,0,0
+     47088,/Game/Effect/FX/Common/NS_Dust_JumpAttack_01.NS_Dust_JumpAttack_01,47088,0,0,0,0,0
+     26340,/Game/Effect/FX/Common/NS_Dust_JumpFall_01.NS_Dust_JumpFall_01,26340,0,0,0,0,0
+     26116,/Game/Effect/FX/Common/NS_Dust_Run_01.NS_Dust_Run_01,26116,0,0,0,0,0
+     85328,/Game/Effect/FX/Common/NS_Dust_SwingTailAttack_01.NS_Dust_SwingTailAttack_01,85328,0,0,0,0,0
+     64168,/Game/Effect/FX/Common/NS_Glissade_Loop_01.NS_Glissade_Loop_01,64168,0,0,0,0,0
+    143028,/Game/Effect/FX/Common/NS_Path_01.NS_Path_01,138180,0,2424,1,2424,0
+     28260,/Game/Effect/FX/Common/NS_PickUp_LV01_01.NS_PickUp_LV01_01,22564,0,2368,1,3328,960
+     71332,/Game/Effect/FX/Common/NS_PickUp_LV05_01.NS_PickUp_LV05_01,58788,0,5120,2,7424,2304
+     57460,/Game/Effect/FX/Common/NS_PropIcon_01.NS_PropIcon_01,34220,0,9892,4,13348,3456
+    164216,/Game/Effect/FX/Equipment/NS_Equipment_Bracelet_01.NS_Equipment_Bracelet_01,164216,0,0,0,0,0
+    156348,/Game/Effect/FX/Equipment/NS_Equipment_Bracelet_02.NS_Equipment_Bracelet_02,156348,0,0,0,0,0
+     88480,/Game/Effect/FX/Equipment/NS_Equipment_Bracelet_Hijacking.NS_Equipment_Bracelet_Hijacking,88480,0,0,0,0,0
+    182224,/Game/Effect/FX/Equipment/NS_Pack_Plume_Start_01.NS_Pack_Plume_Start_01,161424,0,9984,4,10816,0
+     85460,/Game/Effect/FX/Equipment/NS_Shuttle_Plume_03.NS_Shuttle_Plume_03,75700,0,4880,2,4880,0
+    198968,/Game/Effect/FX/Equipment/NS_UseBattery_Quick_01.NS_UseBattery_Quick_01,198968,0,0,0,0,0
+    211848,/Game/Effect/FX/Equipment/NS_UseBattery_Slow_01.NS_UseBattery_Slow_01,211848,0,0,0,0,0
+     88640,/Game/Effect/FX/Impact/NS_Impact_CageLock.NS_Impact_CageLock,78536,0,4620,2,5484,864
+    207224,/Game/Effect/FX/Impact/NS_Impact_Turrent_01.NS_Impact_Turrent_01,207224,0,0,0,0,0
+    189880,/Game/Effect/FX/Muzzle/NS_Muzzle_11.NS_Muzzle_11,180344,0,4768,2,4768,0
+    140108,/Game/Effect/FX/Muzzle/NS_MuzzleTurrent_01.NS_MuzzleTurrent_01,130188,0,4960,2,4960,0
+    189600,/Game/Effect/FX/Muzzle/NS_MuzzleTurrent_02.NS_MuzzleTurrent_02,149920,0,19840,8,19840,0
+     66356,/Game/Effect/FX/Scene/NS_Scene_SpotLight_01.NS_Scene_SpotLight_01,43764,0,11296,4,11296,0
+     35388,/Game/Effect/FX/Scene/NS_Scene_WaterfallFog_1M.NS_Scene_WaterfallFog_1M,30124,0,2632,1,2632,0
+     68416,/Game/Tutorial/Effect/FX/Buff/NS_FaultLight_01.NS_FaultLight_01,63648,0,2384,1,2384,0
+     97040,/Game/Tutorial/Effect/FX/Bullet/NS_SnifferBulletSpline_01.NS_SnifferBulletSpline_01,87280,0,4880,2,4880,0
+    101960,/Game/Tutorial/Effect/FX/Bullet/NS_SnifferBulletSpline_02.NS_SnifferBulletSpline_02,82440,0,9760,4,9760,0
+    100296,/Game/Tutorial/Effect/FX/Bullet/NS_SnifferBulletSpline_03.NS_SnifferBulletSpline_03,90536,0,4880,2,4880,0
+    241476,/Game/Tutorial/Effect/FX/Bullet/NS_SnifferBulletSpline_04.NS_SnifferBulletSpline_04,51156,0,95160,39,95160,0
+    134872,/Game/Tutorial/Effect/FX/Common/NS_SmokeATilling_01.NS_SmokeATilling_01,106264,0,14304,6,14304,0
+     55784,/Game/Tutorial/Effect/FX/Common/NS_TailWaterOfShip_01.NS_TailWaterOfShip_01,50664,0,2560,1,2560,0
+    160004,/Game/Tutorial/Effect/FX/Common/NS_TailWaterOfShip_02.NS_TailWaterOfShip_02,37124,0,61440,24,61440,0
+    100088,/Game/Tutorial/Effect/FX/Common/NS_ToolH_Fl_01.NS_ToolH_Fl_01,90552,0,4768,2,4768,0
+     48340,/Game/Tutorial/Effect/FX/Common/NS_WaterRipple_01.NS_WaterRipple_01,29268,0,9536,4,9536,0
+     81472,/Game/Tutorial/Effect/FX/Common/NS_WaterRipple_04.NS_WaterRipple_04,76592,0,2440,1,2440,0
+    179684,/Game/Tutorial/Effect/FX/Common/NS_WaterRipple_07.NS_WaterRipple_07,155284,0,12200,5,12200,0
+    175544,/Game/Tutorial/Effect/FX/Common/NS_WaterRipple_09.NS_WaterRipple_09,156024,0,9760,4,9760,0
+    197676,/Game/Tutorial/Effect/FX/Common/NS_WaterRipple_10.NS_WaterRipple_10,51276,0,73200,30,73200,0
+    201360,/Game/Tutorial/Effect/FX/Equipment/NS_LeDudeSq_BackpackEnd_01.NS_LeDudeSq_BackpackEnd_01,190672,0,5344,2,5344,0
+    276024,/Game/Tutorial/Effect/FX/Equipment/NS_LeDudeSq_BackpackStart_01.NS_LeDudeSq_BackpackStart_01,265560,0,5232,2,5232,0
+    108016,/Game/Tutorial/Effect/FX/Equipment/NS_Man_Smashes_01.NS_Man_Smashes_01,103248,0,2384,1,2384,0
+    102928,/Game/Tutorial/Effect/FX/Equipment/NS_Mechanical_Smashing_01.NS_Mechanical_Smashing_01,98160,0,2384,1,2384,0
+    118752,/Game/Tutorial/Effect/FX/Equipment/NS_Mechanical_Stepping_01.NS_Mechanical_Stepping_01,104448,0,7152,3,7152,0
+    113984,/Game/Tutorial/Effect/FX/Equipment/NS_Mechanical_Stepping_02.NS_Mechanical_Stepping_02,104448,0,4768,2,4768,0
+    136088,/Game/Tutorial/Effect/FX/Equipment/NS_Mechanical_Stepping_03.NS_Mechanical_Stepping_03,106808,0,14640,6,14640,0
+    197480,/Game/Tutorial/Effect/FX/Equipment/NS_Pack_Plume_LoopSq_01.NS_Pack_Plume_LoopSq_01,175464,0,11008,4,11008,0
+     85332,/Game/Tutorial/Effect/FX/Equipment/NS_TimeBox_Smokediffuse_01.NS_TimeBox_Smokediffuse_01,80068,0,2632,1,2632,0
+     36324,/Game/Tutorial/Effect/FX/Equipment/NS_Underground_Smoke_01.NS_Underground_Smoke_01,26788,0,4768,2,4768,0
+    103896,/Game/Tutorial/Effect/FX/Impact/NS_Groundpoint_01.NS_Groundpoint_01,89592,0,7152,3,7152,0
+     81976,/Game/Tutorial/Effect/FX/Impact/NS_Groundpoint_02.NS_Groundpoint_02,77208,0,2384,1,2384,0
+    144016,/Game/Tutorial/Effect/FX/Impact/NS_Huge_Explosion_01.NS_Huge_Explosion_01,139136,0,2440,1,2440,0
+    233048,/Game/Tutorial/Effect/FX/Impact/NS_Huge_Explosion_02.NS_Huge_Explosion_02,223288,0,4880,2,4880,0
+    327784,/Game/Tutorial/Effect/FX/Impact/NS_Impact_Suppressorseq_01.NS_Impact_Suppressorseq_01,318248,0,4768,2,4768,0
+    226872,/Game/Tutorial/Effect/FX/Impact/NS_ImpactBIG_Explosion_01.NS_ImpactBIG_Explosion_01,217112,0,4880,2,4880,0
+    257304,/Game/Tutorial/Effect/FX/Impact/NS_ImpactBIG_Explosion_02.NS_ImpactBIG_Explosion_02,217624,0,19840,8,19840,0
+    135668,/Game/Tutorial/Effect/FX/Impact/NS_ImpactBIG_Explosion_03.NS_ImpactBIG_Explosion_03,110868,0,12400,5,12400,0
+     51548,/Game/Tutorial/Effect/FX/Impact/NS_Medium_Explosion_01.NS_Medium_Explosion_01,36908,0,7320,3,7320,0
+     63720,/Game/Tutorial/Effect/FX/Impact/NS_Medium_Explosion_02.NS_Medium_Explosion_02,58840,0,2440,1,2440,0
+     94248,/Game/Tutorial/Effect/FX/Impact/NS_UndergroundSmoke_01.NS_UndergroundSmoke_01,89368,0,2440,1,2440,0
+    100992,/Game/Tutorial/Effect/FX/Impact/NS_UndergroundSmoke_02.NS_UndergroundSmoke_02,96112,0,2440,1,2440,0
+     86872,/Game/Tutorial/Effect/FX/Impact/NS_UndergroundSmoke_03.NS_UndergroundSmoke_03,76856,0,5008,2,5008,0
+     63868,/Game/Tutorial/Effect/FX/Level/NS_ContructionPiecesFall_Stage_Right_01.NS_ContructionPiecesFall_Stage_Right_01,32956,0,15456,6,15456,0
+    127136,/Game/Tutorial/Effect/FX/Level/NS_Tutorial_BuildingVirusCubes_01.NS_Tutorial_BuildingVirusCubes_01,119840,0,3024,1,4272,1248
+   1491828,/Game/Tutorial/Effect/FX/Level/NS_TutorialVirus_ColumnarEnd_01.NS_TutorialVirus_ColumnarEnd_01,31924,0,729952,241,729952,0
+     56252,/Game/Tutorial/Effect/FX/Level/NS_TutorialVirus_ColumnarEnd_02.NS_TutorialVirus_ColumnarEnd_02,32028,0,12112,4,12112,0
+     69096,/Game/Tutorial/Effect/FX/Muzzle/NS_Mechanical_Explosion_01.NS_Mechanical_Explosion_01,64328,0,2384,1,2384,0
+     86456,/Game/Tutorial/Effect/FX/Muzzle/NS_Mechanical_Fireball_01.NS_Mechanical_Fireball_01,81304,0,2576,1,2576,0
+    157100,/Game/Tutorial/Effect/FX/Muzzle/NS_Muzzle_Suppressor_01.NS_Muzzle_Suppressor_01,152332,0,2384,1,2384,0
+     28012,/Game/Tutorial/Effect/FX/Muzzle/NS_Speedline_01.NS_Speedline_01,23244,0,2384,1,2384,0
+     16248,/Game/Tutorial/Effect/FX/Skill/NS_AI.NS_AI,11480,0,2384,1,2384,0
+    114132,/Game/Tutorial/Effect/FX/Skill/NS_Mechanica_Eenergy_Storage_01.NS_Mechanica_Eenergy_Storage_01,108900,0,2616,1,2616,0
+    108872,/Game/Tutorial/Effect/FX/Weapon/NS_BatteryEndEffect_01.NS_BatteryEndEffect_01,108872,0,0,0,0,0
+    176504,/Game/Tutorial/Effect/FX/Weapon/NS_BatterystartEffect_01.NS_BatterystartEffect_01,176504,0,0,0,0,0
+     47252,/Game/Tutorial/Effect/FX/Weapon/NS_Suppressor_GoldenSq_01.NS_Suppressor_GoldenSq_01,32132,0,7560,3,7560,0
+     25524,/Game/VX/NigaraParticles/NS_AmmoBoxUI_Add.NS_AmmoBoxUI_Add,25524,0,0,0,0,0
+     45196,/Game/VX/NigaraParticles/NS_BaseZoneReset01.NS_BaseZoneReset01,45196,0,0,0,0,0
+     24428,/Game/VX/NigaraParticles/NS_CharCustom.NS_CharCustom,24428,0,0,0,0,0
+     40904,/Game/VX/NigaraParticles/NS_ClassifySlot.NS_ClassifySlot,40904,0,0,0,0,0
+     90024,/Game/VX/NigaraParticles/NS_Received.NS_Received,90024,0,0,0,0,0
+     24276,/Game/VX/NigaraParticles/NS_Received1.NS_Received1,24276,0,0,0,0,0
+     30252,/Game/VX/NigaraParticles/NS_TrophyTips.NS_TrophyTips,25484,0,2384,1,2384,0
+     43692,/Game/VX/NigaraParticles/NS_Warsettlement.NS_Warsettlement,43692,0,0,0,0,0
+     39928,/Game/VX/NigaraParticles/P_Campfire.P_Campfire,39928,0,0,0,0,0
+     23348,/Game/VX/NigaraParticles/P_Campfire1.P_Campfire1,23348,0,0,0,0,0
+     23892,/Game/VX/NigaraParticles/P_Recycler.P_Recycler,23892,0,0,0,0,0
+  10684144,Total,8046528,0,1313976,476,1323640,8832
+MemReport: End command "ListParticleSystems -alphasort"
+
+MemReport: Begin command "obj list class=SoundWave -alphasort"
+Obj List: class=SoundWave -alphasort
+Objects:
+
+0 Objects (Total: 0.000M / Max: 0.000M / Res: 0.000M | ResDedSys: 0.000M / ResDedVid: 0.000M / ResUnknown: 0.000M)
+MemReport: End command "obj list class=SoundWave -alphasort"
+
+MemReport: Begin command "obj list class=SkeletalMesh -alphasort"
+Obj List: class=SkeletalMesh -alphasort
+Objects:
+
+                                                                                                                                      Object      NumKB      MaxKB   ResExcKB  ResExcDedSysKB  ResExcDedVidKB     ResExcUnkKB
+                                                                SkeletalMesh /Game/Building/Furniture/Meshes/SK_Shuttle_A_01.SK_Shuttle_A_01       5.21       5.29     310.32            3.93            0.00          306.39
+                                                                        SkeletalMesh /Game/Character/Animation/Heroine/SK_F_Grunt.SK_F_Grunt      17.08      17.54     614.72           27.89            0.00          586.83
+                                                              SkeletalMesh /Game/Character/Heroines/Body/SK_F_BaseGlove_01.SK_F_BaseGlove_01      16.71      17.20     134.39           27.89            0.00          106.50
+                                                                        SkeletalMesh /Game/Character/Heroines/Body/SK_F_Head_06.SK_F_Head_06      17.60      18.70     184.40           29.27            0.00          155.13
+                                                              SkeletalMesh /Game/Character/Heroines/Bottom/SK_F_Bottom_Inky.SK_F_Bottom_Inky      17.62      18.54     135.26           29.27            0.00          105.99
+                                                          SkeletalMesh /Game/Character/Heroines/Bottom/SK_F_Bottom_LeDude.SK_F_Bottom_LeDude      16.75      17.20    1251.73           27.89            0.00         1223.84
+                                                        SkeletalMesh /Game/Character/Heroines/Bracelet/SK_F_Bracelet_01_a.SK_F_Bracelet_01_a      17.53      18.64      44.69           29.27            0.00           15.42
+                                                          SkeletalMesh /Game/Character/Heroines/Gloves/SK_F_Gloves_LeDude.SK_F_Gloves_LeDude      17.61      18.53     218.81           29.27            0.00          189.55
+                                                                         SkeletalMesh /Game/Character/Heroines/Hat/SK_F_Hair_04.SK_F_Hair_04      17.92      19.11     181.27           29.27            0.00          152.00
+                                                                 SkeletalMesh /Game/Character/Heroines/Shirt/SK_F_Shirt_Inky.SK_F_Shirt_Inky      17.71      18.62     210.00           29.27            0.00          180.74
+                                                             SkeletalMesh /Game/Character/Heroines/Shirt/SK_F_Shirt_LeDude.SK_F_Shirt_LeDude      17.77      18.67     389.01           29.27            0.00          359.75
+                                                                 SkeletalMesh /Game/Character/Heroines/Shoes/SK_F_Shoes_Inky.SK_F_Shoes_Inky      17.62      18.54      86.03           29.27            0.00           56.77
+                                                             SkeletalMesh /Game/Character/Heroines/Shoes/SK_F_Shoes_LeDude.SK_F_Shoes_LeDude      16.36      16.83     218.99           27.89            0.00          191.10
+                                                         SkeletalMesh /Game/Character/NPC/AutDroneBomber/SK_AutDroneGunner.SK_AutDroneGunner       4.09       4.13     238.12            2.66            0.00          235.47
+                                                               SkeletalMesh /Game/Character/NPC/BasicDrone/SK_BasicDrone_01.SK_BasicDrone_01       3.24       3.33     365.65            1.76            0.00          363.89
+                                                                           SkeletalMesh /Game/Character/NPC/Cyborg/SK_Cyborg_01.SK_Cyborg_01      16.67      17.12     598.56           27.89            0.00          570.67
+                                                                                 SkeletalMesh /Game/Character/NPC/Cyclop/SK_Cyclop.SK_Cyclop      16.45      17.21    2995.55           24.09            0.00         2971.46
+                                                                     SkeletalMesh /Game/Character/NPC/NCAZombieL/SK_NCAZombieL.SK_NCAZombieL      18.89      20.47    1025.44           30.75            0.00          994.69
+                                                                        SkeletalMesh /Game/Character/NPC/Turrent/SK_Turrent_01.SK_Turrent_01       6.14       6.66    1811.47            6.89            0.00         1804.58
+                                                                        SkeletalMesh /Game/Character/NPC/Turrent/SK_Turrent_02.SK_Turrent_02       6.37       6.89     970.91            6.89            0.00          964.02
+                                                                     SkeletalMesh /Game/Collect/Animal/Leopard/SK_SnowLeopard.SK_SnowLeopard       9.91      10.58     129.68           13.48            0.00          116.19
+                                                                            SkeletalMesh /Game/MechBeast/Cheetah/SK_Cheetah_02.SK_Cheetah_02      13.56      14.49     246.52           19.72            0.00          226.80
+                                                                            SkeletalMesh /Game/MechBeast/Cheetah/SK_Cheetah_04.SK_Cheetah_04      14.24      15.20    2627.37           19.72            0.00         2607.65
+                                                                         SkeletalMesh /Game/MechBeast/NcaBossRex/SK_NcaBossRex.SK_NcaBossRex      21.89      23.39    2344.88           34.95            0.00         2309.94
+                                                                   SkeletalMesh /Game/MechBeast/Velociraptor/SK_Velociraptor.SK_Velociraptor      16.00      17.18    1395.97           24.09            0.00         1371.88
+                                                             SkeletalMesh /Game/MechBeast/Velociraptor/SK_Velociraptor_01.SK_Velociraptor_01      15.91      17.05    1515.03           24.09            0.00         1490.93
+                                           SkeletalMesh /Game/Tutorial/Cinematic/Character/SK_F_Tutorial_Hat_LeDude.SK_F_Tutorial_Hat_LeDude      17.52      18.62     443.09           29.27            0.00          413.82
+                                                                 SkeletalMesh /Game/Tutorial/Cinematic/Character/SK_Neutral_01.SK_Neutral_01      17.36      18.44     978.44           29.27            0.00          949.17
+                                         SkeletalMesh /Game/Tutorial/Cinematic/MechBeast/SK_NcaBossRex_Cinematic01.SK_NcaBossRex_Cinematic01      21.78      23.28    2440.74           34.95            0.00         2405.80
+                                                                          SkeletalMesh /Game/Tutorial/Cinematic/Stage01/Prop/SK_Boat.SK_Boat       5.91       6.18    2076.83            5.47            0.00         2071.36
+                                              SkeletalMesh /Game/Tutorial/Cinematic/Stage03/Prop/Animation/Stage03_Shot08_L.Stage03_Shot08_L      35.59      40.48     633.38           63.62            0.00          569.75
+                                              SkeletalMesh /Game/Tutorial/Cinematic/Stage03/Prop/Animation/Stage03_Shot08_R.Stage03_Shot08_R      32.02      34.54     572.24           53.87            0.00          518.38
+                                                                          SkeletalMesh /Game/Tutorial/Cinematic/Stage03/Prop/SK_Lift.SK_Lift       3.34       3.48     444.21            0.99            0.00          443.22
+                                  SkeletalMesh /Game/Tutorial/Cinematic/Stage04/prop/SM_TutoriaCentre_01_A_anime.SM_TutoriaCentre_01_A_anime      18.14      18.75     471.04           27.70            0.00          443.34
+                                                          SkeletalMesh /Game/Tutorial/Cinematic/Stage05/prop/SK_F_LeDude_Hat.SK_F_LeDude_Hat       1.95       2.00      59.01            0.34            0.00           58.67
+                                                       SkeletalMesh /Game/Weapon/Firearm/AssaultRifle/Suppressor/SK_Suppressor.SK_Suppressor       3.99       4.07     202.19            2.99            0.00          199.20
+                                                                           SkeletalMesh /Game/Weapon/Firearm/MachineGun/Bear/SK_Bear.SK_Bear       3.38       3.46     285.21            0.99            0.00          284.22
+                                                                     SkeletalMesh /Game/Weapon/Firearm/Submachinegun/Chore/SK_Chore.SK_Chore       3.36       3.45     377.55            1.41            0.00          376.15
+                                                                       SkeletalMesh /Game/Weapon/Throwable/SK_RexGrenade_01.SK_RexGrenade_01       3.90       3.98      60.23            2.41            0.00           57.82
+
+                                                                                                Class    Count      NumKB      MaxKB   ResExcKB  ResExcDedSysKB  ResExcDedVidKB     ResExcUnkKB
+                                                                                         SkeletalMesh       39     545.09     577.83   29288.95          839.87            0.00        28449.08
+
+39 Objects (Total: 0.532M / Max: 0.564M / Res: 28.602M | ResDedSys: 0.820M / ResDedVid: 0.000M / ResUnknown: 27.782M)
+MemReport: End command "obj list class=SkeletalMesh -alphasort"
+
+MemReport: Begin command "obj list class=StaticMesh -alphasort"
+Obj List: class=StaticMesh -alphasort
+Objects:
+
+                                                                                                                                      Object      NumKB      MaxKB   ResExcKB  ResExcDedSysKB  ResExcDedVidKB     ResExcUnkKB
+                                                                                                    StaticMesh /Engine/BasicShapes/Cube.Cube       1.95       2.34       8.54            5.04            0.00            3.50
+                                                                                                  StaticMesh /Engine/BasicShapes/Plane.Plane       1.95       2.34       2.39            1.34            0.00            1.05
+                                                                                                StaticMesh /Engine/BasicShapes/Sphere.Sphere       1.92       2.31      43.72            5.04            0.00           38.68
+                                                                                           StaticMesh /Engine/EngineMeshes/Cylinder.Cylinder       1.84       2.23      11.33            1.34            0.00            9.99
+                                                                                               StaticMesh /Engine/EngineMeshes/Sphere.Sphere       1.92       2.31      37.60           16.76            0.00           20.84
+                       StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_1111398945_2147472963       1.82       2.22      56.00            0.34            0.00           55.66
+                       StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_1114529534_2147472995       1.82       2.22      63.47            0.34            0.00           63.13
+                       StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_2096028282_2147472975       1.82       2.22      44.36            0.34            0.00           44.02
+                       StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_2114614300_2147472973       1.82       2.22      19.91            0.34            0.00           19.57
+                       StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_2171954393_2147472993       1.82       2.22      23.12            0.34            0.00           22.79
+                       StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_2350770601_2147472967       1.82       2.22       2.94            0.34            0.00            2.60
+                       StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_2653241112_2147472987       1.82       2.22      41.88            0.34            0.00           41.54
+                       StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_2845021043_2147472969       1.82       2.22      23.12            0.34            0.00           22.79
+                       StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_3134607123_2147472977       1.82       2.22      21.94            0.34            0.00           21.60
+                       StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_3310359538_2147472979       1.82       2.22      63.36            0.34            0.00           63.02
+                        StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_335933671_2147472981       1.82       2.22      40.88            0.34            0.00           40.54
+                       StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_3896054524_2147472983       1.82       2.22       4.62            0.34            0.00            4.29
+                       StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_4117980778_2147472991       1.82       2.22      58.22            0.34            0.00           57.88
+                        StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_427994388_2147472965       1.82       2.22      22.81            0.34            0.00           22.48
+                        StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_647429249_2147472985       1.82       2.22       9.88            0.34            0.00            9.54
+                        StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_747312511_2147472971       1.82       2.22       8.56            0.34            0.00            8.23
+                        StaticMesh /Engine/Transient.GameEngine_2147482577:Text3DEngineSubsystem_2147482540.Text3D_Char_937399699_2147472989       1.82       2.22      40.69            0.34            0.00           40.35
+                                                   StaticMesh /Game/Character/Hero/Backpack/Meshes/SM_M_LeDude_Backpack.SM_M_LeDude_Backpack       3.62       4.06     297.45            1.34            0.00          296.12
+                                                                      StaticMesh /Game/Collect/Box/PublicBox/SM_PublicBox_01.SM_PublicBox_01       3.71       4.26     110.99            1.91            0.00          109.08
+                                                                                    StaticMesh /Game/Common/Meshes/SM_SkySphere.SM_SkySphere       2.06       2.23     219.05           64.77            0.00          154.27
+                                                               StaticMesh /Game/Common/Profiler/TestTree/SM_Pine_01_A_Test.SM_Pine_01_A_Test       2.80       3.19     410.09           56.77            0.00          353.32
+                                                           StaticMesh /Game/Common/Profiler/TestTree/SM_Pine_01_A_TestOP.SM_Pine_01_A_TestOP       2.80       3.19     393.81           64.77            0.00          329.04
+                                                               StaticMesh /Game/Common/Profiler/TestTree/SM_Pine_02_A_Test.SM_Pine_02_A_Test       2.70       3.09     328.27           52.77            0.00          275.50
+                                                                                StaticMesh /Game/Effect/Meshes/SM_BendCube_02.SM_BendCube_02       1.84       2.23     139.16            0.77            0.00          138.38
+                                                                                StaticMesh /Game/Effect/Meshes/SM_BendCube_03.SM_BendCube_03       1.84       2.23     129.03            0.77            0.00          128.26
+                                                                              StaticMesh /Game/Effect/Meshes/SM_BendPlane_04.SM_BendPlane_04       1.84       2.23       4.54            0.77            0.00            3.77
+                                                                      StaticMesh /Game/Effect/Meshes/SM_CrossingPlane_03.SM_CrossingPlane_03       1.84       2.23       2.02            0.77            0.00            1.24
+                                                                                StaticMesh /Game/Effect/Meshes/SM_Cylinder_01.SM_Cylinder_01       1.84       2.23      33.33            0.77            0.00           32.55
+                                                                                StaticMesh /Game/Effect/Meshes/SM_Fracture_01.SM_Fracture_01       1.84       2.23       3.22            0.77            0.00            2.45
+                                                                                StaticMesh /Game/Effect/Meshes/SM_Fracture_02.SM_Fracture_02       1.84       2.23       3.22            0.77            0.00            2.45
+                                                                                StaticMesh /Game/Effect/Meshes/SM_Fracture_03.SM_Fracture_03       1.84       2.23       3.45            0.77            0.00            2.68
+                                                                            StaticMesh /Game/Effect/Meshes/SM_Hemisphere_02.SM_Hemisphere_02       1.84       2.23      18.10            0.77            0.00           17.33
+                                                                                  StaticMesh /Game/Effect/Meshes/SM_Hexagon_01.SM_Hexagon_01       1.84       2.23       3.34            0.77            0.00            2.57
+                                                                              StaticMesh /Game/Effect/Meshes/SM_LaserScan_01.SM_LaserScan_01       1.84       2.23      30.42            0.77            0.00           29.65
+                                                                            StaticMesh /Game/Effect/Meshes/SM_LightningB_01.SM_LightningB_01       1.84       2.23     131.41            0.77            0.00          130.64
+                                                                            StaticMesh /Game/Effect/Meshes/SM_LightningB_02.SM_LightningB_02       1.84       2.23     173.09            0.77            0.00          172.31
+                                                                            StaticMesh /Game/Effect/Meshes/SM_LightningB_03.SM_LightningB_03       1.84       2.23      89.60            0.77            0.00           88.83
+                                                                            StaticMesh /Game/Effect/Meshes/SM_LightningB_04.SM_LightningB_04       1.84       2.23      89.84            0.77            0.00           89.06
+                                                                            StaticMesh /Game/Effect/Meshes/SM_LightningB_05.SM_LightningB_05       1.84       2.23     172.95            0.77            0.00          172.17
+                                                                            StaticMesh /Game/Effect/Meshes/SM_LightningB_06.SM_LightningB_06       1.84       2.23      89.70            0.77            0.00           88.92
+                                                                            StaticMesh /Game/Effect/Meshes/SM_LightningB_07.SM_LightningB_07       1.84       2.23      76.97            0.77            0.00           76.20
+                                                                      StaticMesh /Game/Effect/Meshes/SM_Particle_Lava_02.SM_Particle_Lava_02       1.84       2.23      57.64            0.77            0.00           56.87
+                                                                        StaticMesh /Game/Effect/Meshes/SM_Plane_Center_01.SM_Plane_Center_01       1.84       2.23       1.81            0.77            0.00            1.04
+                                                                                      StaticMesh /Game/Effect/Meshes/SM_Plume_01.SM_Plume_01       1.84       2.23      34.20            0.77            0.00           33.43
+                                                                                      StaticMesh /Game/Effect/Meshes/SM_Plume_02.SM_Plume_02       1.84       2.23      33.99            0.77            0.00           33.22
+                                                                                      StaticMesh /Game/Effect/Meshes/SM_Plume_03.SM_Plume_03       1.84       2.23      34.81            0.77            0.00           34.04
+                                                                                      StaticMesh /Game/Effect/Meshes/SM_Plume_07.SM_Plume_07       1.84       2.23      10.65            0.77            0.00            9.88
+                                                                  StaticMesh /Game/Effect/Meshes/SM_RigPartFracture_01.SM_RigPartFracture_01       1.84       2.23       8.02            0.77            0.00            7.24
+                                                                  StaticMesh /Game/Effect/Meshes/SM_RigPartFracture_02.SM_RigPartFracture_02       1.84       2.23       9.19            0.77            0.00            8.41
+                                                                  StaticMesh /Game/Effect/Meshes/SM_RigPartFracture_03.SM_RigPartFracture_03       1.84       2.23       6.05            0.77            0.00            5.27
+                                                                  StaticMesh /Game/Effect/Meshes/SM_RigPartFracture_04.SM_RigPartFracture_04       1.84       2.23       9.09            0.77            0.00            8.32
+                                                                                        StaticMesh /Game/Effect/Meshes/SM_Ring_01.SM_Ring_01       1.84       2.23      33.77            0.77            0.00           33.00
+                                                                        StaticMesh /Game/Effect/Meshes/SM_ShieldSphere_01.SM_ShieldSphere_01       1.84       2.23      76.27            0.77            0.00           75.50
+                                                                                    StaticMesh /Game/Effect/Meshes/SM_Sphere_01.SM_Sphere_01       1.84       2.23      72.66            0.77            0.00           71.88
+                                                                                                Class    Count      NumKB      MaxKB   ResExcKB  ResExcDedSysKB  ResExcDedVidKB     ResExcUnkKB
+                                                                                           StaticMesh      488    3292.77    3586.48   44910.44         8189.92            0.00        36720.52
+
+488 Objects (Total: 3.216M / Max: 3.502M / Res: 43.858M | ResDedSys: 7.998M / ResDedVid: 0.000M / ResUnknown: 35.860M)
+MemReport: End command "obj list class=StaticMesh -alphasort"
+
+MemReport: Begin command "obj list class=Level -alphasort"
+Obj List: class=Level -alphasort
+Objects:
+
+                                                                                                                                      Object      NumKB      MaxKB   ResExcKB  ResExcDedSysKB  ResExcDedVidKB     ResExcUnkKB
+                                                                                          Level /Game/Maps/Tutorial.Tutorial:PersistentLevel       2.57       6.67       0.00            0.00            0.00            0.00
+                                                 Level /Game/Tutorial/Environment/LevelInstance/Effect/Stage03_FX.Stage03_FX:PersistentLevel       0.87       0.88       0.00            0.00            0.00            0.00
+                    Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_Building_01_A.LI_Tutorial_Building_01_A:PersistentLevel       3.82       4.05       0.00            0.00            0.00            0.00
+                        Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_Centre_01_A.LI_Tutorial_Centre_01_A:PersistentLevel       3.58       4.05       0.00            0.00            0.00            0.00
+                        Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_Centre_01_B.LI_Tutorial_Centre_01_B:PersistentLevel       1.42       1.42       0.00            0.00            0.00            0.00
+                        Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_Centre_01_C.LI_Tutorial_Centre_01_C:PersistentLevel       0.99       1.02       0.00            0.00            0.00            0.00
+            Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_ComputerArea_01_A.LI_Tutorial_ComputerArea_01_A:PersistentLevel       5.78       5.78       0.00            0.00            0.00            0.00
+            Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_ComputerArea_01_B.LI_Tutorial_ComputerArea_01_B:PersistentLevel       2.76       2.84       0.00            0.00            0.00            0.00
+            Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_ComputerArea_01_C.LI_Tutorial_ComputerArea_01_C:PersistentLevel       2.13       2.31       0.00            0.00            0.00            0.00
+                    Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_Corridor_01_A.LI_Tutorial_Corridor_01_A:PersistentLevel       8.21       8.84       0.00            0.00            0.00            0.00
+                    Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_Exhibits_01_A.LI_Tutorial_Exhibits_01_A:PersistentLevel       4.01       4.05       0.00            0.00            0.00            0.00
+                        Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_Nature_01_A.LI_Tutorial_Nature_01_A:PersistentLevel       1.05       1.08       0.00            0.00            0.00            0.00
+                    Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_Pipeline_01_D.LI_Tutorial_Pipeline_01_D:PersistentLevel       4.46       4.84       0.00            0.00            0.00            0.00
+                    Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_Pipeline_01_E.LI_Tutorial_Pipeline_01_E:PersistentLevel       6.49       6.67       0.00            0.00            0.00            0.00
+                    Level /Game/Tutorial/Environment/LevelInstance/House/LI_Tutorial_Showroom_01_A.LI_Tutorial_Showroom_01_A:PersistentLevel       4.08       4.84       0.00            0.00            0.00            0.00
+                       Level /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Area_Light.LI_Tutorial_Area_Light:PersistentLevel       1.00       1.02       0.00            0.00            0.00            0.00
+         Level /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Centre_01_A_Light.LI_Tutorial_Centre_01_A_Light:PersistentLevel       1.13       1.14       0.00            0.00            0.00            0.00
+         Level /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Centre_01_B_Light.LI_Tutorial_Centre_01_B_Light:PersistentLevel       1.00       1.02       0.00            0.00            0.00            0.00
+Level /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_ComputerArea_01_A_Light.LI_Tutorial_ComputerArea_01_A_Light:PersistentLevel       1.34       1.36       0.00            0.00            0.00            0.00
+     Level /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Corridor_01_A_Light.LI_Tutorial_Corridor_01_A_Light:PersistentLevel       1.40       1.42       0.00            0.00            0.00            0.00
+     Level /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Exhibits_01_A_Light.LI_Tutorial_Exhibits_01_A_Light:PersistentLevel       1.14       1.14       0.00            0.00            0.00            0.00
+         Level /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Nature_01_A_Light.LI_Tutorial_Nature_01_A_Light:PersistentLevel       1.25       1.30       0.00            0.00            0.00            0.00
+     Level /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel       2.54       2.84       0.00            0.00            0.00            0.00
+     Level /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel       1.62       1.73       0.00            0.00            0.00            0.00
+
+                                                                                                Class    Count      NumKB      MaxKB   ResExcKB  ResExcDedSysKB  ResExcDedVidKB     ResExcUnkKB
+                                                                                                Level       24      64.64      72.31       0.00            0.00            0.00            0.00
+
+24 Objects (Total: 0.063M / Max: 0.071M / Res: 0.000M | ResDedSys: 0.000M / ResDedVid: 0.000M / ResUnknown: 0.000M)
+MemReport: End command "obj list class=Level -alphasort"
+
+MemReport: Begin command "obj list class=StaticMeshComponent -alphasort"
+Obj List: class=StaticMeshComponent -alphasort
+Objects:
+
+                                                                                                                                      Object      NumKB      MaxKB   ResExcKB  ResExcDedSysKB  ResExcDedVidKB     ResExcUnkKB
+InstancedStaticMeshComponent /Game/Environment/Nature/WaterBody/Blueprints/BP_WaterSurface_Ocean.BP_WaterSurface_Ocean_C:NODE_AddInstancedStaticMeshComponent-0       2.68       2.83       0.03            0.03            0.00            0.00
+InstancedStaticMeshComponent /Game/Environment/Nature/WaterBody/Blueprints/BP_WaterSurface_Ocean.BP_WaterSurface_Ocean_C:NODE_AddInstancedStaticMeshComponent-1       2.68       2.83       0.03            0.03            0.00            0.00
+                                     StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_03.BP_TutorialDoor_03_C:Mesh_GEN_VARIABLE       1.54       1.91       0.00            0.00            0.00            0.00
+                               StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_03.BP_TutorialDoor_03_C:StaticMesh_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                     StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_04.BP_TutorialDoor_04_C:Door_GEN_VARIABLE       1.78       1.81       0.00            0.00            0.00            0.00
+                               StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_04.BP_TutorialDoor_04_C:StaticMesh_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                     StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_05.BP_TutorialDoor_05_C:Door_GEN_VARIABLE       1.78       1.81       0.00            0.00            0.00            0.00
+                               StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_05.BP_TutorialDoor_05_C:StaticMesh_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                               StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_06.BP_TutorialDoor_06_C:StaticMesh_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                    StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_07.BP_TutorialDoor_07_C:DoorL_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                    StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_07.BP_TutorialDoor_07_C:DoorR_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                               StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_07.BP_TutorialDoor_07_C:StaticMesh_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                       StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_1.BP_TutorialDoor_1_C:Door_GEN_VARIABLE       1.77       1.80       0.00            0.00            0.00            0.00
+                       StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_1.BP_TutorialDoor_1_C:SM_TutorialDoor_02_C_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                 StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_1.BP_TutorialDoor_1_C:StaticMesh_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                      StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_2.BP_TutorialDoor_2_C:DoorL_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                      StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_2.BP_TutorialDoor_2_C:DoorR_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                 StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_2.BP_TutorialDoor_2_C:StaticMesh_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                      StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_3.BP_TutorialDoor_3_C:DoorL_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                      StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_3.BP_TutorialDoor_3_C:DoorR_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                 StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialDoor_3.BP_TutorialDoor_3_C:StaticMesh_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+               StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialLaserDoorSwitch.BP_TutorialLaserDoorSwitch_C:StaticMesh_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+             StaticMeshComponent /Game/Logic/Tutorial/Door/BP_TutorialPassagePort.BP_TutorialPassagePort_C:SM_PassagePort_01_01_GEN_VARIABLE       1.67       1.67       0.00            0.00            0.00            0.00
+                             StaticMeshComponent /Game/Logic/Tutorial/Pickable/BP_TutorialPickable.BP_TutorialPickable_C:Sphere_GEN_VARIABLE       1.71       1.91       0.00            0.00            0.00            0.00
+                         StaticMeshComponent /Game/Logic/Tutorial/Pickable/BP_TutorialPickable.BP_TutorialPickable_C:StaticMesh_GEN_VARIABLE       1.53       1.89       0.00            0.00            0.00            0.00
+                                                      StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_LaserDoor_C_0.Door       1.77       1.80       2.35            2.35            0.00            0.00
+                                      StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_LaserDoor_C_0.SM_TutorialDoor_02_C       1.53       1.53       0.00            0.00            0.00            0.00
+                                                StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_LaserDoor_C_0.StaticMesh       1.62       1.62       0.00            0.00            0.00            0.00
+ XAIShieldComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_MechAllosaurus_C_2147469596.CharacterMesh0.XAIShieldComponent_2147469553       1.97       2.03       0.01            0.01            0.00            0.00
+StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_MechAllosaurus_C_2147469596.CharacterMesh0.XMonsterRigPartComponent_2147469552.StaticMeshComponent_2147469543       1.65       1.95       2.62            2.62            0.00            0.00
+StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_MechAllosaurus_C_2147469596.CharacterMesh0.XMonsterRigPartComponent_2147469552.StaticMeshComponent_2147469545       1.65       1.95       2.62            2.62            0.00            0.00
+StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_MechAllosaurus_C_2147469596.CharacterMesh0.XMonsterRigPartComponent_2147469552.StaticMeshComponent_2147469547       1.65       1.95       2.62            2.62            0.00            0.00
+StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_MechAllosaurus_C_2147469596.CharacterMesh0.XMonsterRigPartComponent_2147469552.StaticMeshComponent_2147469549       1.65       1.95       2.62            2.62            0.00            0.00
+StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_MechAllosaurus_C_2147469596.CharacterMesh0.XMonsterRigPartComponent_2147469552.StaticMeshComponent_2147469551       1.65       1.95       2.76            2.76            0.00            0.00
+XGadgetStaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_MechAllosaurus_C_2147469596.XGadgetStaticMeshComponent_2147469452       2.60       2.89       2.62            2.62            0.00            0.00
+XGadgetStaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_MechAllosaurus_C_2147469596.XGadgetStaticMeshComponent_2147469453       2.60       2.89       2.62            2.62            0.00            0.00
+                                                 StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_TestPickable_C_0.Sphere       1.54       1.54       0.01            0.01            0.00            0.00
+                                             StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_TestPickable_C_0.StaticMesh       1.61       1.62       2.36            2.36            0.00            0.00
+                                                 StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_TestPickable_C_1.Sphere       1.54       1.54       0.01            0.01            0.00            0.00
+                                             StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_TestPickable_C_1.StaticMesh       1.61       1.62       2.36            2.36            0.00            0.00
+                                                 StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_TestPickable_C_2.Sphere       1.54       1.54       0.01            0.01            0.00            0.00
+                                             StaticMeshComponent /Game/Maps/Tutorial.Tutorial:PersistentLevel.BP_TestPickable_C_2.StaticMesh       1.61       1.62       2.62            2.62            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_70.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_71.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_74.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_75.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_76.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_77.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_78.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_8.StaticMeshComponent0       1.54       1.91       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_80.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_81.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_82.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_83.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_84.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_85.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_86.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_87.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_88.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_89.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_9.StaticMeshComponent0       1.53       1.89       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_90.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_91.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Pipeline_01_D_Light.LI_Tutorial_Pipeline_01_D_Light:PersistentLevel.StaticMeshActor_92.StaticMeshComponent0       1.76       1.78       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel.StaticMeshActor_0.StaticMeshComponent0       1.53       1.89       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel.StaticMeshActor_1.StaticMeshComponent0       1.53       1.89       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel.StaticMeshActor_10.StaticMeshComponent0       1.53       1.89       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel.StaticMeshActor_11.StaticMeshComponent0       1.54       1.91       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel.StaticMeshActor_2.StaticMeshComponent0       1.53       1.89       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel.StaticMeshActor_3.StaticMeshComponent0       1.53       1.89       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel.StaticMeshActor_4.StaticMeshComponent0       1.53       1.89       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel.StaticMeshActor_5.StaticMeshComponent0       1.53       1.89       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel.StaticMeshActor_6.StaticMeshComponent0       1.53       1.89       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel.StaticMeshActor_7.StaticMeshComponent0       1.53       1.89       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel.StaticMeshActor_8.StaticMeshComponent0       1.53       1.89       0.00            0.00            0.00            0.00
+StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutorial_Showroom_01_A_Light.LI_Tutorial_Showroom_01_A_Light:PersistentLevel.StaticMeshActor_9.StaticMeshComponent0       1.54       1.91       0.00            0.00            0.00            0.00
+
+                                                                                                Class    Count      NumKB      MaxKB   ResExcKB  ResExcDedSysKB  ResExcDedVidKB     ResExcUnkKB
+                                                                         InstancedStaticMeshComponent        4      20.72      22.43      17.42           17.42            0.00            0.00
+                                                                                  StaticMeshComponent     4842    7488.60    8764.99    1042.38         1042.38            0.00            0.00
+                                                                                   XAIShieldComponent        1       1.97       2.03       0.01            0.01            0.00            0.00
+                                                                           XGadgetStaticMeshComponent        2       5.20       5.78       5.25            5.25            0.00            0.00
+
+4849 Objects (Total: 7.340M / Max: 8.589M / Res: 1.040M | ResDedSys: 1.040M / ResDedVid: 0.000M / ResUnknown: 0.000M)
+MemReport: End command "obj list class=StaticMeshComponent -alphasort"
+

@@ -92,10 +92,17 @@ public sealed class UnrealMemReportParser : IUnrealMemReportParser
         var renderTargets = new List<UnrealMemReportRenderTarget>();
         var objects = new List<UnrealMemReportObject>();
         var section = DetailSection.None;
+        var inListTexturesBlock = false;
 
         for (var index = 0; index < lines.Count; index++)
         {
             var line = lines[index];
+
+            // Skip the structured ListTextures block entirely — it is parsed separately by ParseListTextures.
+            if (line.Contains("Begin command \"ListTextures\"", StringComparison.OrdinalIgnoreCase)) { inListTexturesBlock = true; continue; }
+            if (line.Contains("End command \"ListTextures\"", StringComparison.OrdinalIgnoreCase)) { inListTexturesBlock = false; continue; }
+            if (inListTexturesBlock) continue;
+
             var detectedSection = DetectSection(line);
             if (detectedSection != DetailSection.None)
             {
@@ -174,39 +181,37 @@ public sealed class UnrealMemReportParser : IUnrealMemReportParser
         return (details, stats);
     }
 
-    // Parses a comma-separated texture detail row:
-    // CookedW x CookedH (CookedKB, CookedBias), InMemW x InMemH (InMemKB), Format, LODGroup, Name, Streaming, UnknownRef, VT, UsageCount, NumMips, Uncompressed
+    // Parses a texture detail row from ListTextures block.
+    // Format: CookedW x CookedH (CookedKB KB, CookedBias), InMemW x InMemH (InMemKB KB), Format, LODGroup, Name, Streaming, UnknownRef, VT, UsageCount, NumMips, Uncompressed
+    // CookedBias may be "?" so we cannot split on commas — the parenthesised groups are extracted by regex first.
+    private static readonly Regex TextureDetailPattern = new(
+        @"^(?<cw>\d+)\s*[xX×]\s*(?<ch>\d+)\s*\(\s*(?<ckb>[\d.]+)\s*KB\s*,\s*(?<bias>[^)]+)\)\s*,\s*(?<iw>\d+)\s*[xX×]\s*(?<ih>\d+)\s*\(\s*(?<ikb>[\d.]+)\s*KB\s*\)\s*,\s*(?<tail>.+)$",
+        RegexOptions.Compiled);
+
     private static bool TryParseTextureDetail(string line, int lineNumber, out UnrealMemReportTextureDetail detail)
     {
         detail = default!;
         var trimmed = line.Trim();
         if (string.IsNullOrWhiteSpace(trimmed)) return false;
 
-        var parts = trimmed.Split(',');
-        if (parts.Length < 11) return false;
+        var m = TextureDetailPattern.Match(trimmed);
+        if (!m.Success) return false;
 
-        // Part 0: "CookedW x CookedH (CookedKB KB, AuthoredBias)"
-        var cookedMatch = Regex.Match(parts[0].Trim(), @"(?<w>\d+)\s*[xX×]\s*(?<h>\d+)\s*\(\s*(?<kb>[\d.]+)\s*KB\s*,\s*(?<bias>[^)]+)\)");
-        if (!cookedMatch.Success) return false;
-
-        // Part 1: " InMemW x InMemH (InMemKB KB)"
-        var inmemMatch = Regex.Match(parts[1].Trim(), @"(?<w>\d+)\s*[xX×]\s*(?<h>\d+)\s*\(\s*(?<kb>[\d.]+)\s*KB\s*\)");
-        if (!inmemMatch.Success) return false;
-
+        var tail = m.Groups["tail"].Value.Split(',');
         detail = new UnrealMemReportTextureDetail(
-            cookedMatch.Groups["w"].Value, cookedMatch.Groups["h"].Value,
-            cookedMatch.Groups["kb"].Value, cookedMatch.Groups["bias"].Value.Trim(),
-            inmemMatch.Groups["w"].Value, inmemMatch.Groups["h"].Value,
-            inmemMatch.Groups["kb"].Value,
-            parts.Length > 2 ? parts[2].Trim() : string.Empty,
-            parts.Length > 3 ? parts[3].Trim() : string.Empty,
-            parts.Length > 4 ? parts[4].Trim() : string.Empty,
-            parts.Length > 5 ? parts[5].Trim() : string.Empty,
-            parts.Length > 6 ? parts[6].Trim() : string.Empty,
-            parts.Length > 7 ? parts[7].Trim() : string.Empty,
-            parts.Length > 8 ? parts[8].Trim() : string.Empty,
-            parts.Length > 9 ? parts[9].Trim() : string.Empty,
-            parts.Length > 10 ? parts[10].Trim() : string.Empty,
+            m.Groups["cw"].Value, m.Groups["ch"].Value,
+            m.Groups["ckb"].Value, m.Groups["bias"].Value.Trim(),
+            m.Groups["iw"].Value, m.Groups["ih"].Value,
+            m.Groups["ikb"].Value,
+            tail.Length > 0 ? tail[0].Trim() : string.Empty,
+            tail.Length > 1 ? tail[1].Trim() : string.Empty,
+            tail.Length > 2 ? tail[2].Trim() : string.Empty,
+            tail.Length > 3 ? tail[3].Trim() : string.Empty,
+            tail.Length > 4 ? tail[4].Trim() : string.Empty,
+            tail.Length > 5 ? tail[5].Trim() : string.Empty,
+            tail.Length > 6 ? tail[6].Trim() : string.Empty,
+            tail.Length > 7 ? tail[7].Trim() : string.Empty,
+            tail.Length > 8 ? tail[8].Trim() : string.Empty,
             line, lineNumber);
         return true;
     }

@@ -17,6 +17,8 @@ internal sealed class RecordingCommandTransport(
 
     public int Port => port;
 
+    public int ForwardPort => port;
+
     public List<string> Commands { get; } = [];
 
     /// <summary>收到的 cvar 读回请求，按顺序记录。</summary>
@@ -58,6 +60,8 @@ internal sealed class FailingCommandTransport(
     public CommandTransportKind Kind => kind;
 
     public int Port => port;
+
+    public int ForwardPort => port;
 
     public Task<ProcessExecutionResult> SendConsoleCommandAsync(
         string command,

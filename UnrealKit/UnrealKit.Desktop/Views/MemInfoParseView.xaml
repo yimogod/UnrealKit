@@ -6,85 +6,6 @@
         这里用页内 TabControl 分页；导航样式以 x:Key 显式引用，不会污染这些内部分页。
     -->
     <TabControl>
-        <TabItem Header="Android meminfo">
-    <Grid Margin="0,12,0,0">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-        <TextBlock Text="离线 Android meminfo 解析" Style="{StaticResource SectionTitleTextStyle}" />
-        <StackPanel Grid.Row="1" Margin="0,14,0,0">
-            <TextBlock Text="选择一个 .txt 文件。解析只读取原始文件；如需归档分析，请从对应 Capture 的 MemInfo 目录明确选择输入。" Style="{StaticResource HintTextStyle}" />
-            <DockPanel Margin="0,12,0,0" LastChildFill="True">
-                <Button Content="浏览..." Click="BrowseMemInfoFile_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
-                <TextBox Text="{Binding MemInfoInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
-            </DockPanel>
-            <Button Content="解析 meminfo" Command="{Binding ParseMemInfoCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,12,0,0" />
-        </StackPanel>
-        <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <TextBlock Text="{Binding MemInfoProcessDescription}" Style="{StaticResource ResultSummaryTextStyle}" />
-                <TextBlock Text="{Binding MemInfoParsedAt}" Style="{StaticResource HintTextStyle}" Margin="0,5,0,12" />
-                <TabControl MinHeight="350">
-                    <TabItem Header="App Summary">
-                        <DataGrid ItemsSource="{Binding MemInfoMetrics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Metric" Binding="{Binding Name}" Width="*" />
-                                <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </TabItem>
-                    <TabItem Header="Detailed PSS">
-                        <DataGrid ItemsSource="{Binding MemInfoPssEntries}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="150" />
-                                <DataGridTextColumn Header="PSS" Binding="{Binding TotalPss}" Width="95" />
-                                <DataGridTextColumn Header="Private Dirty" Binding="{Binding PrivateDirty}" Width="105" />
-                                <DataGridTextColumn Header="Private Clean" Binding="{Binding PrivateClean}" Width="105" />
-                                <DataGridTextColumn Header="SwapPss" Binding="{Binding SwapPss}" Width="95" />
-                                <DataGridTextColumn Header="RSS" Binding="{Binding Rss}" Width="95" />
-                                <DataGridTextColumn Header="Heap Size" Binding="{Binding HeapSize}" Width="95" />
-                                <DataGridTextColumn Header="Heap Alloc" Binding="{Binding HeapAlloc}" Width="95" />
-                                <DataGridTextColumn Header="Heap Free" Binding="{Binding HeapFree}" Width="95" />
-                                <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="60" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </TabItem>
-                    <TabItem Header="Dalvik Details">
-                        <DataGrid ItemsSource="{Binding MemInfoDalvikEntries}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Category" Binding="{Binding Name}" Width="*" />
-                                <DataGridTextColumn Header="PSS" Binding="{Binding Value}" Width="180" />
-                                <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="80" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </TabItem>
-                    <TabItem Header="Objects">
-                        <DataGrid ItemsSource="{Binding MemInfoObjectEntries}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Object Type" Binding="{Binding Name}" Width="*" />
-                                <DataGridTextColumn Header="Count" Binding="{Binding Value}" Width="180" />
-                                <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="80" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </TabItem>
-                    <TabItem Header="Diagnostics">
-                        <DataGrid ItemsSource="{Binding MemInfoDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="90" />
-                                <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="90" />
-                                <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="70" />
-                                <DataGridTextColumn Header="Diagnostic" Binding="{Binding Message}" Width="*" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </TabItem>
-                </TabControl>
-            </StackPanel>
-        </ScrollViewer>
-    </Grid>
-        </TabItem>
-
         <TabItem Header="UE memreport">
             <Grid Margin="0,12,0,0">
                 <Grid.RowDefinitions>
@@ -124,35 +45,109 @@
                                 </DataGrid>
                             </TabItem>
                             <TabItem Header="Textures">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="8" />
-                                        <RowDefinition Height="160" />
-                                    </Grid.RowDefinitions>
-                                    <DataGrid Grid.Row="0" ItemsSource="{Binding MemReportTextures}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
-                                        <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Cooked Size" Binding="{Binding CookedSize}" Width="170" />
-                                            <DataGridTextColumn Header="InMem Size" Binding="{Binding InMemSize}" Width="150" />
-                                            <DataGridTextColumn Header="Format" Binding="{Binding Format}" Width="130" />
-                                            <DataGridTextColumn Header="LOD Group" Binding="{Binding LodGroup}" Width="200" />
-                                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
-                                            <DataGridTextColumn Header="Streaming" Binding="{Binding Streaming}" Width="80" />
-                                            <DataGridTextColumn Header="UnknownRef" Binding="{Binding UnknownRef}" Width="90" />
-                                            <DataGridTextColumn Header="VT" Binding="{Binding Vt}" Width="45" />
-                                            <DataGridTextColumn Header="Usage" Binding="{Binding UsageCount}" Width="55" />
-                                            <DataGridTextColumn Header="Mips" Binding="{Binding NumMips}" Width="50" />
-                                            <DataGridTextColumn Header="Uncompr." Binding="{Binding Uncompressed}" Width="80" />
-                                        </DataGrid.Columns>
-                                    </DataGrid>
-                                    <DataGrid Grid.Row="2" ItemsSource="{Binding MemReportTextureStats}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
-                                        <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Label" Binding="{Binding Label}" Width="*" />
-                                            <DataGridTextColumn Header="InMem" Binding="{Binding InMemMb}" Width="110" />
-                                            <DataGridTextColumn Header="OnDisk" Binding="{Binding OnDiskMb}" Width="110" />
-                                        </DataGrid.Columns>
-                                    </DataGrid>
-                                </Grid>
+                                <DataGrid ItemsSource="{Binding MemReportTextures}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Cooked Size" Binding="{Binding CookedSize}" Width="170" />
+                                        <DataGridTextColumn Header="InMem Size" Binding="{Binding InMemSize}" Width="150" />
+                                        <DataGridTextColumn Header="Format" Binding="{Binding Format}" Width="130" />
+                                        <DataGridTextColumn Header="LOD Group" Binding="{Binding LodGroup}" Width="200" />
+                                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
+                                        <DataGridTextColumn Header="Streaming" Binding="{Binding Streaming}" Width="80" />
+                                        <DataGridTextColumn Header="UnknownRef" Binding="{Binding UnknownRef}" Width="90" />
+                                        <DataGridTextColumn Header="VT" Binding="{Binding Vt}" Width="45" />
+                                        <DataGridTextColumn Header="Usage" Binding="{Binding UsageCount}" Width="55" />
+                                        <DataGridTextColumn Header="Mips" Binding="{Binding NumMips}" Width="50" />
+                                        <DataGridTextColumn Header="Uncompr." Binding="{Binding Uncompressed}" Width="80" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </TabItem>
+                            <TabItem Header="TexSummary">
+                                <DataGrid ItemsSource="{Binding MemReportTextureStats}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Label" Binding="{Binding Label}" Width="*" />
+                                        <DataGridTextColumn Header="InMem" Binding="{Binding InMemMb}" Width="110" />
+                                        <DataGridTextColumn Header="OnDisk" Binding="{Binding OnDiskMb}" Width="110" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </TabItem>
+                        </TabControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </TabItem>
+
+        <TabItem Header="Android meminfo">
+            <Grid Margin="0,12,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="离线 Android meminfo 解析" Style="{StaticResource SectionTitleTextStyle}" />
+                <StackPanel Grid.Row="1" Margin="0,14,0,0">
+                    <TextBlock Text="选择一个 .txt 文件。解析只读取原始文件；如需归档分析，请从对应 Capture 的 MemInfo 目录明确选择输入。" Style="{StaticResource HintTextStyle}" />
+                    <DockPanel Margin="0,12,0,0" LastChildFill="True">
+                        <Button Content="浏览..." Click="BrowseMemInfoFile_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                        <TextBox Text="{Binding MemInfoInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                    </DockPanel>
+                    <Button Content="解析 meminfo" Command="{Binding ParseMemInfoCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,12,0,0" />
+                </StackPanel>
+                <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="{Binding MemInfoProcessDescription}" Style="{StaticResource ResultSummaryTextStyle}" />
+                        <TextBlock Text="{Binding MemInfoParsedAt}" Style="{StaticResource HintTextStyle}" Margin="0,5,0,12" />
+                        <TabControl MinHeight="350">
+                            <TabItem Header="App Summary">
+                                <DataGrid ItemsSource="{Binding MemInfoMetrics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Metric" Binding="{Binding Name}" Width="*" />
+                                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </TabItem>
+                            <TabItem Header="Detailed PSS">
+                                <DataGrid ItemsSource="{Binding MemInfoPssEntries}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="150" />
+                                        <DataGridTextColumn Header="PSS" Binding="{Binding TotalPss}" Width="95" />
+                                        <DataGridTextColumn Header="Private Dirty" Binding="{Binding PrivateDirty}" Width="105" />
+                                        <DataGridTextColumn Header="Private Clean" Binding="{Binding PrivateClean}" Width="105" />
+                                        <DataGridTextColumn Header="SwapPss" Binding="{Binding SwapPss}" Width="95" />
+                                        <DataGridTextColumn Header="RSS" Binding="{Binding Rss}" Width="95" />
+                                        <DataGridTextColumn Header="Heap Size" Binding="{Binding HeapSize}" Width="95" />
+                                        <DataGridTextColumn Header="Heap Alloc" Binding="{Binding HeapAlloc}" Width="95" />
+                                        <DataGridTextColumn Header="Heap Free" Binding="{Binding HeapFree}" Width="95" />
+                                        <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="60" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </TabItem>
+                            <TabItem Header="Dalvik Details">
+                                <DataGrid ItemsSource="{Binding MemInfoDalvikEntries}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Category" Binding="{Binding Name}" Width="*" />
+                                        <DataGridTextColumn Header="PSS" Binding="{Binding Value}" Width="180" />
+                                        <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="80" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </TabItem>
+                            <TabItem Header="Objects">
+                                <DataGrid ItemsSource="{Binding MemInfoObjectEntries}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Object Type" Binding="{Binding Name}" Width="*" />
+                                        <DataGridTextColumn Header="Count" Binding="{Binding Value}" Width="180" />
+                                        <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="80" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </TabItem>
+                            <TabItem Header="Diagnostics">
+                                <DataGrid ItemsSource="{Binding MemInfoDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="90" />
+                                        <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="90" />
+                                        <DataGridTextColumn Header="Line" Binding="{Binding Line}" Width="70" />
+                                        <DataGridTextColumn Header="Diagnostic" Binding="{Binding Message}" Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
                             </TabItem>
                         </TabControl>
                     </StackPanel>
