@@ -29,7 +29,7 @@ public sealed class UnrealMemReportParser : IUnrealMemReportParser
         var diagnostics = new List<Diagnostic>();
         var summary = new UnrealMemReportSummary(ParseMetrics(inputPath, lines, diagnostics));
         var sections = ParseDetails(inputPath, lines, diagnostics);
-        return new UnrealMemReportParseResult(inputPath, new UnrealMemReport(changelist, summary, sections.Textures, sections.RenderTargets, sections.Objects), diagnostics);
+        return new UnrealMemReportParseResult(inputPath, new UnrealMemReport(changelist, summary, sections.Textures, sections.RenderTargets, sections.Objects, sections.TextureDetails, sections.TextureStats), diagnostics);
     }
 
     private static IReadOnlyList<UnrealMemReportMetric> ParseMetrics(string inputPath, IReadOnlyList<string> lines, List<Diagnostic> diagnostics)
@@ -125,7 +125,104 @@ public sealed class UnrealMemReportParser : IUnrealMemReportParser
         AddMissingSectionDiagnostic(inputPath, diagnostics, "UMR301", "texture", textures.Count);
         AddMissingSectionDiagnostic(inputPath, diagnostics, "UMR302", "render target", renderTargets.Count);
         AddMissingSectionDiagnostic(inputPath, diagnostics, "UMR303", "object", objects.Count);
-        return new DetailSections(textures, renderTargets, objects);
+
+        var (textureDetails, textureStats) = ParseListTextures(lines);
+        return new DetailSections(textures, renderTargets, objects, textureDetails, textureStats);
+    }
+
+    // Parses the block between "MemReport: Begin command "ListTextures"" and
+    // "MemReport: End command "ListTextures"". Lines before "Total size:" are
+    // per-texture rows; lines starting with "Total " are stats lines.
+    private static (IReadOnlyList<UnrealMemReportTextureDetail> Details, IReadOnlyList<UnrealMemReportTextureStat> Stats) ParseListTextures(IReadOnlyList<string> lines)
+    {
+        const string beginMarker = "Begin command \"ListTextures\"";
+        const string endMarker = "End command \"ListTextures\"";
+        const string totalPrefix = "Total size:";
+
+        var details = new List<UnrealMemReportTextureDetail>();
+        var stats = new List<UnrealMemReportTextureStat>();
+
+        var inBlock = false;
+        var pastTotalSize = false;
+
+        for (var index = 0; index < lines.Count; index++)
+        {
+            var line = lines[index];
+            if (!inBlock)
+            {
+                if (line.Contains(beginMarker, StringComparison.OrdinalIgnoreCase)) inBlock = true;
+                continue;
+            }
+
+            if (line.Contains(endMarker, StringComparison.OrdinalIgnoreCase)) break;
+
+            if (!pastTotalSize && line.TrimStart().StartsWith(totalPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                pastTotalSize = true;
+            }
+
+            if (pastTotalSize)
+            {
+                if (TryParseTextureStat(line, index + 1, out var stat)) stats.Add(stat);
+            }
+            else
+            {
+                if (TryParseTextureDetail(line, index + 1, out var detail)) details.Add(detail);
+            }
+        }
+
+        return (details, stats);
+    }
+
+    // Parses a comma-separated texture detail row:
+    // CookedW x CookedH (CookedKB, CookedBias), InMemW x InMemH (InMemKB), Format, LODGroup, Name, Streaming, UnknownRef, VT, UsageCount, NumMips, Uncompressed
+    private static bool TryParseTextureDetail(string line, int lineNumber, out UnrealMemReportTextureDetail detail)
+    {
+        detail = default!;
+        var trimmed = line.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return false;
+
+        var parts = trimmed.Split(',');
+        if (parts.Length < 11) return false;
+
+        // Part 0: "CookedW x CookedH (CookedKB KB, AuthoredBias)"
+        var cookedMatch = Regex.Match(parts[0].Trim(), @"(?<w>\d+)\s*[xX×]\s*(?<h>\d+)\s*\(\s*(?<kb>[\d.]+)\s*KB\s*,\s*(?<bias>[^)]+)\)");
+        if (!cookedMatch.Success) return false;
+
+        // Part 1: " InMemW x InMemH (InMemKB KB)"
+        var inmemMatch = Regex.Match(parts[1].Trim(), @"(?<w>\d+)\s*[xX×]\s*(?<h>\d+)\s*\(\s*(?<kb>[\d.]+)\s*KB\s*\)");
+        if (!inmemMatch.Success) return false;
+
+        detail = new UnrealMemReportTextureDetail(
+            cookedMatch.Groups["w"].Value, cookedMatch.Groups["h"].Value,
+            cookedMatch.Groups["kb"].Value, cookedMatch.Groups["bias"].Value.Trim(),
+            inmemMatch.Groups["w"].Value, inmemMatch.Groups["h"].Value,
+            inmemMatch.Groups["kb"].Value,
+            parts.Length > 2 ? parts[2].Trim() : string.Empty,
+            parts.Length > 3 ? parts[3].Trim() : string.Empty,
+            parts.Length > 4 ? parts[4].Trim() : string.Empty,
+            parts.Length > 5 ? parts[5].Trim() : string.Empty,
+            parts.Length > 6 ? parts[6].Trim() : string.Empty,
+            parts.Length > 7 ? parts[7].Trim() : string.Empty,
+            parts.Length > 8 ? parts[8].Trim() : string.Empty,
+            parts.Length > 9 ? parts[9].Trim() : string.Empty,
+            parts.Length > 10 ? parts[10].Trim() : string.Empty,
+            line, lineNumber);
+        return true;
+    }
+
+    // Parses "Total PF_* size: InMem= X MB  OnDisk= Y MB" and
+    // "Total TEXTUREGROUP_* size: InMem= X MB  OnDisk= Y MB"
+    private static bool TryParseTextureStat(string line, int lineNumber, out UnrealMemReportTextureStat stat)
+    {
+        stat = default!;
+        var trimmed = line.Trim();
+        var match = Regex.Match(trimmed,
+            @"^Total\s+(?<label>\S+)\s+size:\s+InMem=\s*(?<inmem>[\d.]+)\s*MB\s+OnDisk=\s*(?<ondisk>[\d.]+)\s*MB",
+            RegexOptions.IgnoreCase);
+        if (!match.Success) return false;
+        stat = new UnrealMemReportTextureStat(match.Groups["label"].Value, match.Groups["inmem"].Value, match.Groups["ondisk"].Value, line, lineNumber);
+        return true;
     }
 
     private static void AddMissingSectionDiagnostic(string inputPath, List<Diagnostic> diagnostics, string code, string sectionName, int rowCount)
@@ -229,7 +326,9 @@ public sealed class UnrealMemReportParser : IUnrealMemReportParser
     private sealed record DetailSections(
         IReadOnlyList<UnrealMemReportTexture> Textures,
         IReadOnlyList<UnrealMemReportRenderTarget> RenderTargets,
-        IReadOnlyList<UnrealMemReportObject> Objects);
+        IReadOnlyList<UnrealMemReportObject> Objects,
+        IReadOnlyList<UnrealMemReportTextureDetail> TextureDetails,
+        IReadOnlyList<UnrealMemReportTextureStat> TextureStats);
 
     private enum DetailSection
     {

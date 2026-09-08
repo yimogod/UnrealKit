@@ -44,12 +44,27 @@ public sealed record UnrealMemReportObject(
     string RawLine,
     int LineNumber);
 
+// Full per-texture row from ListTextures command block.
+public sealed record UnrealMemReportTextureDetail(
+    string CookedWidth, string CookedHeight, string CookedSizeKb, string CookedBias,
+    string InMemWidth, string InMemHeight, string InMemSizeKb,
+    string Format, string LodGroup, string Name,
+    string Streaming, string UnknownRef, string Vt,
+    string UsageCount, string NumMips, string Uncompressed,
+    string RawLine, int LineNumber);
+
+// One "Total PF_* size" or "Total TEXTUREGROUP_* size" stats line.
+public sealed record UnrealMemReportTextureStat(
+    string Label, string InMemMb, string OnDiskMb, string RawLine, int LineNumber);
+
 public sealed record UnrealMemReport(
     string Changelist,
     UnrealMemReportSummary Summary,
     IReadOnlyList<UnrealMemReportTexture> Textures,
     IReadOnlyList<UnrealMemReportRenderTarget> RenderTargets,
-    IReadOnlyList<UnrealMemReportObject> Objects);
+    IReadOnlyList<UnrealMemReportObject> Objects,
+    IReadOnlyList<UnrealMemReportTextureDetail> TextureDetails,
+    IReadOnlyList<UnrealMemReportTextureStat> TextureStats);
 
 public sealed record UnrealMemReportParseResult(
     string InputPath,

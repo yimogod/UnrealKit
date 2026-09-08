@@ -155,6 +155,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         RefreshCaptureResultsCommand = new AsyncDelegateCommand(RefreshCaptureResultsAsync, () => !IsBusy && _project is not null);
         ViewCaptureResultFileCommand = new AsyncDelegateCommand(ViewCaptureResultFileAsync, () => !IsBusy && SelectedCaptureResultFile is not null);
         ParseMemReportCommand = new AsyncDelegateCommand(ParseMemReportAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(MemReportInputPath));
+        CaptureMemReportCommand = new AsyncDelegateCommand(CaptureMemReportAsync, CanOperateOnSelectedDevice);
         ParseStaticCameraCommand = new AsyncDelegateCommand(ParseStaticCameraAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ScpLogPath));
         RunDiffCommand = new AsyncDelegateCommand(RunDiffAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(DiffBaselinePath) && !string.IsNullOrWhiteSpace(DiffCurrentPath));
         RunTrendCommand = new AsyncDelegateCommand(RunTrendAsync, () => !IsBusy && _project is not null);
@@ -211,6 +212,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<MemInfoMetricOption> CaptureResultMetrics { get; } = [];
     public ObservableCollection<MemReportMetricOption> MemReportMetrics { get; } = [];
     public ObservableCollection<MemReportSummaryOption> MemReportSummaries { get; } = [];
+    public ObservableCollection<MemReportTextureOption> MemReportTextures { get; } = [];
+    public ObservableCollection<MemReportTextureStatOption> MemReportTextureStats { get; } = [];
     public ObservableCollection<OperationLogEntry> OperationLogs { get; } = [];
     public ObservableCollection<ScpFrameOption> ScpFrames { get; } = [];
     public ObservableCollection<ScpAverageOption> ScpAverages { get; } = [];
@@ -245,6 +248,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand RefreshCaptureResultsCommand { get; }
     public ICommand ViewCaptureResultFileCommand { get; }
     public ICommand ParseMemReportCommand { get; }
+    public ICommand CaptureMemReportCommand { get; }
     public ICommand ExportCaptureDataCommand { get; }
     public ICommand ParseStaticCameraCommand { get; }
     public ICommand RunDiffCommand { get; }
@@ -1635,6 +1639,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             var result = await new UnrealMemReportParser().ParseFileAsync(MemReportInputPath);
             MemReportMetrics.Clear();
             MemReportSummaries.Clear();
+            MemReportTextures.Clear();
+            MemReportTextureStats.Clear();
 
             if (result.Report is not null)
             {
@@ -1654,7 +1660,20 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 if (result.Report.Objects.Count > 0)
                     MemReportSummaries.Add(new MemReportSummaryOption("Objects", result.Report.Objects.Count.ToString(), string.Empty));
 
-                StatusMessage = "Parsed memreport: " + result.Report.Summary.Metrics.Count + " metrics, " + result.Report.Textures.Count + " textures";
+                foreach (var t in result.Report.TextureDetails)
+                {
+                    MemReportTextures.Add(new MemReportTextureOption(
+                        t.CookedWidth + "x" + t.CookedHeight + " (" + t.CookedSizeKb + " KB)",
+                        t.InMemWidth + "x" + t.InMemHeight + " (" + t.InMemSizeKb + " KB)",
+                        t.Format, t.LodGroup, t.Name,
+                        t.Streaming, t.UnknownRef, t.Vt,
+                        t.UsageCount, t.NumMips, t.Uncompressed));
+                }
+
+                foreach (var s in result.Report.TextureStats)
+                    MemReportTextureStats.Add(new MemReportTextureStatOption(s.Label, s.InMemMb + " MB", s.OnDiskMb + " MB"));
+
+                StatusMessage = "Parsed memreport: " + result.Report.Summary.Metrics.Count + " metrics, " + result.Report.TextureDetails.Count + " textures";
             }
             else
             {
@@ -1668,6 +1687,61 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             StatusMessage = exception.Message;
             AddOperationLog("Error", $"MemReport 解析失败：{exception.Message}");
         }
+    }
+
+    /// <summary>
+    /// 向设备发送 memreport -full，下载 Saved 目录，然后在下载结果的
+    /// Profiling/MemReports 子目录里找最新的 .memreport 文件并填入输入框。
+    /// </summary>
+    private async Task CaptureMemReportAsync()
+    {
+        if (SelectedDevice is null || _project is null) return;
+
+        await RunAsync("正在采集 MemReport…", async progress =>
+        {
+            // 1. 发送 memreport -full 指令
+            progress.Report(new OperationProgress("captureMemReport", "SendCommand", 1, 3, "正在发送 memreport -full 指令…"));
+            var consoleService = new ConsoleCommandService(ResolveDeviceServiceForDevice(SelectedDevice.Device));
+            if (!consoleService.IsSupported)
+                throw new InvalidOperationException($"{SelectedDevice.Platform} 平台暂不支持发送 UE 控制台指令。");
+
+            var sendResult = await consoleService.SendAsync(
+                SelectedDevice.Id,
+                ConsoleCommand.Create("memreport -full"),
+                TryResolveSelectedTarget(out _)?.ProcessIdentity,
+                cancellationToken: OperationCancellationToken);
+
+            if (!sendResult.Succeeded)
+                throw new InvalidOperationException($"memreport -full 指令发送失败（ExitCode={sendResult.ExitCode}）：{sendResult.StandardError}");
+
+            AddOperationLog("Info", "memreport -full 已发送，等待设备写出文件…");
+
+            // 2. 下载 Saved 目录
+            progress.Report(new OperationProgress("captureMemReport", "Download", 2, 3, "正在下载设备 Saved 目录…"));
+            var request = new UnrealSavedPullRequest(_project, SelectedDevice.Device, UnealSavedScope.Common);
+            var savedService = new UnrealSavedService(ResolveDeviceServiceForDevice(SelectedDevice.Device));
+            var downloadResult = await savedService.DownloadAsync(request, progress, OperationCancellationToken);
+
+            AddOperationLog("Info", $"Saved 已下载到：{downloadResult.Plan.LocalDirectory}");
+
+            // 3. 在 Profiling/MemReports 下找最新的 .memreport 文件
+            progress.Report(new OperationProgress("captureMemReport", "FindFile", 3, 3, "正在查找 memreport 文件…"));
+            var memReportsDir = Path.Combine(downloadResult.Plan.LocalDirectory, "Profiling", "MemReports");
+            if (!Directory.Exists(memReportsDir))
+                throw new InvalidOperationException($"下载目录中未找到 Profiling/MemReports：{memReportsDir}");
+
+            var latestFile = Directory
+                .EnumerateFiles(memReportsDir, "*.memreport", SearchOption.AllDirectories)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault();
+
+            if (latestFile is null)
+                throw new InvalidOperationException($"Profiling/MemReports 目录下没有找到 .memreport 文件：{memReportsDir}");
+
+            MemReportInputPath = latestFile;
+            StatusMessage = $"MemReport 已就绪：{latestFile}";
+            AddOperationLog("Info", $"已填入 memreport 路径：{latestFile}");
+        });
     }
 
     private async Task ExportCaptureDataAsync()

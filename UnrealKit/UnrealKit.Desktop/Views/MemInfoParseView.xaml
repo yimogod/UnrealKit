@@ -94,12 +94,11 @@
                 </Grid.RowDefinitions>
                 <StackPanel Grid.Row="1" Margin="0,0,0,0">
                     <DockPanel Margin="0,0,0,0" LastChildFill="True">
+                        <Button Content="Capture" Command="{Binding CaptureMemReportCommand}" Padding="14,7" Margin="6,0,0,0" DockPanel.Dock="Right" />
+                        <Button Content="解析" Command="{Binding ParseMemReportCommand}" Padding="14,7" Margin="6,0,0,0" DockPanel.Dock="Right" />
                         <Button Content="浏览…" Click="BrowseMemReportFile_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
                         <TextBox Text="{Binding MemReportInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
-                        
                     </DockPanel>
-                    <Button Content="解析" Command="{Binding ParseMemReportCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,12,0,0" />
-                    
                 </StackPanel>
                 <ScrollViewer Grid.Row="2" Margin="0,4,0,0" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
@@ -123,6 +122,37 @@
                                         <DataGridTextColumn Header="Details" Binding="{Binding Details}" Width="*" />
                                     </DataGrid.Columns>
                                 </DataGrid>
+                            </TabItem>
+                            <TabItem Header="Textures">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="8" />
+                                        <RowDefinition Height="160" />
+                                    </Grid.RowDefinitions>
+                                    <DataGrid Grid.Row="0" ItemsSource="{Binding MemReportTextures}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Cooked Size" Binding="{Binding CookedSize}" Width="170" />
+                                            <DataGridTextColumn Header="InMem Size" Binding="{Binding InMemSize}" Width="150" />
+                                            <DataGridTextColumn Header="Format" Binding="{Binding Format}" Width="130" />
+                                            <DataGridTextColumn Header="LOD Group" Binding="{Binding LodGroup}" Width="200" />
+                                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
+                                            <DataGridTextColumn Header="Streaming" Binding="{Binding Streaming}" Width="80" />
+                                            <DataGridTextColumn Header="UnknownRef" Binding="{Binding UnknownRef}" Width="90" />
+                                            <DataGridTextColumn Header="VT" Binding="{Binding Vt}" Width="45" />
+                                            <DataGridTextColumn Header="Usage" Binding="{Binding UsageCount}" Width="55" />
+                                            <DataGridTextColumn Header="Mips" Binding="{Binding NumMips}" Width="50" />
+                                            <DataGridTextColumn Header="Uncompr." Binding="{Binding Uncompressed}" Width="80" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                    <DataGrid Grid.Row="2" ItemsSource="{Binding MemReportTextureStats}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Label" Binding="{Binding Label}" Width="*" />
+                                            <DataGridTextColumn Header="InMem" Binding="{Binding InMemMb}" Width="110" />
+                                            <DataGridTextColumn Header="OnDisk" Binding="{Binding OnDiskMb}" Width="110" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </Grid>
                             </TabItem>
                         </TabControl>
                     </StackPanel>

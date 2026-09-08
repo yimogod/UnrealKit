@@ -31,6 +31,14 @@ public sealed record MemReportMetricOption(string Group, string Name, string Val
 
 public sealed record MemReportSummaryOption(string Category, string Count, string Details);
 
+public sealed record MemReportTextureOption(
+    string CookedSize, string InMemSize,
+    string Format, string LodGroup, string Name,
+    string Streaming, string UnknownRef, string Vt,
+    string UsageCount, string NumMips, string Uncompressed);
+
+public sealed record MemReportTextureStatOption(string Label, string InMemMb, string OnDiskMb);
+
 public sealed class LaunchParameterPresetOption(LaunchParameterPreset preset, LaunchParameterPresetGroup? group = null) : INotifyPropertyChanged
 {
     private bool _isSelected;
