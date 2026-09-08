@@ -47,26 +47,27 @@
                             <TabItem Header="Textures">
                                 <DataGrid ItemsSource="{Binding MemReportTextures}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Cooked Size" Binding="{Binding CookedSize}" Width="170" />
-                                        <DataGridTextColumn Header="InMem Size" Binding="{Binding InMemSize}" Width="150" />
-                                        <DataGridTextColumn Header="Format" Binding="{Binding Format}" Width="130" />
-                                        <DataGridTextColumn Header="LOD Group" Binding="{Binding LodGroup}" Width="200" />
+                                        <DataGridTextColumn Header="CookedSize" Binding="{Binding CookedSize}" Width="80" />
+                                        <DataGridTextColumn Header="DiskSize" Binding="{Binding DiskSizeKb}" Width="70" />
+                                        <DataGridTextColumn Header="InMemSize" Binding="{Binding InMemSize}" Width="80" />
+                                        <DataGridTextColumn Header="MemSize(KB)" Binding="{Binding MemSizeKb}" Width="90" />
+                                        <DataGridTextColumn Header="Format" Binding="{Binding Format}" Width="90" />
+                                        <DataGridTextColumn Header="LOD Group" Binding="{Binding LodGroup}" Width="10" />
                                         <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
-                                        <DataGridTextColumn Header="Streaming" Binding="{Binding Streaming}" Width="80" />
-                                        <DataGridTextColumn Header="UnknownRef" Binding="{Binding UnknownRef}" Width="90" />
-                                        <DataGridTextColumn Header="VT" Binding="{Binding Vt}" Width="45" />
-                                        <DataGridTextColumn Header="Usage" Binding="{Binding UsageCount}" Width="55" />
-                                        <DataGridTextColumn Header="Mips" Binding="{Binding NumMips}" Width="50" />
-                                        <DataGridTextColumn Header="Uncompr." Binding="{Binding Uncompressed}" Width="80" />
+                                        <DataGridTextColumn Header="Streaming" Binding="{Binding Streaming}" Width="70" />
+                                        <!-- <DataGridTextColumn Header="VT" Binding="{Binding Vt}" Width="45" />
+                                        <DataGridTextColumn Header="Usage" Binding="{Binding UsageCount}" Width="50" /> -->
+                                        <DataGridTextColumn Header="Mips" Binding="{Binding NumMips}" Width="40" />
+                                        <DataGridTextColumn Header="Compress" Binding="{Binding Compressed}" Width="70" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </TabItem>
                             <TabItem Header="TexSummary">
                                 <DataGrid ItemsSource="{Binding MemReportTextureStats}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Label" Binding="{Binding Label}" Width="*" />
-                                        <DataGridTextColumn Header="InMem" Binding="{Binding InMemMb}" Width="110" />
-                                        <DataGridTextColumn Header="OnDisk" Binding="{Binding OnDiskMb}" Width="110" />
+                                        <DataGridTextColumn Header="Label" Binding="{Binding Label}" Width="300" />
+                                        <DataGridTextColumn Header="InMem" Binding="{Binding InMemMb}" Width="220" />
+                                        <DataGridTextColumn Header="OnDisk" Binding="{Binding OnDiskMb}" Width="*" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </TabItem>

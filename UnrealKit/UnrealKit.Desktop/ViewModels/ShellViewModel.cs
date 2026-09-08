@@ -1663,11 +1663,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 foreach (var t in result.Report.TextureDetails)
                 {
                     MemReportTextures.Add(new MemReportTextureOption(
-                        t.CookedWidth + "x" + t.CookedHeight + " (" + t.CookedSizeKb + " KB)",
-                        t.InMemWidth + "x" + t.InMemHeight + " (" + t.InMemSizeKb + " KB)",
+                        t.CookedWidth + "x" + t.CookedHeight,
+                        int.TryParse(t.CookedSizeKb, out var diskKb) ? diskKb : null,
+                        t.InMemWidth + "x" + t.InMemHeight,
+                        int.TryParse(t.InMemSizeKb, out var memKb) ? memKb : null,
                         t.Format, t.LodGroup, t.Name,
                         t.Streaming, t.UnknownRef, t.Vt,
-                        t.UsageCount, t.NumMips, t.Uncompressed));
+                        t.UsageCount, t.NumMips, t.Uncompressed == "YES" ? "NO" : "YES"));
                 }
 
                 foreach (var s in result.Report.TextureStats)
