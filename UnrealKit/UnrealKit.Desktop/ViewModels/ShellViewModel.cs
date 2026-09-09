@@ -270,6 +270,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string PageDescription => SelectedNavigationItem switch
     {
         "设备" => "刷新设备列表（Win64 本机与 ADB 设备）并明确选择目标设备；不会依赖默认第一台设备。",
+        "安装包" => "从 FTP 下载最新构建，或从本地已下载的构建包中选择一个安装到设备；未选择时安装最新包。",
         "启动参数" => "选择预设并预览 uecommandline.txt，然后推送到已明确选择的设备。",
         "控制台" => "向运行中的 UE 应用发送控制台指令。预设指令按分组列出，开关与数值型可读回游戏中的当前值。",
         "指令序列" => "按顺序执行指令序列（指令 → 等待 → 标记），支持工程预设和内联输入。",
@@ -279,7 +280,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "静态相机" => "解析静态相机性能日志，查看逐相机指标并生成 HTML 报告。",
         "基线差分" => "明确选择基线与当前两份输入，比较指标回退与改善。",
         "历史趋势" => "按标签和时间范围汇总工程内的历史 Capture，查看指标走势。",
-        "安装包" => "从 FTP 下载最新构建，或从本地已下载的构建包中选择一个安装到设备；未选择时安装最新包。",
         _ => string.Empty
     };
 
