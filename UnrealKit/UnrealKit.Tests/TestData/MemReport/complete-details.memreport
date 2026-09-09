@@ -523,3 +523,13 @@ StaticMeshComponent /Game/Tutorial/Environment/LevelInstance/LI_Light/LI_Tutoria
 4849 Objects (Total: 7.340M / Max: 8.589M / Res: 1.040M | ResDedSys: 1.040M / ResDedVid: 0.000M / ResUnknown: 0.000M)
 MemReport: End command "obj list class=StaticMeshComponent -alphasort"
 
+Listing all textures.
+Name | Dimensions | Format | Memory
+Texture2D /Game/Textures/T_Stone | 2048x1024 | PF_DXT1 | 1536 KB
+
+Render target memory:
+Name | Dimensions | Format | Memory
+TextureRenderTarget2D /Game/UI/RT_Minimap | 1024x1024 | PF_B8G8R8A8 | 4096 KB
+
+Obj List:
+Class=Texture2D, Count=42, NumKBytes=8192

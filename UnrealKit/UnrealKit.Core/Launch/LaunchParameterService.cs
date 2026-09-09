@@ -131,7 +131,7 @@ public sealed class LaunchParameterService : ILaunchParameterService
     {
         ArgumentNullException.ThrowIfNull(settings);
         var target = ResolveTarget(settings);
-        return target.CombineDevicePath(target.EngineRootPath, FileName);
+        return target.CombineDevicePath(target.GameRootPath, FileName);
     }
 
     public async Task<LaunchParameterPushResult> PushAsync(UkitProject project, LaunchParameterRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)

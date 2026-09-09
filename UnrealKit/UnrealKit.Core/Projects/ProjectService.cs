@@ -419,9 +419,9 @@ public sealed class ProjectService : IProjectService
         }
 
         if (!int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var port)
-            || port is < 1 or > 65535)
+            || port is < 0 or > 65535)
         {
-            throw new InvalidDataException($"{fieldName} 配置无效: {value}。必须是 1 到 65535 之间的整数，或留空表示与 RemoteControlHttpPort 相同。");
+            throw new InvalidDataException($"{fieldName} 配置无效: {value}。必须是 0 到 65535 之间的整数，或留空表示与 RemoteControlHttpPort 相同。");
         }
 
         return port;
