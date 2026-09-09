@@ -152,7 +152,7 @@ public sealed class CaptureAnalysisServiceTests : IDisposable
         Assert.Equal("20260806-120000-dev01", result.CaptureId);
         Assert.True(result.ParseResult.IsSuccess);
         Assert.NotNull(result.ParseResult.Report);
-        Assert.Equal("com.example.performance", result.ParseResult.Report!.ProcessName);
+        Assert.Equal("com.herogame.gplay.titanite", result.ParseResult.Report!.ProcessName);
 
         Assert.True(File.Exists(result.ResultJsonPath));
         Assert.StartsWith(Path.Combine(project.SavedDir, "Analysis"), result.AnalysisDirectory);
@@ -160,7 +160,7 @@ public sealed class CaptureAnalysisServiceTests : IDisposable
         var outputContent = await File.ReadAllTextAsync(result.ResultJsonPath);
         Assert.Contains("test-analysis-001", outputContent, StringComparison.Ordinal);
         Assert.Contains("20260806-120000-dev01", outputContent, StringComparison.Ordinal);
-        Assert.Contains("com.example.performance", outputContent, StringComparison.Ordinal);
+        Assert.Contains("com.herogame.gplay.titanite", outputContent, StringComparison.Ordinal);
         Assert.Contains("2.0.0", outputContent, StringComparison.Ordinal);
         Assert.Contains("abc1234", outputContent, StringComparison.Ordinal);
     }

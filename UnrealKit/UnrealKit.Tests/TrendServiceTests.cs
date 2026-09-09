@@ -40,19 +40,19 @@ public sealed class TrendServiceTests : IDisposable
         Assert.Equal(2, total.PresentCount);
         Assert.Equal(0, total.MissingCount);
         Assert.Null(total.Points[0].DeltaFromPrevious);
-        Assert.Equal(3024, total.Points[1].DeltaFromPrevious);
-        Assert.Equal(30680, total.First);
+        Assert.Equal(33704 - 523811, total.Points[1].DeltaFromPrevious);
+        Assert.Equal(523811, total.First);
         Assert.Equal(33704, total.Last);
-        Assert.Equal(30680, total.Minimum);
-        Assert.Equal(33704, total.Maximum);
-        Assert.Equal(3024, total.TotalDelta);
-        Assert.Equal(9.856584, total.TotalDeltaPercent!.Value, 4);
-        Assert.Equal(MetricDiffAssessment.Regressed, total.OverallAssessment);
+        Assert.Equal(33704, total.Minimum);
+        Assert.Equal(523811, total.Maximum);
+        Assert.Equal(33704 - 523811, total.TotalDelta);
+        Assert.Equal(Math.Round((33704.0 - 523811.0) / 523811.0 * 100.0, 4), total.TotalDeltaPercent!.Value, 4);
+        Assert.Equal(MetricDiffAssessment.Improved, total.OverallAssessment);
 
         // Memory dropping across the range is an improvement, not a bare negative delta.
         var javaHeap = FindSeries(result, "AppSummary", "JavaHeapKb");
-        Assert.Equal(-1000, javaHeap.TotalDelta);
-        Assert.Equal(MetricDiffAssessment.Improved, javaHeap.OverallAssessment);
+        Assert.Equal(7000 - 6400, javaHeap.TotalDelta);
+        Assert.Equal(MetricDiffAssessment.Regressed, javaHeap.OverallAssessment);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class TrendServiceTests : IDisposable
         Assert.Equal(2, system.PointCount);
         Assert.Equal(1, system.PresentCount);
         Assert.Equal(1, system.MissingCount);
-        Assert.Equal(1024, system.Points[0].Value);
+        Assert.Equal(30023, system.Points[0].Value);
         Assert.Null(system.Points[1].Value);
         Assert.Null(system.Points[1].DeltaFromPrevious);
         Assert.Null(system.TotalDelta);
@@ -92,9 +92,9 @@ public sealed class TrendServiceTests : IDisposable
         // SystemKb exists in captures a and c but not b. The delta at c must step from a's value,
         // not treat the gap at b as a drop to zero.
         var system = FindSeries(result, "AppSummary", "SystemKb");
-        Assert.Equal(1024, system.Points[0].Value);
+        Assert.Equal(30023, system.Points[0].Value);
         Assert.Null(system.Points[1].Value);
-        Assert.Equal(1024, system.Points[2].Value);
+        Assert.Equal(30023, system.Points[2].Value);
         Assert.Equal(0, system.Points[2].DeltaFromPrevious);
         Assert.Equal(MetricDiffAssessment.Unchanged, system.Points[2].Assessment);
     }
@@ -273,8 +273,8 @@ public sealed class TrendServiceTests : IDisposable
 
         var total = FindSeries(result, "AppSummary", "TotalPssKb");
         Assert.Equal(1, total.PointCount);
-        Assert.Equal(30680, total.First);
-        Assert.Equal(30680, total.Last);
+        Assert.Equal(523811, total.First);
+        Assert.Equal(523811, total.Last);
         Assert.Null(total.TotalDelta);
         Assert.Null(total.TotalDeltaPercent);
         Assert.Equal(MetricDiffAssessment.Unknown, total.OverallAssessment);

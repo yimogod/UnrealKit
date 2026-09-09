@@ -12,11 +12,11 @@ public sealed class AndroidMemInfoParserTests
 
         Assert.True(result.IsSuccess);
         var report = Assert.IsType<AndroidMemInfoReport>(result.Report);
-        Assert.Equal("com.example.performance", report.ProcessName);
-        Assert.Equal(4312, report.ProcessId);
-        Assert.Equal(8000, report.Summary.JavaHeapKb);
-        Assert.Equal(12000, report.Summary.NativeHeapKb);
-        Assert.Equal(30680, report.Summary.TotalPssKb);
+        Assert.Equal("com.herogame.gplay.titanite", report.ProcessName);
+        Assert.Equal(32510, report.ProcessId);
+        Assert.Equal(6400, report.Summary.JavaHeapKb);
+        Assert.Equal(20200, report.Summary.NativeHeapKb);
+        Assert.Equal(523811, report.Summary.TotalPssKb);
         Assert.Empty(result.Diagnostics);
     }
 

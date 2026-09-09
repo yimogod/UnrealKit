@@ -93,7 +93,10 @@
                         <Button Content="浏览..." Click="BrowseMemInfoFile_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
                         <TextBox Text="{Binding MemInfoInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
                     </DockPanel>
-                    <Button Content="解析 meminfo" Command="{Binding ParseMemInfoCommand}" Padding="14,7" HorizontalAlignment="Left" Margin="0,12,0,0" />
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <Button Content="解析 meminfo" Command="{Binding ParseMemInfoCommand}" Padding="14,7" />
+                        <Button Content="Capture" Command="{Binding CaptureMemInfoCommand}" Padding="14,7" Margin="10,0,0,0" />
+                    </StackPanel>
                 </StackPanel>
                 <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
                     <StackPanel>

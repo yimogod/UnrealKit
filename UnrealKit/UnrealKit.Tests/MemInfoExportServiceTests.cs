@@ -28,8 +28,8 @@ public sealed class MemInfoExportServiceTests : IDisposable
         Assert.Equal(2, lines.Length);
         Assert.StartsWith("SourceFile,ParsedAtUtc,ToolVersion,ToolGitCommit,ProcessName,ProcessId", lines[0]);
         Assert.Contains("2026-08-06T12:34:56", lines[1]);
-        Assert.Contains("com.example.performance,4312", lines[1]);
-        Assert.Contains("30680", lines[1]);
+        Assert.Contains("com.herogame.gplay.titanite,32510", lines[1]);
+        Assert.Contains("523811", lines[1]);
     }
 
     [Fact]

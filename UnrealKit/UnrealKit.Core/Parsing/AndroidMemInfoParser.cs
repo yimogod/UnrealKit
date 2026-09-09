@@ -81,8 +81,10 @@ public sealed partial class AndroidMemInfoParser : IAndroidMemInfoParser
         for (var index = summaryStart + 1; index < lines.Count; index++)
         {
             var line = lines[index];
-            if (string.IsNullOrWhiteSpace(line)) break;
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (IsKnownSectionHeader(line)) break;
             if (line.Contains("Pss", StringComparison.OrdinalIgnoreCase) && line.Contains("KB", StringComparison.OrdinalIgnoreCase)) continue;
+            if (line.Contains("------", StringComparison.Ordinal)) continue;
             var match = SummaryEntryRegex().Match(line);
             if (!match.Success)
             {
@@ -104,7 +106,9 @@ public sealed partial class AndroidMemInfoParser : IAndroidMemInfoParser
             else if (string.Equals(label, "Graphics", StringComparison.OrdinalIgnoreCase)) graphicsKb = kilobytes;
             else if (string.Equals(label, "Private Other", StringComparison.OrdinalIgnoreCase)) privateOtherKb = kilobytes;
             else if (string.Equals(label, "System", StringComparison.OrdinalIgnoreCase)) systemKb = kilobytes;
-            else if (string.Equals(label, "TOTAL", StringComparison.OrdinalIgnoreCase)) { totalPssKb = kilobytes; totalFound = true; }
+            else if (string.Equals(label, "TOTAL", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(label, "TOTAL PSS", StringComparison.OrdinalIgnoreCase))
+            { totalPssKb = kilobytes; totalFound = true; }
         }
 
         if (!totalFound) diagnostics.Add(Error("AMI105", "Missing required 'TOTAL' value in the 'App Summary' section.", inputPath, summaryStart + 1, "Include the complete App Summary section through its TOTAL line."));
@@ -246,19 +250,23 @@ public sealed partial class AndroidMemInfoParser : IAndroidMemInfoParser
             for (var index = sectionIndex + 1; index < lines.Count && !string.IsNullOrWhiteSpace(lines[index]); index++)
             {
                 if (IsKnownSectionHeader(lines[index])) break;
-                if (!TryParseNamedNumber(lines[index], out var name, out var value))
+                var pairs = ExtractNamedPairs(lines[index]).ToList();
+                if (pairs.Count == 0)
                 {
                     diagnostics.Add(Warning(malformedEntryCode, $"The {displayName} section contains a malformed entry.", inputPath, index + 1, $"Expected '{entryFormat}'."));
                     continue;
                 }
 
-                if (!seenNames.Add(name))
+                foreach (var (name, value) in pairs)
                 {
-                    diagnostics.Add(Warning(duplicateEntryCode, $"The {displayName} section contains a duplicate '{name}' entry; all values are retained.", inputPath, index + 1, "Use the line number to determine whether this is an OEM-specific subdivision or duplicate output."));
-                }
+                    if (!seenNames.Add(name))
+                    {
+                        diagnostics.Add(Warning(duplicateEntryCode, $"The {displayName} section contains a duplicate '{name}' entry; all values are retained.", inputPath, index + 1, "Use the line number to determine whether this is an OEM-specific subdivision or duplicate output."));
+                    }
 
-                entries.Add((name, value, index + 1));
-                sectionEntries++;
+                    entries.Add((name, value, index + 1));
+                    sectionEntries++;
+                }
             }
 
             if (sectionEntries == 0)
@@ -286,6 +294,17 @@ public sealed partial class AndroidMemInfoParser : IAndroidMemInfoParser
         return match.Success && TryParseNumber(match.Groups["value"].Value, out value);
     }
 
+    // Objects 节一行可能有多个 "label: value" 对，逐一提取。
+    private static IEnumerable<(string Name, long Value)> ExtractNamedPairs(string line)
+    {
+        foreach (Match match in NamedPairRegex().Matches(line))
+        {
+            var label = match.Groups["label"].Value.Trim();
+            if (TryParseNumber(match.Groups["value"].Value, out var number))
+                yield return (label, number);
+        }
+    }
+
     private static bool TryParseNumber(string value, out long number) => long.TryParse(value.Trim().TrimEnd('K', 'B', 'k', 'b').Replace(",", string.Empty, StringComparison.Ordinal), NumberStyles.None, CultureInfo.InvariantCulture, out number);
 
     private static bool IsNumericOrPlaceholder(string value) => IsPlaceholder(value) || TryParseNumber(value, out _);
@@ -299,6 +318,11 @@ public sealed partial class AndroidMemInfoParser : IAndroidMemInfoParser
     [GeneratedRegex(@"^\s*\*\*\s+MEMINFO\s+in\s+pid\s+(?<pid>\d+)\s+\[(?<process>[^\]]+)\]\s+\*\*\s*$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex ProcessHeaderRegex();
 
-    [GeneratedRegex(@"^\s*(?<label>[^:]+):\s*(?<value>\S+)\s*(?:KB)?\s*$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    // value はスペースや単位を含まない最初のトークンのみ取り出す。行末に RSS 列等が続いても可。
+    [GeneratedRegex(@"^\s*(?<label>[^:]+):\s*(?<value>\S+)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex SummaryEntryRegex();
+
+    // 一行に複数の "label: value" が並ぶ Objects 行用。
+    [GeneratedRegex(@"(?<label>[^:\r\n]+?):\s*(?<value>\d[\d,]*)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex NamedPairRegex();
 }

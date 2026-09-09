@@ -20,21 +20,21 @@ public sealed class BaselineServiceTests : IDisposable
 
         var total = FindMetric(result, "AppSummary", "TotalPssKb");
         Assert.Equal(MetricDiffStatus.Compared, total.Status);
-        Assert.Equal(30680, total.BaselineValue);
+        Assert.Equal(523811, total.BaselineValue);
         Assert.Equal(33704, total.CurrentValue);
-        Assert.Equal(3024, total.Delta);
+        Assert.Equal(33704 - 523811, total.Delta);
         Assert.Equal("KB", total.Unit);
         Assert.Equal(MetricDirection.LowerIsBetter, total.Direction);
-        Assert.Equal(MetricDiffAssessment.Regressed, total.Assessment);
+        Assert.Equal(MetricDiffAssessment.Improved, total.Assessment);
 
         // Memory dropping is an improvement because the metric is LowerIsBetter.
         var javaHeap = FindMetric(result, "AppSummary", "JavaHeapKb");
-        Assert.Equal(-1000, javaHeap.Delta);
-        Assert.Equal(MetricDiffAssessment.Improved, javaHeap.Assessment);
+        Assert.Equal(7000 - 6400, javaHeap.Delta);
+        Assert.Equal(MetricDiffAssessment.Regressed, javaHeap.Assessment);
 
         var code = FindMetric(result, "AppSummary", "CodeKb");
-        Assert.Equal(0, code.Delta);
-        Assert.Equal(MetricDiffAssessment.Unchanged, code.Assessment);
+        Assert.Equal(3000 - 197696, code.Delta);
+        Assert.Equal(MetricDiffAssessment.Improved, code.Assessment);
     }
 
     [Fact]
@@ -46,9 +46,9 @@ public sealed class BaselineServiceTests : IDisposable
             BaselineSample("current-meminfo.txt")));
 
         var graphics = FindMetric(result, "AppSummary", "GraphicsKb");
-        Assert.Equal(4096, graphics.BaselineValue);
+        Assert.Equal(84848, graphics.BaselineValue);
         Assert.Equal(6144, graphics.CurrentValue);
-        Assert.Equal(50.0, graphics.DeltaPercent!.Value, 6);
+        Assert.Equal(Math.Round((6144.0 - 84848.0) / 84848.0 * 100.0, 6), graphics.DeltaPercent!.Value, 6);
     }
 
     [Fact]
@@ -62,16 +62,16 @@ public sealed class BaselineServiceTests : IDisposable
         // The current sample omits the System line, so the metric must read as missing.
         var system = FindMetric(result, "AppSummary", "SystemKb");
         Assert.Equal(MetricDiffStatus.MissingInCurrent, system.Status);
-        Assert.Equal(1024, system.BaselineValue);
+        Assert.Equal(30023, system.BaselineValue);
         Assert.Null(system.CurrentValue);
         Assert.Null(system.Delta);
         Assert.Null(system.DeltaPercent);
         Assert.Equal(MetricDiffAssessment.Unknown, system.Assessment);
 
-        // Objects exist only in the current sample.
+        // Objects exist in both samples now; Views baseline = 24, current = 8.
         var views = FindMetric(result, "Objects", "Views");
-        Assert.Equal(MetricDiffStatus.MissingInBaseline, views.Status);
-        Assert.Null(views.BaselineValue);
+        Assert.Equal(MetricDiffStatus.Compared, views.Status);
+        Assert.Equal(24, views.BaselineValue);
         Assert.Equal(8, views.CurrentValue);
 
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "BDF202" && diagnostic.Severity == DiagnosticSeverity.Warning);

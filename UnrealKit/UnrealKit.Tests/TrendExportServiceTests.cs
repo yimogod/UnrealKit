@@ -33,9 +33,9 @@ public sealed class TrendExportServiceTests : IDisposable
         var totalRow = lines.Single(line => line.Contains(",TotalPssKb,", StringComparison.Ordinal));
         Assert.Contains("MemInfo", totalRow, StringComparison.Ordinal);
         Assert.Contains("LowerIsBetter", totalRow, StringComparison.Ordinal);
-        Assert.Contains("30680", totalRow, StringComparison.Ordinal);
+        Assert.Contains("523811", totalRow, StringComparison.Ordinal);
         Assert.Contains("33704", totalRow, StringComparison.Ordinal);
-        Assert.Contains("Regressed", totalRow, StringComparison.Ordinal);
+        Assert.Contains("Improved", totalRow, StringComparison.Ordinal);
         Assert.Contains("1.2.3", totalRow, StringComparison.Ordinal);
     }
 

@@ -1,20 +1,54 @@
 Applications Memory Usage (in Kilobytes):
-Uptime: 125436 Realtime: 125436
+Uptime: 162619344 Realtime: 162619344
 
-** MEMINFO in pid 4312 [com.example.performance] **
-                   Pss  Private  Private  SwapPss
-                 Total    Dirty    Clean    Dirty
-                ------   ------   ------   ------
-  Native Heap    12000    11000        0        0
-  Dalvik Heap     8000     7900        0        0
-
+** MEMINFO in pid 32510 [com.herogame.gplay.titanite] **
+                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap
+                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free
+                ------   ------   ------   ------   ------   ------   ------   ------
+  Native Heap    22713    20200       12       70    26492    44664    33052    11611
+  Dalvik Heap     4045     3016        0      277     7736    12799     3200     9599
+ Dalvik Other     2691     2036        0        2     4088                           
+        Stack     1748     1624        0        0     1884                           
+       Ashmem       18        0        0        0      876                           
+      Gfx dev    37824    37824        0        0    37824                           
+    Other dev      368      312       20        0      864                           
+     .so mmap   200375     1240   183844        0   243660                           
+    .jar mmap     7800        0     3824        0    41880                           
+    .apk mmap     1283        0      608        0     3512                           
+    .ttf mmap     1575        0       24        0     3696                           
+    .dex mmap     8595        4     8004        0     9928                           
+    .oat mmap      209        0      144        0     3088                           
+    .art mmap     5406     3336       48       38    16288                           
+   Other mmap      867        8      844        0     1484                           
+   EGL mtrack    46064    46064        0        0    46064                           
+    GL mtrack      960      960        0        0      960                           
+      Unknown   180882   179792        0        1   182404                           
+        TOTAL   523811   296416   197372      388   632728    57463    36252    21210
+ 
  App Summary
-                       Pss(KB)
-                        Java Heap:     8000
-                      Native Heap:    12000
-                             Code:     3000
-                            Stack:      512
-                         Graphics:     4096
-                    Private Other:     2048
-                           System:     1024
-                          TOTAL:   30,680
+                       Pss(KB)                        Rss(KB)
+                        ------                         ------
+           Java Heap:     6400                          24024
+         Native Heap:    20200                          26492
+                Code:   197696                         305928
+               Stack:     1624                           1884
+            Graphics:    84848                          84848
+       Private Other:   183020
+              System:    30023
+             Unknown:                                  189552
+ 
+           TOTAL PSS:   523811            TOTAL RSS:   632728       TOTAL SWAP PSS:      388
+ 
+ Objects
+               Views:       24         ViewRootImpl:        2
+         AppContexts:       10           Activities:        2
+              Assets:       31        AssetManagers:        0
+       Local Binders:       29        Proxy Binders:       50
+       Parcel memory:       48         Parcel count:       62
+    Death Recipients:        3      OpenSSL Sockets:        1
+            WebViews:        0
+ 
+ SQL
+         MEMORY_USED:        0
+  PAGECACHE_OVERFLOW:        0          MALLOC_SIZE:        0
+ 

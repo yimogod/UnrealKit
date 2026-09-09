@@ -156,6 +156,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         ViewCaptureResultFileCommand = new AsyncDelegateCommand(ViewCaptureResultFileAsync, () => !IsBusy && SelectedCaptureResultFile is not null);
         ParseMemReportCommand = new AsyncDelegateCommand(ParseMemReportAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(MemReportInputPath));
         CaptureMemReportCommand = new AsyncDelegateCommand(CaptureMemReportAsync, CanOperateOnSelectedDevice);
+        CaptureMemInfoCommand = new AsyncDelegateCommand(CaptureMemInfoAsync, CanOperateOnSelectedDevice);
         ParseStaticCameraCommand = new AsyncDelegateCommand(ParseStaticCameraAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ScpLogPath));
         RunDiffCommand = new AsyncDelegateCommand(RunDiffAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(DiffBaselinePath) && !string.IsNullOrWhiteSpace(DiffCurrentPath));
         RunTrendCommand = new AsyncDelegateCommand(RunTrendAsync, () => !IsBusy && _project is not null);
@@ -249,6 +250,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand ViewCaptureResultFileCommand { get; }
     public ICommand ParseMemReportCommand { get; }
     public ICommand CaptureMemReportCommand { get; }
+    public ICommand CaptureMemInfoCommand { get; }
     public ICommand ExportCaptureDataCommand { get; }
     public ICommand ParseStaticCameraCommand { get; }
     public ICommand RunDiffCommand { get; }
@@ -1743,6 +1745,34 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             MemReportInputPath = latestFile;
             StatusMessage = $"MemReport 已就绪：{latestFile}";
             AddOperationLog("Info", $"已填入 memreport 路径：{latestFile}");
+        });
+    }
+
+    private async Task CaptureMemInfoAsync()
+    {
+        if (SelectedDevice is null || _project is null) return;
+
+        await RunAsync("正在采集 Android meminfo…", async progress =>
+        {
+            var target = TryResolveSelectedTarget(out var error);
+            if (target is null)
+                throw new InvalidOperationException(error ?? "无法确定操作目标，请检查工程 Android 配置。");
+
+            progress.Report(new OperationProgress("captureMemInfo", "Run", 1, 2, "正在运行 adb dumpsys meminfo…"));
+            var deviceService = ResolveDeviceServiceForDevice(SelectedDevice.Device);
+            var result = await deviceService.CaptureMemoryAsync(
+                SelectedDevice.Device, target.ProcessIdentity, progress, OperationCancellationToken);
+
+            progress.Report(new OperationProgress("captureMemInfo", "Save", 2, 2, "正在保存 meminfo 文件…"));
+            var timestamp = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            var outDir = Path.Combine(_project.SavedDir, "Temp", "Android", "MemInfo");
+            Directory.CreateDirectory(outDir);
+            var outFile = Path.Combine(outDir, $"meminfo_{timestamp}.txt");
+            await File.WriteAllTextAsync(outFile, result.StandardOutput, OperationCancellationToken);
+
+            MemInfoInputPath = outFile;
+            StatusMessage = $"meminfo 已保存：{outFile}";
+            AddOperationLog("Info", $"meminfo 已保存到：{outFile}");
         });
     }
 
