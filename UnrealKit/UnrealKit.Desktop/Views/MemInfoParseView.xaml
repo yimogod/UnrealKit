@@ -87,8 +87,7 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <TextBlock Text="离线 Android meminfo 解析" Style="{StaticResource SectionTitleTextStyle}" />
-                <StackPanel Grid.Row="1" Margin="0,14,0,0">
-                    <TextBlock Text="选择一个 .txt 文件。解析只读取原始文件；如需归档分析，请从对应 Capture 的 MemInfo 目录明确选择输入。" Style="{StaticResource HintTextStyle}" />
+                <StackPanel Grid.Row="1" Margin="0,4,0,0">
                     <DockPanel Margin="0,12,0,0" LastChildFill="True">
                         <Button Content="浏览..." Click="BrowseMemInfoFile_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
                         <TextBox Text="{Binding MemInfoInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
