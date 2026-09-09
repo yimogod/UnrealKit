@@ -56,10 +56,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _win64WorkingDirectory = string.Empty;
     private string _memInfoParsedAt = string.Empty;
     private string _captureResultsCount = "Select a project then browse capture entries.";
-    private string _exportInputPath = string.Empty;
-    private string _exportOutputPath = string.Empty;
-    private bool _exportIncludeDetails;
-    private string _exportProgress = "Select an input file and output path, then choose a format.";
+
     private string _memReportInputPath = string.Empty;
     private string _memReportParseDescription = "Select a .memreport text file to begin offline parsing.";
     private string _memReportParsedAt = string.Empty;
@@ -170,7 +167,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ApplyConsoleCommandPresetAsync, () => !IsBusy && _selectedDevice is not null);
         _refreshConsoleCommandPresetValuesCommand = new AsyncDelegateCommand(
             RefreshConsoleCommandPresetValuesAsync, () => !IsBusy && _selectedDevice is not null);
-        ExportCaptureDataCommand = new AsyncDelegateCommand(ExportCaptureDataAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ExportInputPath) && !string.IsNullOrWhiteSpace(ExportOutputPath));
         _clearOperationLogsCommand = new DelegateCommand(ClearOperationLogs, () => OperationLogs.Count > 0);
         DownloadCommand = new AsyncDelegateCommand(DownloadLatestAsync, CanDownloadLatest);
         InstallDownloadedApkCommand = new AsyncDelegateCommand(InstallDownloadedApkAsync, CanInstallDownloadedApk);
@@ -251,7 +247,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand ParseMemReportCommand { get; }
     public ICommand CaptureMemReportCommand { get; }
     public ICommand CaptureMemInfoCommand { get; }
-    public ICommand ExportCaptureDataCommand { get; }
     public ICommand ParseStaticCameraCommand { get; }
     public ICommand RunDiffCommand { get; }
     public ICommand RunTrendCommand { get; }
@@ -404,10 +399,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string MemInfoProcessDescription { get => _memInfoProcessDescription; private set => SetField(ref _memInfoProcessDescription, value); }
     public string MemInfoParsedAt { get => _memInfoParsedAt; private set => SetField(ref _memInfoParsedAt, value); }
     public string CaptureResultsCount { get => _captureResultsCount; private set => SetField(ref _captureResultsCount, value); }
-    public string ExportInputPath { get => _exportInputPath; set { if (SetField(ref _exportInputPath, value)) RaiseCommandStates(); } }
-    public string ExportOutputPath { get => _exportOutputPath; set { if (SetField(ref _exportOutputPath, value)) RaiseCommandStates(); } }
-    public bool ExportIncludeDetails { get => _exportIncludeDetails; set => SetField(ref _exportIncludeDetails, value); }
-    public string ExportProgress { get => _exportProgress; private set => SetField(ref _exportProgress, value); }
     public string MemReportInputPath { get => _memReportInputPath; set { if (SetField(ref _memReportInputPath, value)) RaiseCommandStates(); } }
     public string MemReportParseDescription { get => _memReportParseDescription; private set => SetField(ref _memReportParseDescription, value); }
     public string MemReportParsedAt { get => _memReportParsedAt; private set => SetField(ref _memReportParsedAt, value); }
@@ -1777,64 +1768,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         });
     }
 
-    private async Task ExportCaptureDataAsync()
-    {
-        if (string.IsNullOrWhiteSpace(ExportInputPath) || string.IsNullOrWhiteSpace(ExportOutputPath)) return;
-        IsBusy = true;
-        OperationStage = "Exporting";
-        ExportProgress = "Exporting...";
-        try
-        {
-            var isXlsx = ExportOutputPath.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase);
-            var isMemReport = ExportInputPath.EndsWith(".memreport", StringComparison.OrdinalIgnoreCase);
-
-            if (isMemReport)
-            {
-                var parseResult = await new UnrealMemReportParser().ParseFileAsync(ExportInputPath);
-                if (!parseResult.IsSuccess) { StatusMessage = "MemReport parse failed; cannot export."; ExportProgress = "Failed."; return; }
-
-                if (isXlsx)
-                {
-                    var result = await new XlsxMemReportExportService().ExportAsync(new MemReportExportRequest(parseResult, ExportOutputPath, DateTimeOffset.UtcNow, ExportIncludeDetails));
-                    ExportProgress = "Exported to: " + result.OutputFilePath;
-                }
-                else
-                {
-                    var result = await new MemReportExportService().ExportAsync(new MemReportExportRequest(parseResult, ExportOutputPath, DateTimeOffset.UtcNow, ExportIncludeDetails));
-                    ExportProgress = "Exported to: " + result.OutputFilePath;
-                }
-            }
-            else
-            {
-                var parseResult = await new AndroidMemInfoParser().ParseFileAsync(ExportInputPath);
-                if (!parseResult.IsSuccess) { StatusMessage = "MemInfo parse failed; cannot export."; ExportProgress = "Failed."; return; }
-
-                if (isXlsx)
-                {
-                    var result = await new XlsxMemInfoExportService().ExportAsync(new MemInfoExportRequest(parseResult, ExportOutputPath, DateTimeOffset.UtcNow, ExportIncludeDetails));
-                    ExportProgress = "Exported to: " + result.OutputFilePath;
-                }
-                else
-                {
-                    var result = await new MemInfoExportService().ExportAsync(new MemInfoExportRequest(parseResult, ExportOutputPath, DateTimeOffset.UtcNow, ExportIncludeDetails));
-                    ExportProgress = "Exported to: " + result.OutputFilePath;
-                }
-            }
-
-            StatusMessage = ExportProgress;
-        }
-        catch (Exception exception)
-        {
-            StatusMessage = exception.Message;
-            ExportProgress = "Error: " + exception.Message;
-        }
-        finally
-        {
-            IsBusy = false;
-            OperationStage = "Idle";
-        }
-    }
-
     private async Task ParseStaticCameraAsync() => await RunAsync("Parsing static camera perf log...", async _ =>
     {
         var inputPath = Path.GetFullPath(ScpLogPath);
@@ -2580,7 +2513,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ExportCaptureDataCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }

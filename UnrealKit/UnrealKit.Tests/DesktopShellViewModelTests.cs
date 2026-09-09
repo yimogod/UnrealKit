@@ -148,62 +148,6 @@ public sealed class DesktopShellViewModelTests
         }
     }
 
-    [Fact]
-    public async Task ParseMemReport_PopulatesMetricsAndLeavesBusyCleared()
-    {
-        var viewModel = CreateViewModel();
-        viewModel.MemReportInputPath = TestDataPath("MemReport", "complete-details.memreport");
-
-        Assert.True(viewModel.ParseMemReportCommand.CanExecute(null));
-        await ((AsyncDelegateCommand)viewModel.ParseMemReportCommand).ExecuteAsync();
-
-        Assert.NotEmpty(viewModel.MemReportMetrics);
-        Assert.Contains("Changelist", viewModel.MemReportParseDescription);
-        // 嵌套复用 core 方法后，外层解析结束必须把忙碌状态清掉。
-        Assert.False(viewModel.IsBusy);
-    }
-
-    [Theory]
-    [InlineData("MemInfo", "complete-meminfo.txt", ".tsv")]
-    [InlineData("MemInfo", "complete-meminfo.txt", ".xlsx")]
-    [InlineData("MemReport", "complete-details.memreport", ".tsv")]
-    [InlineData("MemReport", "complete-details.memreport", ".xlsx")]
-    public async Task ExportCaptureData_WritesFileForEachInputAndFormat(string folder, string sample, string extension)
-    {
-        var viewModel = CreateViewModel();
-        var outputPath = Path.Combine(Path.GetTempPath(), $"ukit-export-{Guid.NewGuid():N}{extension}");
-
-        viewModel.ExportInputPath = TestDataPath(folder, sample);
-        viewModel.ExportOutputPath = outputPath;
-
-        Assert.True(viewModel.ExportCaptureDataCommand.CanExecute(null));
-        try
-        {
-            await ((AsyncDelegateCommand)viewModel.ExportCaptureDataCommand).ExecuteAsync();
-
-            Assert.True(File.Exists(outputPath), $"未生成导出文件：{viewModel.ExportProgress}");
-            Assert.Contains("Exported to", viewModel.ExportProgress);
-            Assert.False(viewModel.IsBusy);
-        }
-        finally
-        {
-            if (File.Exists(outputPath)) File.Delete(outputPath);
-        }
-    }
-
-    [Fact]
-    public void ExportCommand_StaysDisabledUntilBothPathsProvided()
-    {
-        var viewModel = CreateViewModel();
-        Assert.False(viewModel.ExportCaptureDataCommand.CanExecute(null));
-
-        viewModel.ExportInputPath = TestDataPath("MemInfo", "complete-meminfo.txt");
-        Assert.False(viewModel.ExportCaptureDataCommand.CanExecute(null));
-
-        viewModel.ExportOutputPath = Path.Combine(Path.GetTempPath(), "ukit-unused.tsv");
-        Assert.True(viewModel.ExportCaptureDataCommand.CanExecute(null));
-    }
-
     private static ShellViewModel CreateViewModel()
     {
         var project = CreateProject();

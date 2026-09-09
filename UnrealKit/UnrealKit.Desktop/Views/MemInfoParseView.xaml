@@ -2,7 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!--
-        内存解析页分三块：meminfo、memreport 各自离线解析，导出把任一种解析结果写成文件。
+        内存解析页分两块：meminfo、memreport 各自离线解析，以及归档浏览。
         这里用页内 TabControl 分页；导航样式以 x:Key 显式引用，不会污染这些内部分页。
     -->
     <TabControl>
@@ -13,8 +13,8 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-                <StackPanel Grid.Row="1" Margin="0,0,0,0">
-                    <DockPanel Margin="0,0,0,0" LastChildFill="True">
+                <StackPanel Grid.Row="1">
+                    <DockPanel LastChildFill="True">
                         <Button Content="Capture" Command="{Binding CaptureMemReportCommand}" Padding="14,7" Margin="6,0,0,0" DockPanel.Dock="Right" />
                         <Button Content="解析" Command="{Binding ParseMemReportCommand}" Padding="14,7" Margin="6,0,0,0" DockPanel.Dock="Right" />
                         <Button Content="浏览…" Click="BrowseMemReportFile_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
@@ -86,9 +86,8 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-                <TextBlock Text="离线 Android meminfo 解析" Style="{StaticResource SectionTitleTextStyle}" />
-                <StackPanel Grid.Row="1" Margin="0,4,0,0">
-                    <DockPanel Margin="0,12,0,0" LastChildFill="True">
+                <StackPanel Grid.Row="1" Margin="0,0,0,0">
+                    <DockPanel Margin="0,0,0,0" LastChildFill="True">
                         <Button Content="Capture" Command="{Binding CaptureMemInfoCommand}" Padding="14,7" Margin="6,0,0,0" DockPanel.Dock="Right" />
                         <Button Content="解析" Command="{Binding ParseMemInfoCommand}" Padding="14,7" Margin="6,0,0,0" DockPanel.Dock="Right" />
                         <Button Content="浏览..." Click="BrowseMemInfoFile_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
@@ -156,33 +155,6 @@
                         </TabControl>
                     </StackPanel>
                 </ScrollViewer>
-            </Grid>
-        </TabItem>
-
-        <TabItem Header="导出">
-            <Grid Margin="0,12,0,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <TextBlock Text="导出解析结果" Style="{StaticResource SectionTitleTextStyle}" />
-                <StackPanel Grid.Row="1" Margin="0,14,0,0">
-                    <TextBlock Text="输入 .txt（meminfo）或 .memreport；输出格式由保存对话框选择的扩展名决定：.xlsx 写出真实工作簿，.tsv 写制表符文本。" Style="{StaticResource HintTextStyle}" />
-                    <TextBlock Text="输入文件" Style="{StaticResource StackedFieldLabelTextStyle}" />
-                    <DockPanel LastChildFill="True">
-                        <Button Content="浏览…" Click="BrowseExportInput_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
-                        <TextBox Text="{Binding ExportInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
-                    </DockPanel>
-                    <TextBlock Text="输出文件" Style="{StaticResource StackedFieldLabelTextStyle}" />
-                    <DockPanel LastChildFill="True">
-                        <Button Content="另存为…" Click="BrowseExportOutput_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
-                        <TextBox Text="{Binding ExportOutputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
-                    </DockPanel>
-                    <CheckBox Content="包含明细（Detailed PSS / 纹理等逐条数据）" IsChecked="{Binding ExportIncludeDetails}" Margin="0,14,0,0" />
-                    <Button Content="导出" Command="{Binding ExportCaptureDataCommand}" Padding="18,8" HorizontalAlignment="Left" Margin="0,16,0,0" />
-                </StackPanel>
-                <TextBlock Grid.Row="2" Text="{Binding ExportProgress}" Style="{StaticResource HintTextStyle}" Margin="0,18,0,0" VerticalAlignment="Top" />
             </Grid>
         </TabItem>
 
