@@ -106,8 +106,9 @@
                             <TabItem Header="App Summary">
                                 <DataGrid ItemsSource="{Binding MemInfoMetrics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Metric" Binding="{Binding Name}" Width="*" />
-                                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*" />
+                                        <DataGridTextColumn Header="Metric" Binding="{Binding Name}" Width="200" />
+                                        <DataGridTextColumn Header="PSS (KB)" Binding="{Binding Pss}" Width="150" />
+                                        <DataGridTextColumn Header="RSS (KB)" Binding="{Binding Rss}" Width="*" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </TabItem>

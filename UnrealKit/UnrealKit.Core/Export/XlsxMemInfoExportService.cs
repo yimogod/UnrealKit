@@ -79,27 +79,26 @@ public sealed class XlsxMemInfoExportService : IXlsxMemInfoExportService
     private static void WriteSummarySheet(XLWorkbook workbook, AndroidMemInfoSummary summary)
     {
         var sheet = workbook.AddWorksheet("AndroidMemInfo");
-        var headers = new[] { "Metric", "Value (KB)" };
-        WriteHeader(sheet, headers);
-        var metrics = new (string, long?)[]
+        WriteHeader(sheet, new[] { "Metric", "PSS (KB)", "RSS (KB)" });
+        var metrics = new (string, long?, long?)[]
         {
-            ("Java Heap", summary.JavaHeapKb),
-            ("Native Heap", summary.NativeHeapKb),
-            ("Code", summary.CodeKb),
-            ("Stack", summary.StackKb),
-            ("Graphics", summary.GraphicsKb),
-            ("Private Other", summary.PrivateOtherKb),
-            ("System", summary.SystemKb),
-            ("TOTAL PSS", summary.TotalPssKb)
+            ("Java Heap", summary.JavaHeapKb, summary.JavaHeapRssKb),
+            ("Native Heap", summary.NativeHeapKb, summary.NativeHeapRssKb),
+            ("Code", summary.CodeKb, summary.CodeRssKb),
+            ("Stack", summary.StackKb, summary.StackRssKb),
+            ("Graphics", summary.GraphicsKb, summary.GraphicsRssKb),
+            ("Private Other", summary.PrivateOtherKb, summary.PrivateOtherRssKb),
+            ("System", summary.SystemKb, summary.SystemRssKb),
+            ("Unknown", null, summary.UnknownRssKb),
+            ("TOTAL PSS", summary.TotalPssKb, summary.TotalRssKb)
         };
         for (var i = 0; i < metrics.Length; i++)
         {
             sheet.Cell(i + 2, 1).Value = metrics[i].Item1;
-            var cell = sheet.Cell(i + 2, 2);
-            if (metrics[i].Item2.HasValue)
-                cell.SetValue(metrics[i].Item2.GetValueOrDefault());
-            else
-                cell.SetValue("N/A");
+            var pssCell = sheet.Cell(i + 2, 2);
+            if (metrics[i].Item2.HasValue) pssCell.SetValue(metrics[i].Item2.GetValueOrDefault());
+            var rssCell = sheet.Cell(i + 2, 3);
+            if (metrics[i].Item3.HasValue) rssCell.SetValue(metrics[i].Item3.GetValueOrDefault());
         }
         sheet.Columns().AdjustToContents();
     }

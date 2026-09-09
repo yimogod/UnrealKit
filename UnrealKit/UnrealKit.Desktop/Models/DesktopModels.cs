@@ -7,7 +7,7 @@ namespace UnrealKit.Desktop.Models;
 
 public sealed record LaunchOperationTarget(string SerialNumber, string PackageName, string Activity, string RemoteCommandLinePath);
 
-public sealed record MemInfoMetricOption(string Name, string Value);
+public sealed record MemInfoMetricOption(string Name, string Pss, string Rss);
 
 public sealed record MemInfoPssOption(string Name, string TotalPss, string PrivateDirty, string PrivateClean, string SwapPss, string Rss, string HeapSize, string HeapAlloc, string HeapFree, string Line);
 

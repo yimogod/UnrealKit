@@ -2,7 +2,16 @@
 
 namespace UnrealKit.Core.Parsing;
 
-public sealed record AndroidMemInfoSummary(long? JavaHeapKb, long? NativeHeapKb, long? CodeKb, long? StackKb, long? GraphicsKb, long? PrivateOtherKb, long? SystemKb, long? TotalPssKb);
+public sealed record AndroidMemInfoSummary(
+    long? JavaHeapKb, long? JavaHeapRssKb,
+    long? NativeHeapKb, long? NativeHeapRssKb,
+    long? CodeKb, long? CodeRssKb,
+    long? StackKb, long? StackRssKb,
+    long? GraphicsKb, long? GraphicsRssKb,
+    long? PrivateOtherKb, long? PrivateOtherRssKb,
+    long? SystemKb, long? SystemRssKb,
+    long? UnknownRssKb,
+    long? TotalPssKb, long? TotalRssKb, long? TotalSwapPssKb);
 
 public sealed record AndroidMemInfoPssEntry(
     string Name,

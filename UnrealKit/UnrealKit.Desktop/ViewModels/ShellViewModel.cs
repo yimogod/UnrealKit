@@ -1358,14 +1358,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         if (parseResult.Report is { } report)
         {
             MemInfoProcessDescription = $"{report.ProcessName} (PID {report.ProcessId})";
-            AddMemInfoMetric("Java Heap", report.Summary.JavaHeapKb);
-            AddMemInfoMetric("Native Heap", report.Summary.NativeHeapKb);
-            AddMemInfoMetric("Code", report.Summary.CodeKb);
-            AddMemInfoMetric("Stack", report.Summary.StackKb);
-            AddMemInfoMetric("Graphics", report.Summary.GraphicsKb);
-            AddMemInfoMetric("Private Other", report.Summary.PrivateOtherKb);
-            AddMemInfoMetric("System", report.Summary.SystemKb);
-            AddMemInfoMetric("TOTAL", report.Summary.TotalPssKb);
+            AddMemInfoMetric("Java Heap", report.Summary.JavaHeapKb, report.Summary.JavaHeapRssKb);
+            AddMemInfoMetric("Native Heap", report.Summary.NativeHeapKb, report.Summary.NativeHeapRssKb);
+            AddMemInfoMetric("Code", report.Summary.CodeKb, report.Summary.CodeRssKb);
+            AddMemInfoMetric("Stack", report.Summary.StackKb, report.Summary.StackRssKb);
+            AddMemInfoMetric("Graphics", report.Summary.GraphicsKb, report.Summary.GraphicsRssKb);
+            AddMemInfoMetric("Private Other", report.Summary.PrivateOtherKb, report.Summary.PrivateOtherRssKb);
+            AddMemInfoMetric("System", report.Summary.SystemKb, report.Summary.SystemRssKb);
+            AddMemInfoMetric("Unknown", null, report.Summary.UnknownRssKb);
+            AddMemInfoMetric("TOTAL", report.Summary.TotalPssKb, report.Summary.TotalRssKb);
             foreach (var entry in report.DetailedPssEntries)
             {
                 MemInfoPssEntries.Add(new MemInfoPssOption(entry.Name, FormatMemInfoValue(entry.TotalPssKb), FormatMemInfoValue(entry.PrivateDirtyKb), FormatMemInfoValue(entry.PrivateCleanKb), FormatMemInfoValue(entry.SwapPssKb), FormatMemInfoValue(entry.RssKb), FormatMemInfoValue(entry.HeapSizeKb), FormatMemInfoValue(entry.HeapAllocKb), FormatMemInfoValue(entry.HeapFreeKb), entry.LineNumber.ToString()));
@@ -1401,9 +1402,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             : "Meminfo parsing completed with errors. Review the diagnostics.";
     });
 
-    private void AddMemInfoMetric(string name, long? value) => MemInfoMetrics.Add(new MemInfoMetricOption(name, FormatMemInfoValue(value)));
+    private void AddMemInfoMetric(string name, long? pss, long? rss) => MemInfoMetrics.Add(new MemInfoMetricOption(name, FormatMemInfoValue(pss), FormatMemInfoValue(rss)));
 
-    private static string FormatMemInfoValue(long? value) => value is null ? "Not found" : $"{value:N0} KB";
+    private static string FormatMemInfoValue(long? value) => value is null ? "" : $"{value:N0} KB";
 
     private async Task RunAsync(string initialMessage, Func<IProgress<OperationProgress>, Task> operation)
     {
@@ -1576,16 +1577,16 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 if (result.IsSuccess && result.Report is not null)
                 {
                     var summary = result.Report.Summary;
-                    CaptureResultMetrics.Add(new MemInfoMetricOption("Process Name", result.Report.ProcessName ?? "-"));
-                    CaptureResultMetrics.Add(new MemInfoMetricOption("Process ID", result.Report.ProcessId.ToString()));
-                    CaptureResultMetrics.Add(new MemInfoMetricOption("Java Heap", (summary.JavaHeapKb?.ToString() ?? "N/A") + " KB"));
-                    CaptureResultMetrics.Add(new MemInfoMetricOption("Native Heap", (summary.NativeHeapKb?.ToString() ?? "N/A") + " KB"));
-                    CaptureResultMetrics.Add(new MemInfoMetricOption("Code", (summary.CodeKb?.ToString() ?? "N/A") + " KB"));
-                    CaptureResultMetrics.Add(new MemInfoMetricOption("Stack", (summary.StackKb?.ToString() ?? "N/A") + " KB"));
-                    CaptureResultMetrics.Add(new MemInfoMetricOption("Graphics", (summary.GraphicsKb?.ToString() ?? "N/A") + " KB"));
-                    CaptureResultMetrics.Add(new MemInfoMetricOption("Private Other", (summary.PrivateOtherKb?.ToString() ?? "N/A") + " KB"));
-                    CaptureResultMetrics.Add(new MemInfoMetricOption("System", (summary.SystemKb?.ToString() ?? "N/A") + " KB"));
-                    CaptureResultMetrics.Add(new MemInfoMetricOption("TOTAL PSS", (summary.TotalPssKb?.ToString() ?? "N/A") + " KB"));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Process Name", result.Report.ProcessName ?? "-", ""));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Process ID", result.Report.ProcessId.ToString(), ""));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Java Heap", FormatMemInfoValue(summary.JavaHeapKb), FormatMemInfoValue(summary.JavaHeapRssKb)));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Native Heap", FormatMemInfoValue(summary.NativeHeapKb), FormatMemInfoValue(summary.NativeHeapRssKb)));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Code", FormatMemInfoValue(summary.CodeKb), FormatMemInfoValue(summary.CodeRssKb)));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Stack", FormatMemInfoValue(summary.StackKb), FormatMemInfoValue(summary.StackRssKb)));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Graphics", FormatMemInfoValue(summary.GraphicsKb), FormatMemInfoValue(summary.GraphicsRssKb)));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("Private Other", FormatMemInfoValue(summary.PrivateOtherKb), FormatMemInfoValue(summary.PrivateOtherRssKb)));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("System", FormatMemInfoValue(summary.SystemKb), FormatMemInfoValue(summary.SystemRssKb)));
+                    CaptureResultMetrics.Add(new MemInfoMetricOption("TOTAL PSS", FormatMemInfoValue(summary.TotalPssKb), FormatMemInfoValue(summary.TotalRssKb)));
                 }
 
                 StatusMessage = "已解析 meminfo：" + filePath;

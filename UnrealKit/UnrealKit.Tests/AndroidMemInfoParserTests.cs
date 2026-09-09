@@ -15,8 +15,13 @@ public sealed class AndroidMemInfoParserTests
         Assert.Equal("com.herogame.gplay.titanite", report.ProcessName);
         Assert.Equal(32510, report.ProcessId);
         Assert.Equal(6400, report.Summary.JavaHeapKb);
+        Assert.Equal(24024, report.Summary.JavaHeapRssKb);
         Assert.Equal(20200, report.Summary.NativeHeapKb);
+        Assert.Equal(26492, report.Summary.NativeHeapRssKb);
         Assert.Equal(523811, report.Summary.TotalPssKb);
+        Assert.Equal(632728, report.Summary.TotalRssKb);
+        Assert.Equal(388, report.Summary.TotalSwapPssKb);
+        Assert.Equal(189552, report.Summary.UnknownRssKb);
         Assert.Empty(result.Diagnostics);
     }
 

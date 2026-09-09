@@ -76,15 +76,36 @@ public sealed partial class AndroidMemInfoParser : IAndroidMemInfoParser
 
     private static AndroidMemInfoSummary ParseSummary(string inputPath, IReadOnlyList<string> lines, int summaryStart, List<Diagnostic> diagnostics)
     {
-        long? javaHeapKb = null, nativeHeapKb = null, codeKb = null, stackKb = null, graphicsKb = null, privateOtherKb = null, systemKb = null, totalPssKb = null;
+        long? javaHeapKb = null, javaHeapRssKb = null;
+        long? nativeHeapKb = null, nativeHeapRssKb = null;
+        long? codeKb = null, codeRssKb = null;
+        long? stackKb = null, stackRssKb = null;
+        long? graphicsKb = null, graphicsRssKb = null;
+        long? privateOtherKb = null, privateOtherRssKb = null;
+        long? systemKb = null, systemRssKb = null;
+        long? unknownRssKb = null;
+        long? totalPssKb = null, totalRssKb = null, totalSwapPssKb = null;
         var totalFound = false;
+
         for (var index = summaryStart + 1; index < lines.Count; index++)
         {
             var line = lines[index];
             if (string.IsNullOrWhiteSpace(line)) continue;
             if (IsKnownSectionHeader(line)) break;
-            if (line.Contains("Pss", StringComparison.OrdinalIgnoreCase) && line.Contains("KB", StringComparison.OrdinalIgnoreCase)) continue;
+            if (line.Contains("KB", StringComparison.OrdinalIgnoreCase) && !line.Contains(":", StringComparison.Ordinal)) continue;
             if (line.Contains("------", StringComparison.Ordinal)) continue;
+
+            // TOTAL line: "TOTAL PSS:  523811  TOTAL RSS:  632728  TOTAL SWAP PSS:  388"
+            var totalMatch = SummaryTotalLineRegex().Match(line);
+            if (totalMatch.Success)
+            {
+                if (TryParseNumber(totalMatch.Groups["pss"].Value, out var tp)) { totalPssKb = tp; totalFound = true; }
+                if (totalMatch.Groups["rss"].Success && TryParseNumber(totalMatch.Groups["rss"].Value, out var tr)) totalRssKb = tr;
+                if (totalMatch.Groups["swap"].Success && TryParseNumber(totalMatch.Groups["swap"].Value, out var ts)) totalSwapPssKb = ts;
+                continue;
+            }
+
+            // Regular entry: "   Java Heap:   6400                          24024"
             var match = SummaryEntryRegex().Match(line);
             if (!match.Success)
             {
@@ -93,26 +114,56 @@ public sealed partial class AndroidMemInfoParser : IAndroidMemInfoParser
             }
 
             var label = match.Groups["label"].Value.Trim();
-            if (!TryParseNumber(match.Groups["value"].Value, out var kilobytes))
+            var rawValue = match.Groups["value"].Value;
+
+            // Collect all numeric tokens after the colon; Unknown has only RSS (no PSS column).
+            var afterColon = line.Substring(line.IndexOf(':', StringComparison.Ordinal) + 1);
+            var numericTokens = afterColon.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                .Where(t => TryParseNumber(t, out _)).ToArray();
+
+            // Non-empty raw value that isn't a number → malformed PSS value.
+            if (!string.IsNullOrWhiteSpace(rawValue) && !TryParseNumber(rawValue, out _))
             {
                 diagnostics.Add(Error("AMI107", $"The App Summary value for '{label}' is not a valid kilobyte count.", inputPath, index + 1, "Use an integer value, optionally with thousands separators."));
                 continue;
             }
 
-            if (string.Equals(label, "Java Heap", StringComparison.OrdinalIgnoreCase)) javaHeapKb = kilobytes;
-            else if (string.Equals(label, "Native Heap", StringComparison.OrdinalIgnoreCase)) nativeHeapKb = kilobytes;
-            else if (string.Equals(label, "Code", StringComparison.OrdinalIgnoreCase)) codeKb = kilobytes;
-            else if (string.Equals(label, "Stack", StringComparison.OrdinalIgnoreCase)) stackKb = kilobytes;
-            else if (string.Equals(label, "Graphics", StringComparison.OrdinalIgnoreCase)) graphicsKb = kilobytes;
-            else if (string.Equals(label, "Private Other", StringComparison.OrdinalIgnoreCase)) privateOtherKb = kilobytes;
-            else if (string.Equals(label, "System", StringComparison.OrdinalIgnoreCase)) systemKb = kilobytes;
+            long? pss = null, rss = null;
+            var isRssOnly = string.Equals(label, "Unknown", StringComparison.OrdinalIgnoreCase);
+            if (isRssOnly)
+            {
+                if (numericTokens.Length >= 1 && TryParseNumber(numericTokens[0], out var rssOnly)) rss = rssOnly;
+            }
+            else
+            {
+                if (numericTokens.Length >= 1 && TryParseNumber(numericTokens[0], out var pssVal)) pss = pssVal;
+                if (numericTokens.Length >= 2 && TryParseNumber(numericTokens[1], out var rssVal)) rss = rssVal;
+            }
+
+            if (string.Equals(label, "Java Heap", StringComparison.OrdinalIgnoreCase)) { javaHeapKb = pss; javaHeapRssKb = rss; }
+            else if (string.Equals(label, "Native Heap", StringComparison.OrdinalIgnoreCase)) { nativeHeapKb = pss; nativeHeapRssKb = rss; }
+            else if (string.Equals(label, "Code", StringComparison.OrdinalIgnoreCase)) { codeKb = pss; codeRssKb = rss; }
+            else if (string.Equals(label, "Stack", StringComparison.OrdinalIgnoreCase)) { stackKb = pss; stackRssKb = rss; }
+            else if (string.Equals(label, "Graphics", StringComparison.OrdinalIgnoreCase)) { graphicsKb = pss; graphicsRssKb = rss; }
+            else if (string.Equals(label, "Private Other", StringComparison.OrdinalIgnoreCase)) { privateOtherKb = pss; privateOtherRssKb = rss; }
+            else if (string.Equals(label, "System", StringComparison.OrdinalIgnoreCase)) { systemKb = pss; systemRssKb = rss; }
+            else if (string.Equals(label, "Unknown", StringComparison.OrdinalIgnoreCase)) unknownRssKb = rss;
             else if (string.Equals(label, "TOTAL", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(label, "TOTAL PSS", StringComparison.OrdinalIgnoreCase))
-            { totalPssKb = kilobytes; totalFound = true; }
+            { totalPssKb = pss; totalFound = true; }
         }
 
         if (!totalFound) diagnostics.Add(Error("AMI105", "Missing required 'TOTAL' value in the 'App Summary' section.", inputPath, summaryStart + 1, "Include the complete App Summary section through its TOTAL line."));
-        return new AndroidMemInfoSummary(javaHeapKb, nativeHeapKb, codeKb, stackKb, graphicsKb, privateOtherKb, systemKb, totalPssKb);
+        return new AndroidMemInfoSummary(
+            javaHeapKb, javaHeapRssKb,
+            nativeHeapKb, nativeHeapRssKb,
+            codeKb, codeRssKb,
+            stackKb, stackRssKb,
+            graphicsKb, graphicsRssKb,
+            privateOtherKb, privateOtherRssKb,
+            systemKb, systemRssKb,
+            unknownRssKb,
+            totalPssKb, totalRssKb, totalSwapPssKb);
     }
 
     private static IReadOnlyList<AndroidMemInfoPssEntry> ParseDetailedPssEntries(string inputPath, IReadOnlyList<string> lines, List<Diagnostic> diagnostics)
@@ -318,9 +369,13 @@ public sealed partial class AndroidMemInfoParser : IAndroidMemInfoParser
     [GeneratedRegex(@"^\s*\*\*\s+MEMINFO\s+in\s+pid\s+(?<pid>\d+)\s+\[(?<process>[^\]]+)\]\s+\*\*\s*$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex ProcessHeaderRegex();
 
-    // value はスペースや単位を含まない最初のトークンのみ取り出す。行末に RSS 列等が続いても可。
-    [GeneratedRegex(@"^\s*(?<label>[^:]+):\s*(?<value>\S+)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    // PSS 列是冒号后第一个非空 token（可能不是数字），RSS 列是第二个数字 token（可选）。
+    [GeneratedRegex(@"^\s*(?<label>[^:]+):\s*(?<value>\S+)?(?:\s+(?<rss>\d[\d,]*))?", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex SummaryEntryRegex();
+
+    // "TOTAL PSS:  523811  TOTAL RSS:  632728  TOTAL SWAP PSS:  388"
+    [GeneratedRegex(@"TOTAL\s+PSS\s*:\s*(?<pss>\d[\d,]*)(?:.*?TOTAL\s+RSS\s*:\s*(?<rss>\d[\d,]*))?(?:.*?TOTAL\s+SWAP\s+PSS\s*:\s*(?<swap>\d[\d,]*))?", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex SummaryTotalLineRegex();
 
     // 一行に複数の "label: value" が並ぶ Objects 行用。
     [GeneratedRegex(@"(?<label>[^:\r\n]+?):\s*(?<value>\d[\d,]*)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
