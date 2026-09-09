@@ -89,13 +89,11 @@
                 <TextBlock Text="离线 Android meminfo 解析" Style="{StaticResource SectionTitleTextStyle}" />
                 <StackPanel Grid.Row="1" Margin="0,4,0,0">
                     <DockPanel Margin="0,12,0,0" LastChildFill="True">
+                        <Button Content="Capture" Command="{Binding CaptureMemInfoCommand}" Padding="14,7" Margin="6,0,0,0" DockPanel.Dock="Right" />
+                        <Button Content="解析" Command="{Binding ParseMemInfoCommand}" Padding="14,7" Margin="6,0,0,0" DockPanel.Dock="Right" />
                         <Button Content="浏览..." Click="BrowseMemInfoFile_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
                         <TextBox Text="{Binding MemInfoInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
                     </DockPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                        <Button Content="解析 meminfo" Command="{Binding ParseMemInfoCommand}" Padding="14,7" />
-                        <Button Content="Capture" Command="{Binding CaptureMemInfoCommand}" Padding="14,7" Margin="10,0,0,0" />
-                    </StackPanel>
                 </StackPanel>
                 <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
