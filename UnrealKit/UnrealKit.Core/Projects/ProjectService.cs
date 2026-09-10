@@ -47,7 +47,7 @@ public sealed class ProjectService : IProjectService
         var descriptor = UkitProjectDescriptor.CreateDefault(request.ProjectName);
         var settings = ProjectSettings.CreateDefaults(request.ProjectName);
         Directory.CreateDirectory(rootDirectory);
-        foreach (var directoryName in new[] { descriptor.ConfigRoot, descriptor.ContentRoot, descriptor.SavedRoot, descriptor.IntermediateRoot })
+        foreach (var directoryName in new[] { UkitProjectDescriptor.ConfigRoot, UkitProjectDescriptor.ContentRoot, UkitProjectDescriptor.SavedRoot, UkitProjectDescriptor.IntermediateRoot })
         {
             cancellationToken.ThrowIfCancellationRequested();
             Directory.CreateDirectory(Path.Combine(rootDirectory, directoryName));
@@ -56,7 +56,7 @@ public sealed class ProjectService : IProjectService
         Report(progress, operationId, "Creating", "正在写入工程描述与默认配置。", 1, 2);
         await WriteAgentTemplatesAsync(rootDirectory, request.ProjectName, cancellationToken);
         await WriteDescriptorAsync(descriptorPath, descriptor, cancellationToken);
-        await WriteSettingsAsync(Path.Combine(rootDirectory, descriptor.ConfigRoot, "DefaultGame.ini"), settings, cancellationToken);
+        await WriteSettingsAsync(Path.Combine(rootDirectory, UkitProjectDescriptor.ConfigRoot, "DefaultGame.ini"), settings, cancellationToken);
         var validation = await ValidateProjectAsync(descriptorPath, progress, cancellationToken);
         Report(progress, operationId, "Completed", "工程创建完成。", 2, 2);
         _logger.Log(new LogEvent(DateTimeOffset.UtcNow, LogLevel.Information, operationId, "Project created", new Dictionary<string, string> { ["path"] = descriptorPath }));
@@ -73,7 +73,7 @@ public sealed class ProjectService : IProjectService
         Report(progress, operationId, "Loading", "正在读取工程描述文件。", 1, 2);
         var descriptor = await ReadDescriptorAsync(fullPath, cancellationToken);
         var rootDirectory = Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("无法确定工程根目录。");
-        var settings = await ReadSettingsAsync(Path.Combine(rootDirectory, descriptor.ConfigRoot, "DefaultGame.ini"), descriptor.ProjectName, cancellationToken);
+        var settings = await ReadSettingsAsync(Path.Combine(rootDirectory, UkitProjectDescriptor.ConfigRoot, "DefaultGame.ini"), descriptor.ProjectName, cancellationToken);
         Report(progress, operationId, "Completed", "工程已加载。", 2, 2);
         return new UkitProject(fullPath, rootDirectory, descriptor, settings);
     }
@@ -119,17 +119,17 @@ public sealed class ProjectService : IProjectService
 
         cancellationToken.ThrowIfCancellationRequested();
         ValidateProjectName(descriptor.ProjectName, diagnostics, fullPath);
-        ValidateRoot(descriptor.ContentRoot, nameof(descriptor.ContentRoot), rootDirectory, diagnostics);
-        ValidateRoot(descriptor.ConfigRoot, nameof(descriptor.ConfigRoot), rootDirectory, diagnostics);
-        ValidateRoot(descriptor.SavedRoot, nameof(descriptor.SavedRoot), rootDirectory, diagnostics);
-        ValidateRoot(descriptor.IntermediateRoot, nameof(descriptor.IntermediateRoot), rootDirectory, diagnostics);
+        ValidateRoot(UkitProjectDescriptor.ContentRoot, "ContentRoot", rootDirectory, diagnostics);
+        ValidateRoot(UkitProjectDescriptor.ConfigRoot, "ConfigRoot", rootDirectory, diagnostics);
+        ValidateRoot(UkitProjectDescriptor.SavedRoot, "SavedRoot", rootDirectory, diagnostics);
+        ValidateRoot(UkitProjectDescriptor.IntermediateRoot, "IntermediateRoot", rootDirectory, diagnostics);
 
         if (descriptor.FormatVersion != UkitProjectDescriptor.CurrentFormatVersion)
         {
             diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, "UKIT002", $"不支持的工程格式版本: {descriptor.FormatVersion}（当前版本: {UkitProjectDescriptor.CurrentFormatVersion}）", fullPath, "使用新版 UnrealKit 重新创建工程或查阅迁移文档。"));
         }
 
-        var settingsPath = Path.Combine(rootDirectory, descriptor.ConfigRoot, "DefaultGame.ini");
+        var settingsPath = Path.Combine(rootDirectory, UkitProjectDescriptor.ConfigRoot, "DefaultGame.ini");
         if (!File.Exists(settingsPath))
         {
             diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "UKIT003", "未找到可选配置文件 DefaultGame.ini。", settingsPath, "创建 Config/DefaultGame.ini 以保存项目默认配置。"));
@@ -165,10 +165,6 @@ public sealed class ProjectService : IProjectService
         var document = new IniDocument();
         document.SetValue(DescriptorSection, "FormatVersion", descriptor.FormatVersion.ToString(System.Globalization.CultureInfo.InvariantCulture));
         document.SetValue(DescriptorSection, "ProjectName", descriptor.ProjectName);
-        document.SetValue(DescriptorSection, "ContentRoot", descriptor.ContentRoot);
-        document.SetValue(DescriptorSection, "ConfigRoot", descriptor.ConfigRoot);
-        document.SetValue(DescriptorSection, "SavedRoot", descriptor.SavedRoot);
-        document.SetValue(DescriptorSection, "IntermediateRoot", descriptor.IntermediateRoot);
         await document.SaveAsync(path, cancellationToken);
     }
 
@@ -185,7 +181,7 @@ public sealed class ProjectService : IProjectService
             throw new InvalidDataException(".ukit 缺少或包含无效的 UnrealKit.Project/FormatVersion。");
         }
 
-        return new UkitProjectDescriptor(formatVersion, RequireValue(document, "ProjectName"), RequireValue(document, "ContentRoot"), RequireValue(document, "ConfigRoot"), RequireValue(document, "SavedRoot"), RequireValue(document, "IntermediateRoot"));
+        return new UkitProjectDescriptor(formatVersion, RequireValue(document, "ProjectName"));
     }
 
     private static async Task WriteSettingsAsync(string path, ProjectSettings settings, CancellationToken cancellationToken)

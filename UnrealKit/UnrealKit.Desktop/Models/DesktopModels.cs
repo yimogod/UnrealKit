@@ -193,3 +193,10 @@ public sealed record DownloadedPackageOption(string FolderName, string? LocalApk
 }
 
 public sealed record TrendChartAxisLabel(double X, double Y, string Label);
+
+public sealed record PakScanTextureOption(
+    string Name, string Path, string SizeX, string SizeY,
+    string Format, string LodBias, string LodGroup,
+    string NumMips, string EstimatedSizeMB);
+
+public sealed record PakScanDiagnosticOption(string Severity, string Code, string Message);

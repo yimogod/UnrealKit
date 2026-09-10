@@ -30,6 +30,8 @@
                          而完整 Saved 可能很大（含 Profiling、截图）。 -->
                     <Button Content="下载Log" Command="{Binding DownloadDeviceLogsCommand}" Padding="14,7" Margin="12,0,0,0"
                             ToolTip="只把所选设备上的 UE Saved/Logs 目录取回本地并打开该目录" />
+                    <Button Content="打开Saved目录" Command="{Binding OpenSavedDirectoryCommand}" Padding="14,7" Margin="12,0,0,0"
+                            ToolTip="在资源管理器中打开工程本地 Saved 目录" />
                 </StackPanel>
                 <TextBlock Text="[下载 Saved] 只取回 Logs/Screenshots/Profiling/GPUDumps 四个常用子目录；[下载 Log] 只取回 Saved/Logs。两者都下载到工程 Saved/Device/&lt;平台&gt;/&lt;范围-时间戳-设备&gt;/ 下"
                            Style="{StaticResource HintTextStyle}" Margin="0,10,0,0" TextWrapping="Wrap" />

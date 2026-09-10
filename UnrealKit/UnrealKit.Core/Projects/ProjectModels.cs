@@ -7,16 +7,17 @@ namespace UnrealKit.Core.Projects;
 /// </summary>
 public sealed record UkitProjectDescriptor(
     int FormatVersion,
-    string ProjectName,
-    string ContentRoot,
-    string ConfigRoot,
-    string SavedRoot,
-    string IntermediateRoot)
+    string ProjectName)
 {
-    public const int CurrentFormatVersion = 1;
+    public const int CurrentFormatVersion = 2;
+
+    public const string ContentRoot = "Content";
+    public const string ConfigRoot = "Config";
+    public const string SavedRoot = "Saved";
+    public const string IntermediateRoot = "Intermediate";
 
     public static UkitProjectDescriptor CreateDefault(string projectName) => new(
-        CurrentFormatVersion, projectName, "Content", "Config", "Saved", "Intermediate");
+        CurrentFormatVersion, projectName);
 }
 
 /// <summary>
@@ -456,13 +457,13 @@ public sealed record UkitProject(
 {
     public string ProjectDir => RootDirectory;
 
-    public string ContentDir => Path.Combine(ProjectDir, Descriptor.ContentRoot);
+    public string ContentDir => Path.Combine(ProjectDir, UkitProjectDescriptor.ContentRoot);
 
-    public string ConfigDir => Path.Combine(ProjectDir, Descriptor.ConfigRoot);
+    public string ConfigDir => Path.Combine(ProjectDir, UkitProjectDescriptor.ConfigRoot);
 
-    public string SavedDir => Path.Combine(ProjectDir, Descriptor.SavedRoot);
+    public string SavedDir => Path.Combine(ProjectDir, UkitProjectDescriptor.SavedRoot);
 
-    public string IntermediateDir => Path.Combine(ProjectDir, Descriptor.IntermediateRoot);
+    public string IntermediateDir => Path.Combine(ProjectDir, UkitProjectDescriptor.IntermediateRoot);
 
     public string ConfigFilePath => Path.Combine(ConfigDir, "DefaultGame.ini");
 

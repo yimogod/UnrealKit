@@ -1,0 +1,54 @@
+<UserControl x:Class="UnrealKit.Desktop.Views.PakScanView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock Text="Pak 静态包扫描" Style="{StaticResource SectionTitleTextStyle}" />
+            <TextBlock Text="选择游戏包目录（含 .pak / .utoc / .ucas 文件），离线批量提取 Texture2D 资产信息，无需连接设备。" Style="{StaticResource SectionDescriptionTextStyle}" />
+            <TextBlock Text="包目录" Style="{StaticResource FieldLabelTextStyle}" />
+            <DockPanel LastChildFill="True">
+                <Button Content="浏览…" Click="BrowsePakDir_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                <TextBox Text="{Binding PakScanInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+            </DockPanel>
+            <TextBlock Text="AES 解密密钥 (可选，格式：0x1A2B3C…)" Style="{StaticResource StackedFieldLabelTextStyle}" />
+            <TextBox Text="{Binding PakScanAesKey, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+            <Button Content="扫描" Command="{Binding ScanPakCommand}" HorizontalAlignment="Left" Padding="18,8" Margin="0,16,0,0" />
+        </StackPanel>
+        <ScrollViewer Grid.Row="2" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="{Binding PakScanDescription}" Style="{StaticResource ResultSummaryTextStyle}" />
+                <TabControl MinHeight="350" Margin="0,12,0,0">
+                    <TabItem Header="Textures">
+                        <DataGrid ItemsSource="{Binding PakScanTextures}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" />
+                                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="300" />
+                                <DataGridTextColumn Header="SizeX" Binding="{Binding SizeX}" Width="60" />
+                                <DataGridTextColumn Header="SizeY" Binding="{Binding SizeY}" Width="60" />
+                                <DataGridTextColumn Header="Format" Binding="{Binding Format}" Width="120" />
+                                <DataGridTextColumn Header="LodBias" Binding="{Binding LodBias}" Width="65" />
+                                <DataGridTextColumn Header="LodGroup" Binding="{Binding LodGroup}" Width="160" />
+                                <DataGridTextColumn Header="Mips" Binding="{Binding NumMips}" Width="50" />
+                                <DataGridTextColumn Header="Est. MB" Binding="{Binding EstimatedSizeMB}" Width="70" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </TabItem>
+                    <TabItem Header="Diagnostics">
+                        <DataGrid ItemsSource="{Binding PakScanDiagnostics}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="90" />
+                                <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="70" />
+                                <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </TabItem>
+                </TabControl>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

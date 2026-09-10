@@ -2,7 +2,7 @@
 
 UnrealKit 是面向 Unreal Engine Android 性能数据采集与分析的桌面工具，同时提供 WPF 图形界面（日常设备操作、采集、查看、导出）和命令行界面（自动化、批处理、CI）。
 
-技术栈：.NET 9 / C#，WPF（Windows），ClosedXML 写出真实 XLSX。当前 79 个测试全部通过。
+技术栈：.NET 9 / C#，WPF（Windows），ClosedXML 写出真实 XLSX。当前 126 个测试全部通过。
 
 ## 详细约定
 
@@ -17,10 +17,8 @@ UnrealKit 是面向 Unreal Engine Android 性能数据采集与分析的桌面�
 | [Doc/设备操作与文件安全.md](Doc/设备操作与文件安全.md) | 参数化进程调用、ADB 路径解析、设备选择、破坏性操作确认 |
 | [Doc/解析导出与诊断.md](Doc/解析导出与诊断.md) | 解析原则、诊断码分域、解析器现状、导出格式与列名契约 |
 | [Doc/测试与质量约定.md](Doc/测试与质量约定.md) | 测试布局、金样测试、覆盖要求、验证流程 |
-| [Doc/旧版Python性能检查工具功能分析.md](Doc/旧版Python性能检查工具功能分析.md) | 旧工具功能分析，兼容性判断依据 |
-| [Doc/PlanM1.md](Doc/PlanM1.md) / [Doc/PlanM2.md](Doc/PlanM2.md) | 第一阶段完成记录 / 第二阶段计划 |
 
-实现新功能前，先确认是否需要兼容旧工具的工作流、输入格式或输出数据。
+实现新功能前，先确认兼容旧工具的工作流、输入格式或输出数据是否仍相关（兼容性规则已内化在各规范文档中）。
 
 ## 核心不变式
 
@@ -56,9 +54,11 @@ ADB 路径解析顺序：`--adb-path` < 工程配置 `AdbPath` < 环境变量（
 
 ## 功能优先级
 
-第一阶段核心能力已完成（工程管理、ADB、采集归档、解析、导出、CLI/GUI 全覆盖），记录见 `Doc/PlanM1.md`。
+前四个阶段已全部完成：工程管理、ADB、采集归档、解析、导出、CLI/GUI 全覆盖（第一阶段）；静态相机、基线差分、历史趋势、RenderDoc 集成、Agent 分析、Win64 设备支持（第二阶段）；UE 控制台指令通道（第三阶段）；Win64 Desktop 全链路集成（第四阶段）。
 
-第二阶段按序推进（`Doc/PlanM2.md`）：静态相机 HTML 报告与 WPF 页面 → 基线差分 → 历史趋势 → RenderDoc 集成 → Agent 分析。RenderDoc Python 脚本保留为独立能力，不做 C# 重写。
+当前进行中：PakScan 离线资产扫描（见 `UnrealKit.Core/PakScan/`）。
+
+下一步候选：Win64 采集端到端集成测试、RenderDoc WPF 页增强、更多 Agent 分析 Skill 模板。
 
 ## 交付要求
 

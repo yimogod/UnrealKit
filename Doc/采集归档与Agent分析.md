@@ -48,6 +48,29 @@ Content/<Platform>/<Tag>/<YYYY-MM-DD>/<CaptureId>/
 - `CaptureImportRequest(Project, SourceDirectory, Platform, Tag, CaptureId?)` — 从本地目录导入既有数据，同样生成 Manifest 与校验信息。
 - `CapturePlan` 在实际写入前确定 `CaptureId`、目标目录和设备源路径；GUI 应在确认阶段展示计划路径。
 
+## Pak 资产扫描
+
+`PakScanService` 对 APK 或 `.pak` 文件做离线资产扫描，结果写入 `Saved/PakScan/<Platform>/<yyyyMMdd-HHmmss>-<source>/`：
+
+| 文件 | 说明 |
+| --- | --- |
+| `scan_manifest.json` | 扫描来源（pak 路径或 APK 路径）、工具版本、执行时间 |
+| `assets.json` | 扫描到的资产列表（强类型结构化数据） |
+| `report.html` | 可选的 HTML 摘要报告 |
+
+`<source>` 取自 `Intermediate/Download/<Platform>/<subdir>/` 对应的子目录名（即 FTP 下载版本号），保持可追溯。如果扫描的不是下载产物而是用户手动指定的文件，`<source>` 取文件名（不含扩展名）。
+
+若某次采集需要关联其资产扫描结果，在对应 `CaptureManifest.json` 中通过可空字段 `LinkedPakScanId` 记录扫描目录名（即时间戳+source 部分）；`Content/` 目录本身不存放资产扫描数据。
+
+## 临时数据（Scratch）
+
+`Saved/Scratch/<yyyyMMdd-HHmmss>/` 用于不需要完整归档流程的临时操作：随手拿一份 memreport、拉一段运行日志、做一次快速验证等。
+
+- 每次操作独立一个时间戳目录，不同操作的文件不混放。
+- 无 `CaptureManifest.json`，来源不保证完整可溯源。
+- 整个 `Scratch/` 目录可随时清除，不影响 `Content/` 中的任何归档。
+- 与 `Saved/DeviceSaved/` 的区别：`DeviceSaved/` 来源明确（知道是哪台设备、哪个时间、哪个范围拉的），适合需要保留一段时间的设备快照；`Scratch/` 是随手操作，生命周期更短。
+
 ## 下载设备 Saved
 
 `SavedDownloadService`（`SavedDownloadRequest` / `SavedDownloadPlan` / `SavedDownloadResult`）把设备上的 UE Saved 数据取回本地，供用户直接翻看日志、截图、Profiling 文件。GUI 在「采集归档」页有两个按钮，下载完成后都会打开落地目录：
@@ -98,4 +121,4 @@ Agent 分析是工程的派生能力，不是原始数据的替代品。
 - Agent 提供方必须通过可替换的适配层接入，`UnrealKit.Core` 不得直接依赖某个模型 SDK 或服务商。
 - CLI 应支持非交互式、可审计的分析：指定 Capture、分析预设、输出目录和机器可读结果；任何需要外网的调用仍需显式开关授权。
 
-当前状态：`CaptureAnalysisService` 提供本地采集分析；LLM 适配层尚未实现，属 `Doc/PlanM2.md` 的 P5 项。
+当前状态：`CaptureAnalysisService` 提供本地采集分析；LLM 适配层接口已预留，具体提供方通过可替换适配层接入。

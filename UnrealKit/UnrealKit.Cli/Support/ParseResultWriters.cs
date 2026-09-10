@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using UnrealKit.Core.PakScan;
 using UnrealKit.Core.Parsing;
 
 namespace UnrealKit.Cli;
@@ -155,6 +156,45 @@ internal static class ParseResultWriters
                 {
                     Console.WriteLine($"       Screenshots: {frame.Screenshots.Count}");
                 }
+            }
+        }
+
+        CliOutput.WriteDiagnostics(result.Diagnostics);
+    }
+
+    internal static void WritePakScan(PakScanResult result, bool json, string? outputFile)
+    {
+        if (json)
+        {
+            var jsonText = JsonSerializer.Serialize(result, IndentedJson);
+            if (outputFile is not null)
+                File.WriteAllText(outputFile, jsonText);
+            else
+                Console.WriteLine(jsonText);
+            return;
+        }
+
+        if (result.Report is not null)
+        {
+            var report = result.Report;
+            var header = "Name\tPath\tSizeX\tSizeY\tFormat\tLodBias\tLodGroup\tNumMips\tEstimatedSizeBytes";
+            var lines = report.Textures.Select(t =>
+                $"{t.Name}\t{t.ObjectPath}\t{t.SizeX}\t{t.SizeY}\t{t.PixelFormat}\t{t.LodBias}\t{t.LodGroup}\t{t.NumMips}\t{t.EstimatedSizeBytes}");
+
+            if (outputFile is not null)
+            {
+                File.WriteAllLines(outputFile, lines.Prepend(header));
+                Console.WriteLine($"Pak scan complete: {report.TextureCount} texture(s) written to {outputFile}");
+            }
+            else
+            {
+                Console.WriteLine(header);
+                foreach (var line in lines)
+                    Console.WriteLine(line);
+
+                Console.WriteLine();
+                Console.WriteLine($"Total: {report.TextureCount} Texture2D asset(s) / {report.TotalAssetsScanned} total assets scanned");
+                Console.WriteLine($"Directory: {report.InputDirectory}");
             }
         }
 

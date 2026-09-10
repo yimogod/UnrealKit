@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using UnrealKit.Core.Capture;
+using UnrealKit.Core.PakScan;
 using UnrealKit.Core.Parsing;
 using UnrealKit.Core.Projects;
 
@@ -24,6 +25,7 @@ internal static class ParseCommands
             "capture-meminfo" => await ParseCaptureMemInfoAsync(arguments[1..]),
             "memreport" => await ParseMemReportAsync(arguments[1..]),
             "static-camera" => await ParseStaticCameraAsync(arguments[1..]),
+            "pak-scan" => await ParsePakScanAsync(arguments[1..]),
             _ => FailUsage()
         };
     }
@@ -62,6 +64,20 @@ internal static class ParseCommands
             ? await parser.ParseFileAsync(input, screenshots)
             : await parser.ParseFileAsync(input);
         ParseResultWriters.WriteStaticCamera(result, CliOptions.IsJsonFormat(options));
+        return result.IsSuccess ? 0 : 1;
+    }
+
+    private static async Task<int> ParsePakScanAsync(string[] options)
+    {
+        CliOptions.EnsureOnly(options, CliOptions.Allowed("--input", "--aes-key", "--game-version", "--output", "--format"));
+        var input = CliOptions.GetRequired(options, "--input");
+        var config = new PakScanConfig
+        {
+            AesKey = CliOptions.GetOptional(options, "--aes-key") ?? string.Empty,
+            GameVersion = CliOptions.GetOptional(options, "--game-version") ?? "GAME_UE5_3",
+        };
+        var result = await new PakScanService().ScanAsync(input, config);
+        ParseResultWriters.WritePakScan(result, CliOptions.IsJsonFormat(options), CliOptions.GetOptional(options, "--output"));
         return result.IsSuccess ? 0 : 1;
     }
 
@@ -182,6 +198,7 @@ internal static class ParseCommands
         Console.Error.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
         Console.Error.WriteLine("  unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]");
         Console.Error.WriteLine("  unrealkit parse static-camera --input <log> [--screenshots <dir>] [--format json]");
+        Console.Error.WriteLine("  unrealkit parse pak-scan --input <pak-dir> [--aes-key <key>] [--game-version <ver>] [--output <file>] [--format json]");
         return 2;
     }
 }

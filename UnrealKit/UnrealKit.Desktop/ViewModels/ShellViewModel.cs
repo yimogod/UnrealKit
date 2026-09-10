@@ -89,6 +89,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _renderDocStandardOutput = string.Empty;
     private string _renderDocStandardError = string.Empty;
     private string _renderDocSummary = "Configure Python and RenderDoc script paths, then execute.";
+    private string _pakScanInputPath = string.Empty;
+    private string _pakScanAesKey = string.Empty;
+    private string _pakScanDescription = "选择游戏包目录（含 .pak / .utoc / .ucas），点击扫描。";
     private string _consoleCommandText = string.Empty;
     private string _consoleOutput = string.Empty;
     private bool _consoleIsSending;
@@ -146,6 +149,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         RunCaptureCommand = new AsyncDelegateCommand(RunCaptureAsync, CanOperateOnSelectedDevice);
         DownloadDeviceSavedCommand = new AsyncDelegateCommand(DownloadDeviceSavedAsync, CanOperateOnSelectedDevice);
         DownloadDeviceLogsCommand = new AsyncDelegateCommand(DownloadDeviceLogsAsync, CanOperateOnSelectedDevice);
+        OpenSavedDirectoryCommand = new DelegateCommand(OpenSavedDirectory, () => _project is not null);
         CancelOperationCommand = new DelegateCommand(CancelCurrentOperation, () => IsBusy);
         SaveProjectSettingsCommand = new AsyncDelegateCommand(SaveProjectSettingsAsync, () => !IsBusy && _project is not null);
         ParseMemInfoCommand = new AsyncDelegateCommand(ParseMemInfoAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(MemInfoInputPath));
@@ -161,6 +165,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             && !string.IsNullOrWhiteSpace(_renderDocPythonPath)
             && !string.IsNullOrWhiteSpace(_renderDocScriptPath));
         OpenRenderDocOutputDirCommand = new DelegateCommand(OpenRenderDocOutputDir, () => !string.IsNullOrWhiteSpace(_renderDocOutputDir) && Directory.Exists(_renderDocOutputDir));
+        ScanPakCommand = new AsyncDelegateCommand(ScanPakAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(PakScanInputPath));
         _sendConsoleCommandCommand = new AsyncDelegateCommand(SendConsoleCommandAsync, () => !IsBusy && _selectedDevice is not null && !string.IsNullOrWhiteSpace(_consoleCommandText));
         _runConsoleSequenceCommand = new AsyncDelegateCommand(RunConsoleSequenceAsync, () => !IsBusy && _selectedDevice is not null);
         _applyConsoleCommandPresetCommand = new ParameterizedAsyncDelegateCommand<ConsoleCommandPresetOption>(
@@ -227,6 +232,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<TrendDiagnosticOption> TrendDiagnostics { get; } = [];
     public ObservableCollection<RenderDocDiagnosticOption> RenderDocDiagnostics { get; } = [];
     public ObservableCollection<DownloadedPackageOption> DownloadedPackages { get; } = [];
+    public ObservableCollection<PakScanTextureOption> PakScanTextures { get; } = [];
+    public ObservableCollection<PakScanDiagnosticOption> PakScanDiagnostics { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
     public ICommand RefreshDevicesCommand { get; }
@@ -239,6 +246,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand RunCaptureCommand { get; }
     public ICommand DownloadDeviceSavedCommand { get; }
     public ICommand DownloadDeviceLogsCommand { get; }
+    public ICommand OpenSavedDirectoryCommand { get; }
     public ICommand CancelOperationCommand { get; }
     public ICommand SaveProjectSettingsCommand { get; }
     public ICommand ParseMemInfoCommand { get; }
@@ -252,6 +260,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand RunTrendCommand { get; }
     public ICommand RunRenderDocCommand { get; }
     public ICommand OpenRenderDocOutputDirCommand { get; }
+    public ICommand ScanPakCommand { get; }
     public ICommand DownloadCommand { get; }
     public ICommand InstallDownloadedApkCommand { get; }
     public ICommand OpenDownloadedDirectoryCommand { get; }
@@ -280,6 +289,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "静态相机" => "解析静态相机性能日志，查看逐相机指标并生成 HTML 报告。",
         "基线差分" => "明确选择基线与当前两份输入，比较指标回退与改善。",
         "历史趋势" => "按标签和时间范围汇总工程内的历史 Capture，查看指标走势。",
+        "Pak 扫描" => "离线扫描游戏包目录（.pak / .utoc / .ucas），批量提取 Texture2D 资产信息，无需连接设备。",
         _ => string.Empty
     };
 
@@ -426,6 +436,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string RenderDocStandardOutput { get => _renderDocStandardOutput; private set => SetField(ref _renderDocStandardOutput, value); }
     public string RenderDocStandardError { get => _renderDocStandardError; private set => SetField(ref _renderDocStandardError, value); }
     public string RenderDocSummary { get => _renderDocSummary; private set => SetField(ref _renderDocSummary, value); }
+
+    public string PakScanInputPath { get => _pakScanInputPath; set { if (SetField(ref _pakScanInputPath, value)) RaiseCommandStates(); } }
+    public string PakScanAesKey { get => _pakScanAesKey; set => SetField(ref _pakScanAesKey, value); }
+    public string PakScanDescription { get => _pakScanDescription; private set => SetField(ref _pakScanDescription, value); }
 
     public IReadOnlyList<string> DiffSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
     public IReadOnlyList<string> TrendSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
@@ -1273,6 +1287,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     /// </summary>
     private Task DownloadDeviceLogsAsync() => DownloadDeviceSavedAsync(UnealSavedScope.Logs, "Logs");
 
+    private void OpenSavedDirectory()
+    {
+        if (_project is null) return;
+        var savedDir = _project.SavedDir;
+        Directory.CreateDirectory(savedDir);
+        OpenLocalDirectory(savedDir);
+    }
+
     /// <summary>
     /// 取回设备 Saved 数据的共用流程。范围不同只影响设备端源目录与提示文字，
     /// 落地、打开目录、汇总展示完全一致，因此两个按钮共用这一份实现——
@@ -1973,9 +1995,45 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         AddOperationLog("Info", $"HTML report saved: {outputPath}");
     }
 
+    private async Task ScanPakAsync() => await RunAsync("Scanning pak assets...", async progress =>
+    {
+        var inputPath = Path.GetFullPath(PakScanInputPath);
+        var config = new UnrealKit.Core.PakScan.PakScanConfig { AesKey = PakScanAesKey };
+        var result = await new UnrealKit.Core.PakScan.PakScanService().ScanAsync(
+            inputPath, config, progress, OperationCancellationToken);
+
+        PakScanTextures.Clear();
+        PakScanDiagnostics.Clear();
+
+        if (result.Report is not null)
+        {
+            PakScanDescription = $"扫描完成：{result.Report.TextureCount} 个 Texture2D / 共 {result.Report.TotalAssetsScanned} 个资产";
+            foreach (var t in result.Report.Textures)
+            {
+                PakScanTextures.Add(new PakScanTextureOption(
+                    t.Name, t.ObjectPath,
+                    t.SizeX.ToString(), t.SizeY.ToString(),
+                    t.PixelFormat,
+                    t.LodBias.ToString(), t.LodGroup,
+                    t.NumMips.ToString(),
+                    (t.EstimatedSizeBytes / 1024.0 / 1024.0).ToString("F2")));
+            }
+        }
+        else
+        {
+            PakScanDescription = "扫描失败，请查看诊断信息。";
+        }
+
+        foreach (var d in result.Diagnostics)
+            PakScanDiagnostics.Add(new PakScanDiagnosticOption(d.Severity.ToString(), d.Code, d.Message));
+
+        StatusMessage = result.IsSuccess
+            ? $"Pak 扫描完成：{result.Report?.TextureCount ?? 0} 个纹理"
+            : "Pak 扫描完成（有错误）";
+    });
+
     private bool CanDownloadLatest() =>
         !IsBusy && _project is not null && !string.IsNullOrWhiteSpace(DownloadPlatform);
-
     private bool CanInstallDownloadedApk() =>
         !IsBusy
         && SelectedDevice?.IsAvailable == true
@@ -2513,13 +2571,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, ScanPakCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
 
         // 参数化命令不是 AsyncDelegateCommand，上面的 OfType 过滤覆盖不到它。
         _applyConsoleCommandPresetCommand.RaiseCanExecuteChanged();
+        (OpenSavedDirectoryCommand as DelegateCommand)?.RaiseCanExecuteChanged();
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
