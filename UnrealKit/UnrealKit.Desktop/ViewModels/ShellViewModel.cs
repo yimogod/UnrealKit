@@ -22,6 +22,7 @@ using UnrealKit.Core.Runtime;
 using UnrealKit.Core.Unreal;
 using UnrealKit.Desktop.Models;
 using UnrealKit.Desktop.Services;
+using UnrealKit.Cli;
 
 namespace UnrealKit.Desktop.ViewModels;
 
@@ -94,6 +95,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _pakFolderSummary = "打开工程后显示本地已下载的 Pak 包。";
     private string _pakOodlePath = string.Empty;
     private string _pakGameVersion = "GAME_UE5_6";
+    private UnrealKit.Core.PakScan.PakScanResult? _lastPakScanResult;
     private LocalPakPackageOption? _selectedLocalPakPackage;
     private string _consoleCommandText = string.Empty;
     private string _consoleOutput = string.Empty;
@@ -173,6 +175,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             && !string.IsNullOrWhiteSpace(_renderDocScriptPath));
         OpenRenderDocOutputDirCommand = new DelegateCommand(OpenRenderDocOutputDir, () => !string.IsNullOrWhiteSpace(_renderDocOutputDir) && Directory.Exists(_renderDocOutputDir));
         ScanPakCommand = new AsyncDelegateCommand(ScanPakAsync, () => !IsBusy && SelectedLocalPakPackage is not null);
+        ExportPakScanHtmlCommand = new DelegateCommand(ExportPakScanHtml, () => _lastPakScanResult is not null);
         DownloadPakCommand = new AsyncDelegateCommand(DownloadLatestPakAsync, CanDownloadLatestPak);
         OpenPakDownloadDirectoryCommand = new AsyncDelegateCommand(
             OpenPakDownloadDirectoryAsync,
@@ -274,6 +277,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand RunRenderDocCommand { get; }
     public ICommand OpenRenderDocOutputDirCommand { get; }
     public ICommand ScanPakCommand { get; }
+    public ICommand ExportPakScanHtmlCommand { get; }
     public ICommand DownloadPakCommand { get; }
     public ICommand OpenPakDownloadDirectoryCommand { get; }
     public ICommand RefreshLocalPakPackagesCommand { get; }
@@ -2090,6 +2094,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         PakScanTextures.Clear();
         PakScanDiagnostics.Clear();
+        _lastPakScanResult = result;
 
         if (result.Report is not null)
         {
@@ -2116,7 +2121,16 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         StatusMessage = result.IsSuccess
             ? $"Pak 扫描完成：{result.Report?.TextureCount ?? 0} 个纹理"
             : "Pak 扫描完成（有错误）";
+        RaiseCommandStates();
     });
+
+    private void ExportPakScanHtml()
+    {
+        if (_lastPakScanResult is null) return;
+        var html = PakScanHtmlBuilder.Build(_lastPakScanResult);
+        var path = Path.Combine(Path.GetTempPath(), $"PakScanTextures_{DateTime.Now:yyyyMMdd_HHmmss}.html");
+        HtmlTableReport.WriteAndOpen(html, path);
+    }
 
     private bool CanDownloadLatestPak() =>
         !IsBusy && _project is not null && !string.IsNullOrWhiteSpace(DownloadPlatform);
@@ -2787,6 +2801,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         // 参数化命令不是 AsyncDelegateCommand，上面的 OfType 过滤覆盖不到它。
         _applyConsoleCommandPresetCommand.RaiseCanExecuteChanged();
         (OpenSavedDirectoryCommand as DelegateCommand)?.RaiseCanExecuteChanged();
+        (ExportPakScanHtmlCommand as DelegateCommand)?.RaiseCanExecuteChanged();
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

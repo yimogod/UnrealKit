@@ -164,62 +164,10 @@ internal static class ParseResultWriters
 
     internal static void WritePakScanHtml(PakScanResult result, string? outputFile)
     {
-        var report = result.Report;
-        var textures = report?.Textures ?? [];
-        var scanDir = report?.InputDirectory ?? result.InputPath;
-
-        HtmlColumn[] columns =
-        [
-            new("n",   "名称",     HtmlColumnType.Text),
-            new("x",   "宽",       HtmlColumnType.Number),
-            new("y",   "高",       HtmlColumnType.Number),
-            new("fmt", "格式",     HtmlColumnType.Tag),
-            new("grp", "LodGroup", HtmlColumnType.Tag),
-            new("mip", "Mips",     HtmlColumnType.Number),
-            new("lod", "LodBias",  HtmlColumnType.Number),
-            new("sz",  "估算大小", HtmlColumnType.Bytes, DefaultSort: true, DefaultSortDesc: true),
-            new("p",   "路径",     HtmlColumnType.Path,  Sortable: false),
-        ];
-
-        HtmlFilter[] filters =
-        [
-            new("_grp", "全部 LodGroup", "grp", EnumFromColumn: "grp"),
-            new("_fmt", "全部格式",       "fmt", EnumFromColumn: "fmt"),
-            new("_sz",  "全部尺寸", "x",
-                FilterMode: HtmlFilterMode.NumberAtLeastEither,
-                FilterColumn2: "y",
-                FixedOptions:
-                [
-                    new("≥ 4096", "4096"),
-                    new("≥ 2048", "2048"),
-                    new("≥ 1024", "1024"),
-                    new("≥ 512",  "512"),
-                ]),
-        ];
-
-        var rows = textures.Select(t => new object?[]
-        {
-            t.Name, (int)t.SizeX, (int)t.SizeY, t.PixelFormat,
-            t.LodGroup, (int)t.NumMips, (int)t.LodBias,
-            t.EstimatedSizeBytes, t.ObjectPath,
-        }).ToArray();
-
-        var meta = new HtmlMetaItem[]
-        {
-            new("目录",     scanDir),
-            new("扫描资产", (report?.TotalAssetsScanned ?? 0).ToString()),
-            new("Texture2D", textures.Count.ToString()),
-            new("生成时间", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
-        };
-
-        var title = $"PakScan — Texture Report — {Path.GetFileName(scanDir.TrimEnd('/', '\\'))}";
-        var html = HtmlTableReport.Build(title, columns, rows, meta, filters,
-            result.Diagnostics, searchPlaceholder: "搜索名称 / 路径 / 格式…");
-
+        var html = PakScanHtmlBuilder.Build(result);
         var path = outputFile ?? Path.Combine(
             Path.GetTempPath(),
             $"PakScanTextures_{DateTime.Now:yyyyMMdd_HHmmss}.html");
-
         HtmlTableReport.WriteAndOpen(html, path);
         CliOutput.WriteDiagnostics(result.Diagnostics);
     }
