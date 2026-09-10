@@ -78,7 +78,15 @@ internal static class ParseCommands
             OodleDllPath = CliOptions.GetOptional(options, "--oodle-path") ?? string.Empty,
         };
         var result = await new PakScanService().ScanAsync(input, config);
-        ParseResultWriters.WritePakScan(result, CliOptions.IsJsonFormat(options), CliOptions.GetOptional(options, "--output"));
+        var outputFile = CliOptions.GetOptional(options, "--output");
+        if (CliOptions.IsHtmlFormat(options))
+        {
+            ParseResultWriters.WritePakScanHtml(result, outputFile);
+        }
+        else
+        {
+            ParseResultWriters.WritePakScan(result, CliOptions.IsJsonFormat(options), outputFile);
+        }
         return result.IsSuccess ? 0 : 1;
     }
 
@@ -199,7 +207,7 @@ internal static class ParseCommands
         Console.Error.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
         Console.Error.WriteLine("  unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]");
         Console.Error.WriteLine("  unrealkit parse static-camera --input <log> [--screenshots <dir>] [--format json]");
-        Console.Error.WriteLine("  unrealkit parse pak-scan --input <pak-dir> [--aes-key <key>] [--game-version <ver>] [--oodle-path <oo2core.dll>] [--output <file>] [--format json]");
+        Console.Error.WriteLine("  unrealkit parse pak-scan --input <pak-dir> [--aes-key <key>] [--game-version <ver>] [--oodle-path <oo2core.dll>] [--output <file>] [--format text|json|html]");
         return 2;
     }
 }

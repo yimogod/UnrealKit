@@ -65,7 +65,7 @@ internal static class CliOptions
     internal static bool HasFlag(string[] arguments, string optionName) =>
         arguments.Any(argument => string.Equals(argument, optionName, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary><c>--format</c> 默认 text；只接受 text/json，其它取值报错而不是回退默认值。</summary>
+    /// <summary><c>--format</c> 默认 text；只接受 text/json/html，其它取值报错而不是回退默认值。</summary>
     internal static bool IsJsonFormat(string[] arguments)
     {
         var format = GetOptional(arguments, "--format");
@@ -74,9 +74,20 @@ internal static class CliOptions
             return false;
         }
 
-        return string.Equals(format, "json", StringComparison.OrdinalIgnoreCase)
-            ? true
-            : throw new ArgumentException("--format must be either text or json.");
+        if (string.Equals(format, "json", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (string.Equals(format, "html", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        throw new ArgumentException("--format must be either text, json, or html.");
+    }
+
+    /// <summary><c>--format html</c> 检测，与 <see cref="IsJsonFormat"/> 互斥。</summary>
+    internal static bool IsHtmlFormat(string[] arguments)
+    {
+        var format = GetOptional(arguments, "--format");
+        return string.Equals(format, "html", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static void EnsureOnly(string[] arguments, IReadOnlySet<string> allowedOptions, IReadOnlySet<string>? flagOptions = null)
