@@ -92,6 +92,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _pakScanInputPath = string.Empty;
     private string _pakScanAesKey = string.Empty;
     private string _pakScanDescription = "选择游戏包目录（含 .pak / .utoc / .ucas），点击扫描。";
+    private string _pakScanPlatform = PlatformNames.ToName(TargetPlatform.Android);
+    private string _pakDownloadSummary = "请先打开工程并配置 FTP 下载，然后选择平台下载最新 Pak 包。";
+    private string _pakFolderSummary = "打开工程后显示本地已下载的 Pak 包。";
+    private LocalPakPackageOption? _selectedLocalPakPackage;
     private string _consoleCommandText = string.Empty;
     private string _consoleOutput = string.Empty;
     private bool _consoleIsSending;
@@ -104,7 +108,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _ftpUsername = string.Empty;
     private string _ftpPassword = string.Empty;
     private string _androidFtpPath = string.Empty;
+    private string _androidPakFtpPath = string.Empty;
     private string _win64FtpPath = string.Empty;
+    private string _win64PakFtpPath = string.Empty;
     private string _downloadPlatform = PlatformNames.ToName(TargetPlatform.Android);
     private string _downloadSummary = "请先打开工程并配置 FTP 下载，然后选择平台下载最新构建。";
     private string _downloadedApkPath = string.Empty;
@@ -166,6 +172,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             && !string.IsNullOrWhiteSpace(_renderDocScriptPath));
         OpenRenderDocOutputDirCommand = new DelegateCommand(OpenRenderDocOutputDir, () => !string.IsNullOrWhiteSpace(_renderDocOutputDir) && Directory.Exists(_renderDocOutputDir));
         ScanPakCommand = new AsyncDelegateCommand(ScanPakAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(PakScanInputPath));
+        DownloadPakCommand = new AsyncDelegateCommand(DownloadLatestPakAsync, CanDownloadLatestPak);
+        OpenPakDownloadDirectoryCommand = new AsyncDelegateCommand(
+            OpenPakDownloadDirectoryAsync,
+            () => PakDownloadRootDirectory is { Length: > 0 } root && Directory.Exists(root));
+        RefreshLocalPakPackagesCommand = new AsyncDelegateCommand(RefreshLocalPakPackagesAsync, () => !IsBusy && _project is not null);
         _sendConsoleCommandCommand = new AsyncDelegateCommand(SendConsoleCommandAsync, () => !IsBusy && _selectedDevice is not null && !string.IsNullOrWhiteSpace(_consoleCommandText));
         _runConsoleSequenceCommand = new AsyncDelegateCommand(RunConsoleSequenceAsync, () => !IsBusy && _selectedDevice is not null);
         _applyConsoleCommandPresetCommand = new ParameterizedAsyncDelegateCommand<ConsoleCommandPresetOption>(
@@ -234,6 +245,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<DownloadedPackageOption> DownloadedPackages { get; } = [];
     public ObservableCollection<PakScanTextureOption> PakScanTextures { get; } = [];
     public ObservableCollection<PakScanDiagnosticOption> PakScanDiagnostics { get; } = [];
+    public ObservableCollection<LocalPakPackageOption> LocalPakPackages { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
     public ICommand RefreshDevicesCommand { get; }
@@ -261,6 +273,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand RunRenderDocCommand { get; }
     public ICommand OpenRenderDocOutputDirCommand { get; }
     public ICommand ScanPakCommand { get; }
+    public ICommand DownloadPakCommand { get; }
+    public ICommand OpenPakDownloadDirectoryCommand { get; }
+    public ICommand RefreshLocalPakPackagesCommand { get; }
     public ICommand DownloadCommand { get; }
     public ICommand InstallDownloadedApkCommand { get; }
     public ICommand OpenDownloadedDirectoryCommand { get; }
@@ -285,11 +300,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "指令序列" => "按顺序执行指令序列（指令 → 等待 → 标记），支持工程预设和内联输入。",
         "采集归档" => "将采集数据归档到新的 Content Capture，避免覆盖历史数据。",
         "RenderDoc" => "调用独立的 RenderDoc Python 脚本，查看退出码与输出目录。",
+        "Pak解析" => "离线扫描游戏包目录（.pak / .utoc / .ucas），批量提取 Texture2D/Mesh 资产信息，无需连接设备。",
         "内存解析" => "离线解析 meminfo 与 memreport，导出结果，或浏览工程内已归档的 Capture。",
         "静态相机" => "解析静态相机性能日志，查看逐相机指标并生成 HTML 报告。",
         "基线差分" => "明确选择基线与当前两份输入，比较指标回退与改善。",
         "历史趋势" => "按标签和时间范围汇总工程内的历史 Capture，查看指标走势。",
-        "Pak 扫描" => "离线扫描游戏包目录（.pak / .utoc / .ucas），批量提取 Texture2D 资产信息，无需连接设备。",
+        
         _ => string.Empty
     };
 
@@ -350,8 +366,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     /// <summary>Android 平台在 FTP 服务器上的下载父目录。</summary>
     public string AndroidFtpPath { get => _androidFtpPath; set => SetField(ref _androidFtpPath, value); }
 
+    /// <summary>Android 平台在 FTP 服务器上的 Pak 下载父目录。</summary>
+    public string AndroidPakFtpPath { get => _androidPakFtpPath; set => SetField(ref _androidPakFtpPath, value); }
+
     /// <summary>Win64 平台在 FTP 服务器上的下载父目录。</summary>
     public string Win64FtpPath { get => _win64FtpPath; set => SetField(ref _win64FtpPath, value); }
+
+    /// <summary>Win64 平台在 FTP 服务器上的 Pak 下载父目录。</summary>
+    public string Win64PakFtpPath { get => _win64PakFtpPath; set => SetField(ref _win64PakFtpPath, value); }
 
     /// <summary>「安装包」页下载目标平台，默认 Android。</summary>
     public string DownloadPlatform
@@ -441,9 +463,51 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string PakScanAesKey { get => _pakScanAesKey; set => SetField(ref _pakScanAesKey, value); }
     public string PakScanDescription { get => _pakScanDescription; private set => SetField(ref _pakScanDescription, value); }
 
+    /// <summary>「Pak解析」页下载目标平台，默认 Android。</summary>
+    public string PakScanPlatform
+    {
+        get => _pakScanPlatform;
+        set
+        {
+            if (!SetField(ref _pakScanPlatform, value))
+                return;
+            RaiseCommandStates();
+            _ = RefreshLocalPakPackagesAsync();
+        }
+    }
+
+    public string PakDownloadSummary { get => _pakDownloadSummary; private set => SetField(ref _pakDownloadSummary, value); }
+
+    /// <summary>本地已下载 Pak 包列表的现状说明。</summary>
+    public string PakFolderSummary { get => _pakFolderSummary; private set => SetField(ref _pakFolderSummary, value); }
+
+    public LocalPakPackageOption? SelectedLocalPakPackage
+    {
+        get => _selectedLocalPakPackage;
+        set
+        {
+            if (!SetField(ref _selectedLocalPakPackage, value))
+                return;
+            if (value is not null)
+                PakScanInputPath = value.LocalDirectory;
+            RaiseCommandStates();
+        }
+    }
+
+    /// <summary>
+    /// 当前平台的本地 Pak 下载根目录（<c>Intermediate/Download/Pak/&lt;Platform&gt;</c>）。
+    /// </summary>
+    private string? PakDownloadRootDirectory =>
+        _project is null
+            ? null
+            : PlatformNames.TryParse(PakScanPlatform, out var platform)
+                ? Path.Combine(_project.IntermediateDir, "Download", "Pak", PlatformNames.ToName(platform))
+                : null;
+
     public IReadOnlyList<string> DiffSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
     public IReadOnlyList<string> TrendSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
     public IReadOnlyList<string> DownloadPlatformOptions { get; } = [PlatformNames.ToName(TargetPlatform.Android), PlatformNames.ToName(TargetPlatform.Win64)];
+    public IReadOnlyList<string> PakScanPlatformOptions { get; } = [PlatformNames.ToName(TargetPlatform.Android), PlatformNames.ToName(TargetPlatform.Win64)];
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
     public string LaunchOperationSummary { get => _launchOperationSummary; private set => SetField(ref _launchOperationSummary, value); }
     public string DeviceLaunchParameterContent { get => _deviceLaunchParameterContent; private set => SetField(ref _deviceLaunchParameterContent, value); }
@@ -1059,6 +1123,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         DeviceGameRoot = androidValues.GameRoot;
         AdbPath = androidValues.AdbPath;
         AndroidFtpPath = androidValues.FtpPath;
+        AndroidPakFtpPath = androidValues.PakFtpPath;
 
         var win64 = project.Settings.Win64;
         Win64Enabled = win64 is not null;
@@ -1066,6 +1131,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         Win64Executable = win64Values.Executable;
         Win64WorkingDirectory = win64Values.WorkingDirectory;
         Win64FtpPath = win64Values.FtpPath;
+        Win64PakFtpPath = win64Values.PakFtpPath;
 
         var ftp = project.Settings.FtpSettings;
         FtpHost = ftp.Host;
@@ -1079,6 +1145,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         DownloadedPackages.Clear();
         SelectedDownloadedPackage = null;
         DownloadFolderSummary = "点击「刷新本地包」列出本工程已下载的构建包。";
+
+        PakDownloadSummary = "请选择平台并点击「下载最新」。";
+        LocalPakPackages.Clear();
+        SelectedLocalPakPackage = null;
+        PakFolderSummary = "点击「刷新本地包」列出本工程已下载的 Pak 包。";
 
         OnPropertyChanged(nameof(ProjectTitle));
         UpdateLaunchParameterPreview();
@@ -1101,13 +1172,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     Activity: Activity.Trim(),
                     GameRoot: DeviceGameRoot.Trim(),
                     AdbPath: AdbPath.Trim(),
-                    FtpPath: AndroidFtpPath.Trim())
+                    FtpPath: AndroidFtpPath.Trim(),
+                    PakFtpPath: AndroidPakFtpPath.Trim())
                 : null,
             Win64 = Win64Enabled
                 ? new Win64PlatformProfile(
                     Executable: Win64Executable.Trim(),
                     WorkingDirectory: Win64WorkingDirectory.Trim(),
-                    FtpPath: Win64FtpPath.Trim())
+                    FtpPath: Win64FtpPath.Trim(),
+                    PakFtpPath: Win64PakFtpPath.Trim())
                 : null,
             Ftp = new FtpSettings(
                 Host: FtpHost.Trim(),
@@ -2031,6 +2104,122 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ? $"Pak 扫描完成：{result.Report?.TextureCount ?? 0} 个纹理"
             : "Pak 扫描完成（有错误）";
     });
+
+    private bool CanDownloadLatestPak() =>
+        !IsBusy && _project is not null && !string.IsNullOrWhiteSpace(PakScanPlatform);
+
+    private Task OpenPakDownloadDirectoryAsync()
+    {
+        var root = PakDownloadRootDirectory;
+        if (root is { Length: > 0 } && Directory.Exists(root))
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = root,
+                UseShellExecute = true
+            });
+            StatusMessage = $"已打开 Pak 下载目录：{root}";
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task DownloadLatestPakAsync() => RunAsync("正在下载最新 Pak 包…", async progress =>
+    {
+        var platform = PlatformNames.Parse(PakScanPlatform, nameof(PakScanPlatform));
+        var profile = _project!.Settings.ProfileFor(platform);
+        if (profile is null)
+        {
+            throw new InvalidOperationException(
+                $"工程尚未配置 {PlatformNames.ToName(platform)} 平台。请先在「Setting」中勾选该平台。");
+        }
+
+        var pakFtpPath = platform == TargetPlatform.Android ? AndroidPakFtpPath.Trim() : Win64PakFtpPath.Trim();
+        if (string.IsNullOrWhiteSpace(pakFtpPath))
+        {
+            throw new InvalidOperationException(
+                $"{PlatformNames.ToName(platform)} 平台的 Pak FTP 父目录尚未配置。" +
+                $"请在「Setting」中的 {PlatformNames.ToName(platform)} 分组内填写 Pak FTP 父目录。");
+        }
+
+        var request = new DownloadRequest(
+            platform,
+            _project.Settings.FtpSettings,
+            pakFtpPath,
+            PakDownloadRootDirectory!);
+
+        var result = await new FtpDownloadService(new FluentFtpClientFactory())
+            .DownloadAsync(request, progress, OperationCancellationToken);
+
+        foreach (var diagnostic in result.Diagnostics)
+        {
+            var fix = diagnostic.SuggestedFix is { Length: > 0 } fixText ? $"（{fixText}）" : string.Empty;
+            AddOperationLog(diagnostic.Severity.ToString(), $"[{diagnostic.Code}] {diagnostic.Message}{fix}");
+        }
+
+        var alreadyUpToDate = result.Diagnostics.Any(
+            diagnostic => diagnostic.Code == DownloadDiagnosticCodes.AlreadyUpToDate);
+        if (alreadyUpToDate)
+        {
+            PakDownloadSummary = $"本地已有最新 Pak 包 {result.SourceSubdir}，未重新下载。";
+            StatusMessage = PakDownloadSummary;
+            AddOperationLog("Info", PakDownloadSummary);
+            await RefreshLocalPakPackagesAsync();
+            return;
+        }
+
+        PakDownloadSummary = result.Succeeded
+            ? $"下载完成：{result.SourceSubdir}（{result.FileCount} 个文件）→ {result.LocalPath}"
+            : $"下载失败：{result.SourceSubdir ?? "(无)"}。详见操作日志。";
+        AddOperationLog(result.Succeeded ? "Info" : "Error", PakDownloadSummary);
+
+        if (result.Succeeded)
+        {
+            StatusMessage = $"Pak 下载完成：{result.LocalPath}";
+            await RefreshLocalPakPackagesAsync();
+        }
+    });
+
+    private async Task RefreshLocalPakPackagesAsync()
+    {
+        LocalPakPackages.Clear();
+        SelectedLocalPakPackage = null;
+        RaiseCommandStates();
+
+        if (_project is null)
+        {
+            PakFolderSummary = "请先打开工程以浏览本地已下载的 Pak 包。";
+            return;
+        }
+
+        if (!PlatformNames.TryParse(PakScanPlatform, out var platform))
+        {
+            PakFolderSummary = "请选择平台以浏览本地已下载的 Pak 包。";
+            return;
+        }
+
+        var baseDirectory = PakDownloadRootDirectory!;
+        if (!Directory.Exists(baseDirectory))
+        {
+            PakFolderSummary = $"本地暂无已下载的 {PlatformNames.ToName(platform)} Pak 包。点击「下载最新」获取。";
+            return;
+        }
+
+        var entries = await Task.Run(() =>
+            Directory.EnumerateDirectories(baseDirectory)
+                .Select(dir => new LocalPakPackageOption(Path.GetFileName(dir), dir))
+                .Where(opt => !string.IsNullOrWhiteSpace(opt.FolderName))
+                .OrderBy(opt => opt.FolderName, NaturalSortComparer.Instance)
+                .ToArray());
+
+        foreach (var entry in Enumerable.Reverse(entries))
+            LocalPakPackages.Add(entry);
+
+        PakFolderSummary = LocalPakPackages.Count == 0
+            ? $"本地暂无已下载的 {PlatformNames.ToName(platform)} Pak 包。点击「下载最新」获取。"
+            : $"本地已下载 {LocalPakPackages.Count} 个 {PlatformNames.ToName(platform)} Pak 包，选择其一自动填入包目录。";
+        RaiseCommandStates();
+    }
 
     private bool CanDownloadLatest() =>
         !IsBusy && _project is not null && !string.IsNullOrWhiteSpace(DownloadPlatform);

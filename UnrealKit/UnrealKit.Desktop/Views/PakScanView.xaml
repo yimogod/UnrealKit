@@ -10,7 +10,22 @@
         <StackPanel>
             <TextBlock Text="Pak 静态包扫描" Style="{StaticResource SectionTitleTextStyle}" />
             <TextBlock Text="选择游戏包目录（含 .pak / .utoc / .ucas 文件），离线批量提取 Texture2D 资产信息，无需连接设备。" Style="{StaticResource SectionDescriptionTextStyle}" />
-            <TextBlock Text="包目录" Style="{StaticResource FieldLabelTextStyle}" />
+            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                <TextBlock Text="平台" Style="{StaticResource FieldLabelTextStyle}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox ItemsSource="{Binding PakScanPlatformOptions}"
+                          SelectedItem="{Binding PakScanPlatform}"
+                          MinWidth="140" Padding="8,4" VerticalContentAlignment="Center" />
+                <Button Content="下载最新" Command="{Binding DownloadPakCommand}" Padding="18,8" Margin="16,0,0,0" />
+                <Button Content="打开下载目录" Command="{Binding OpenPakDownloadDirectoryCommand}" Padding="18,8" Margin="12,0,0,0" />
+                <Button Content="刷新本地包" Command="{Binding RefreshLocalPakPackagesCommand}" Padding="18,8" Margin="12,0,0,0" />
+            </StackPanel>
+            <TextBlock Text="{Binding PakDownloadSummary}" Style="{StaticResource ResultSummaryTextStyle}" Margin="0,16,0,0" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding PakFolderSummary}" Style="{StaticResource HintTextStyle}" Margin="0,8,0,0" TextWrapping="Wrap" />
+            <ListBox ItemsSource="{Binding LocalPakPackages}"
+                     SelectedItem="{Binding SelectedLocalPakPackage}"
+                     DisplayMemberPath="Display"
+                     MinHeight="80" MaxHeight="160" Margin="0,8,0,0" />
+            <TextBlock Text="包目录" Style="{StaticResource StackedFieldLabelTextStyle}" />
             <DockPanel LastChildFill="True">
                 <Button Content="浏览…" Click="BrowsePakDir_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
                 <TextBox Text="{Binding PakScanInputPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />

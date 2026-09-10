@@ -200,3 +200,12 @@ public sealed record PakScanTextureOption(
     string NumMips, string EstimatedSizeMB);
 
 public sealed record PakScanDiagnosticOption(string Severity, string Code, string Message);
+
+/// <summary>
+/// 本地已下载 Pak 包的展示投影。<see cref="FolderName"/> 是版本目录名，
+/// 与同构建号的安装包目录名一致。
+/// </summary>
+public sealed record LocalPakPackageOption(string FolderName, string LocalDirectory)
+{
+    public string Display => FolderName;
+}

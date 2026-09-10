@@ -45,6 +45,8 @@
                         <TextBox Text="{Binding AdbPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
                         <TextBlock Text="FTP 父目录（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
                         <TextBox Text="{Binding AndroidFtpPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
+                        <TextBlock Text="Pak FTP 父目录（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding AndroidPakFtpPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
                     </StackPanel>
                 </GroupBox>
 
@@ -60,6 +62,8 @@
                         <TextBox Text="{Binding Win64WorkingDirectory, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
                         <TextBlock Text="FTP 父目录（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
                         <TextBox Text="{Binding Win64FtpPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
+                        <TextBlock Text="Pak FTP 父目录（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Win64PakFtpPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
                     </StackPanel>
                 </GroupBox>
 
