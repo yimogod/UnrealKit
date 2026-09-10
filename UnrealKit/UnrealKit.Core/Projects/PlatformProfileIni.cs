@@ -70,6 +70,7 @@ internal static class PlatformProfileIni
                 document.SetValue(section, "AdbPath", android.AdbPath);
                 document.SetValue(section, "FtpPath", android.FtpPath);
                 document.SetValue(section, "PakFtpPath", android.PakFtpPath);
+                document.SetValue(section, "PakAesKey", android.PakAesKey);
                 break;
 
             case Win64PlatformProfile win64:
@@ -77,6 +78,7 @@ internal static class PlatformProfileIni
                 document.SetValue(section, "WorkingDirectory", win64.WorkingDirectory);
                 document.SetValue(section, "FtpPath", win64.FtpPath);
                 document.SetValue(section, "PakFtpPath", win64.PakFtpPath);
+                document.SetValue(section, "PakAesKey", win64.PakAesKey);
                 break;
 
             default:
@@ -94,7 +96,8 @@ internal static class PlatformProfileIni
             GameRoot: value("GameRoot", defaults.GameRoot),
             AdbPath: value("AdbPath", defaults.AdbPath),
             FtpPath: value("FtpPath", defaults.FtpPath),
-            PakFtpPath: value("PakFtpPath", defaults.PakFtpPath));
+            PakFtpPath: value("PakFtpPath", defaults.PakFtpPath),
+            PakAesKey: value("PakAesKey", defaults.PakAesKey));
     }
 
     private static Win64PlatformProfile ReadWin64(Func<string, string, string> value)
@@ -104,6 +107,7 @@ internal static class PlatformProfileIni
             Executable: value("Executable", defaults.Executable),
             WorkingDirectory: value("WorkingDirectory", defaults.WorkingDirectory),
             FtpPath: value("FtpPath", defaults.FtpPath),
-            PakFtpPath: value("PakFtpPath", defaults.PakFtpPath));
+            PakFtpPath: value("PakFtpPath", defaults.PakFtpPath),
+            PakAesKey: value("PakAesKey", defaults.PakAesKey));
     }
 }

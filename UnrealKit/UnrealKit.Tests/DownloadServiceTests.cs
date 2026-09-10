@@ -120,7 +120,7 @@ public sealed class DownloadServiceTests
         var factory = new FakeFtpClientFactory();
         factory.Client.ListResults["/builds/win64"] = [new("2024.01.01", true), new("2024.01.05", true)];
         var service = new FtpDownloadService(factory);
-        var request = new DownloadRequest(TargetPlatform.Win64, ConfiguredSettings, "/builds/win64", NewLocalBaseDirectory());
+        var request = new DownloadRequest(TargetPlatform.Win64, ConfiguredSettings, "/builds/win64", NewLocalBaseDirectory(), DownloadMode.Directory);
 
         var result = await service.DownloadAsync(request);
 
@@ -129,6 +129,30 @@ public sealed class DownloadServiceTests
         Assert.Equal(1, result.FileCount);
         Assert.Equal("/builds/win64/2024.01.05", factory.Client.DownloadedDirectories[0].RemotePath);
         Assert.EndsWith("2024.01.05", result.LocalPath);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_AndroidPak_DirectoryMode_DownloadsWholeSubdirectory()
+    {
+        // Pak 包目录（Android 平台）应整目录下载，不能因为没有 .apk 而报 DWN005。
+        var factory = new FakeFtpClientFactory();
+        factory.Client.ListResults["/HotUpdate/Android"] =
+        [
+            new("ProjectX_20260910_061857_WinBuild03", true),
+        ];
+        var service = new FtpDownloadService(factory);
+        var request = new DownloadRequest(
+            TargetPlatform.Android,
+            ConfiguredSettings,
+            "/HotUpdate/Android",
+            NewLocalBaseDirectory(),
+            DownloadMode.Directory);
+
+        var result = await service.DownloadAsync(request);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("ProjectX_20260910_061857_WinBuild03", result.SourceSubdir);
+        Assert.Equal("/HotUpdate/Android/ProjectX_20260910_061857_WinBuild03", factory.Client.DownloadedDirectories[0].RemotePath);
     }
 
     [Fact]
@@ -191,7 +215,7 @@ public sealed class DownloadServiceTests
         var localBase = NewLocalBaseDirectory();
         Directory.CreateDirectory(Path.Combine(localBase, "2024.01.05"));
         var service = new FtpDownloadService(factory);
-        var request = new DownloadRequest(TargetPlatform.Win64, ConfiguredSettings, "/builds/win64", localBase);
+        var request = new DownloadRequest(TargetPlatform.Win64, ConfiguredSettings, "/builds/win64", localBase, DownloadMode.Directory);
 
         var result = await service.DownloadAsync(request);
 

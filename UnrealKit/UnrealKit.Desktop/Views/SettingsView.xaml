@@ -47,6 +47,8 @@
                         <TextBox Text="{Binding AndroidFtpPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
                         <TextBlock Text="Pak FTP 父目录（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
                         <TextBox Text="{Binding AndroidPakFtpPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
+                        <TextBlock Text="Pak AES 解密密钥（可选，格式：0x1A2B3C…）" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding AndroidPakAesKey, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
                     </StackPanel>
                 </GroupBox>
 
@@ -64,6 +66,8 @@
                         <TextBox Text="{Binding Win64FtpPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
                         <TextBlock Text="Pak FTP 父目录（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
                         <TextBox Text="{Binding Win64PakFtpPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
+                        <TextBlock Text="Pak AES 解密密钥（可选，格式：0x1A2B3C…）" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding Win64PakAesKey, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
                     </StackPanel>
                 </GroupBox>
 

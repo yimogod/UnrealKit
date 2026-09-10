@@ -316,12 +316,13 @@ public sealed class AdbService
 
         try
         {
-            while (!process.StandardOutput.EndOfStream)
+            while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var line = await process.StandardOutput.ReadLineAsync(cancellationToken);
-                if (line is not null)
-                    yield return line;
+                if (line is null)
+                    break;
+                yield return line;
             }
         }
         finally

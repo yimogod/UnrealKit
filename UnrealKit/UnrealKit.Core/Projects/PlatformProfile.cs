@@ -89,7 +89,8 @@ public sealed record AndroidPlatformProfile(
     string GameRoot,
     string AdbPath,
     string FtpPath = "",
-    string PakFtpPath = "") : PlatformProfile
+    string PakFtpPath = "",
+    string PakAesKey = "") : PlatformProfile
 {
     /// <summary>设备端游戏根目录模板的默认值，与旧工具的 UE Saved 路径规则一致。</summary>
     public const string DefaultGameRoot =
@@ -105,7 +106,8 @@ public sealed record AndroidPlatformProfile(
         GameRoot: DefaultGameRoot,
         AdbPath: string.Empty,
         FtpPath: string.Empty,
-        PakFtpPath: string.Empty);
+        PakFtpPath: string.Empty,
+        PakAesKey: string.Empty);
 
     public override PlatformTarget Resolve(string unrealProjectName)
     {
@@ -151,7 +153,8 @@ public sealed record Win64PlatformProfile(
     string Executable,
     string WorkingDirectory,
     string FtpPath = "",
-    string PakFtpPath = "") : PlatformProfile
+    string PakFtpPath = "",
+    string PakAesKey = "") : PlatformProfile
 {
     public override TargetPlatform Platform => TargetPlatform.Win64;
 
@@ -161,7 +164,8 @@ public sealed record Win64PlatformProfile(
         Executable: string.Empty,
         WorkingDirectory: string.Empty,
         FtpPath: string.Empty,
-        PakFtpPath: string.Empty);
+        PakFtpPath: string.Empty,
+        PakAesKey: string.Empty);
 
     public override PlatformTarget Resolve(string unrealProjectName)
     {

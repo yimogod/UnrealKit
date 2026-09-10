@@ -4,7 +4,7 @@ public sealed record PakScanConfig
 {
     public static readonly PakScanConfig Default = new();
 
-    public string GameVersion { get; init; } = "GAME_UE5_3";
+    public string GameVersion { get; init; } = "GAME_UE5_6";
 
     public string AesKey { get; init; } = string.Empty;
 

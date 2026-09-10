@@ -10,14 +10,26 @@ namespace UnrealKit.Core.Download;
 public sealed record FtpEntry(string Name, bool IsDirectory);
 
 /// <summary>
+/// 控制 FTP 下载的文件策略：<see cref="Apk"/> 在子目录中精确找唯一 .apk，
+/// <see cref="Directory"/> 递归下载整个子目录（适用于 Win64 构建包和 Pak 资产包）。
+/// </summary>
+public enum DownloadMode
+{
+    Apk,
+    Directory,
+}
+
+/// <summary>
 /// 一次 FTP 下载请求。<see cref="FtpPath"/> 是该平台在 FTP 服务器上的父目录，
 /// <see cref="LocalBaseDirectory"/> 是本地落地根目录（<c>Intermediate/Download/&lt;Platform&gt;</c>）。
+/// <see cref="Mode"/> 控制下载策略，默认 <see cref="DownloadMode.Apk"/>（向后兼容）。
 /// </summary>
 public sealed record DownloadRequest(
     TargetPlatform Platform,
     FtpSettings Settings,
     string FtpPath,
-    string LocalBaseDirectory);
+    string LocalBaseDirectory,
+    DownloadMode Mode = DownloadMode.Apk);
 
 /// <summary>
 /// 下载结果。<see cref="LocalPath"/> 是落地的文件（Android APK）或目录（Win64 整包）。

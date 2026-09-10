@@ -89,12 +89,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _renderDocStandardOutput = string.Empty;
     private string _renderDocStandardError = string.Empty;
     private string _renderDocSummary = "Configure Python and RenderDoc script paths, then execute.";
-    private string _pakScanInputPath = string.Empty;
-    private string _pakScanAesKey = string.Empty;
     private string _pakScanDescription = "选择游戏包目录（含 .pak / .utoc / .ucas），点击扫描。";
-    private string _pakScanPlatform = PlatformNames.ToName(TargetPlatform.Android);
     private string _pakDownloadSummary = "请先打开工程并配置 FTP 下载，然后选择平台下载最新 Pak 包。";
     private string _pakFolderSummary = "打开工程后显示本地已下载的 Pak 包。";
+    private string _pakOodlePath = string.Empty;
+    private string _pakGameVersion = "GAME_UE5_6";
     private LocalPakPackageOption? _selectedLocalPakPackage;
     private string _consoleCommandText = string.Empty;
     private string _consoleOutput = string.Empty;
@@ -109,8 +108,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _ftpPassword = string.Empty;
     private string _androidFtpPath = string.Empty;
     private string _androidPakFtpPath = string.Empty;
+    private string _androidPakAesKey = string.Empty;
     private string _win64FtpPath = string.Empty;
     private string _win64PakFtpPath = string.Empty;
+    private string _win64PakAesKey = string.Empty;
     private string _downloadPlatform = PlatformNames.ToName(TargetPlatform.Android);
     private string _downloadSummary = "请先打开工程并配置 FTP 下载，然后选择平台下载最新构建。";
     private string _downloadedApkPath = string.Empty;
@@ -171,7 +172,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             && !string.IsNullOrWhiteSpace(_renderDocPythonPath)
             && !string.IsNullOrWhiteSpace(_renderDocScriptPath));
         OpenRenderDocOutputDirCommand = new DelegateCommand(OpenRenderDocOutputDir, () => !string.IsNullOrWhiteSpace(_renderDocOutputDir) && Directory.Exists(_renderDocOutputDir));
-        ScanPakCommand = new AsyncDelegateCommand(ScanPakAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(PakScanInputPath));
+        ScanPakCommand = new AsyncDelegateCommand(ScanPakAsync, () => !IsBusy && SelectedLocalPakPackage is not null);
         DownloadPakCommand = new AsyncDelegateCommand(DownloadLatestPakAsync, CanDownloadLatestPak);
         OpenPakDownloadDirectoryCommand = new AsyncDelegateCommand(
             OpenPakDownloadDirectoryAsync,
@@ -369,11 +370,17 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     /// <summary>Android 平台在 FTP 服务器上的 Pak 下载父目录。</summary>
     public string AndroidPakFtpPath { get => _androidPakFtpPath; set => SetField(ref _androidPakFtpPath, value); }
 
+    /// <summary>Android 平台 Pak 解密密钥。</summary>
+    public string AndroidPakAesKey { get => _androidPakAesKey; set => SetField(ref _androidPakAesKey, value); }
+
     /// <summary>Win64 平台在 FTP 服务器上的下载父目录。</summary>
     public string Win64FtpPath { get => _win64FtpPath; set => SetField(ref _win64FtpPath, value); }
 
     /// <summary>Win64 平台在 FTP 服务器上的 Pak 下载父目录。</summary>
     public string Win64PakFtpPath { get => _win64PakFtpPath; set => SetField(ref _win64PakFtpPath, value); }
+
+    /// <summary>Win64 平台 Pak 解密密钥。</summary>
+    public string Win64PakAesKey { get => _win64PakAesKey; set => SetField(ref _win64PakAesKey, value); }
 
     /// <summary>「安装包」页下载目标平台，默认 Android。</summary>
     public string DownloadPlatform
@@ -389,6 +396,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             RaiseCommandStates();
             // 平台决定本地下载根目录，换平台即换列表；立即刷新而不是等用户点刷新。
             _ = RefreshDownloadedPackagesAsync();
+            _ = RefreshLocalPakPackagesAsync();
         }
     }
 
@@ -459,27 +467,16 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string RenderDocStandardError { get => _renderDocStandardError; private set => SetField(ref _renderDocStandardError, value); }
     public string RenderDocSummary { get => _renderDocSummary; private set => SetField(ref _renderDocSummary, value); }
 
-    public string PakScanInputPath { get => _pakScanInputPath; set { if (SetField(ref _pakScanInputPath, value)) RaiseCommandStates(); } }
-    public string PakScanAesKey { get => _pakScanAesKey; set => SetField(ref _pakScanAesKey, value); }
     public string PakScanDescription { get => _pakScanDescription; private set => SetField(ref _pakScanDescription, value); }
-
-    /// <summary>「Pak解析」页下载目标平台，默认 Android。</summary>
-    public string PakScanPlatform
-    {
-        get => _pakScanPlatform;
-        set
-        {
-            if (!SetField(ref _pakScanPlatform, value))
-                return;
-            RaiseCommandStates();
-            _ = RefreshLocalPakPackagesAsync();
-        }
-    }
 
     public string PakDownloadSummary { get => _pakDownloadSummary; private set => SetField(ref _pakDownloadSummary, value); }
 
     /// <summary>本地已下载 Pak 包列表的现状说明。</summary>
     public string PakFolderSummary { get => _pakFolderSummary; private set => SetField(ref _pakFolderSummary, value); }
+
+    public string PakOodlePath { get => _pakOodlePath; set => SetField(ref _pakOodlePath, value); }
+
+    public string PakGameVersion { get => _pakGameVersion; set => SetField(ref _pakGameVersion, value); }
 
     public LocalPakPackageOption? SelectedLocalPakPackage
     {
@@ -488,26 +485,33 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         {
             if (!SetField(ref _selectedLocalPakPackage, value))
                 return;
-            if (value is not null)
-                PakScanInputPath = value.LocalDirectory;
             RaiseCommandStates();
         }
     }
 
     /// <summary>
-    /// 当前平台的本地 Pak 下载根目录（<c>Intermediate/Download/Pak/&lt;Platform&gt;</c>）。
+    /// 当前平台的本地 Pak 下载根目录（<c>Intermediate/Download/&lt;Platform&gt;</c>，与 APK 共用，平台跟随 <see cref="DownloadPlatform"/>）。
     /// </summary>
     private string? PakDownloadRootDirectory =>
         _project is null
             ? null
-            : PlatformNames.TryParse(PakScanPlatform, out var platform)
-                ? Path.Combine(_project.IntermediateDir, "Download", "Pak", PlatformNames.ToName(platform))
+            : PlatformNames.TryParse(DownloadPlatform, out var platform)
+                ? Path.Combine(_project.IntermediateDir, "Download", PlatformNames.ToName(platform))
                 : null;
+
+    private string PakAesKeyForPlatform(string platformName) =>
+        PlatformNames.TryParse(platformName, out var platform)
+            ? platform switch
+            {
+                TargetPlatform.Android => AndroidPakAesKey,
+                TargetPlatform.Win64 => Win64PakAesKey,
+                _ => string.Empty
+            }
+            : string.Empty;
 
     public IReadOnlyList<string> DiffSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
     public IReadOnlyList<string> TrendSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
     public IReadOnlyList<string> DownloadPlatformOptions { get; } = [PlatformNames.ToName(TargetPlatform.Android), PlatformNames.ToName(TargetPlatform.Win64)];
-    public IReadOnlyList<string> PakScanPlatformOptions { get; } = [PlatformNames.ToName(TargetPlatform.Android), PlatformNames.ToName(TargetPlatform.Win64)];
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
     public string LaunchOperationSummary { get => _launchOperationSummary; private set => SetField(ref _launchOperationSummary, value); }
     public string DeviceLaunchParameterContent { get => _deviceLaunchParameterContent; private set => SetField(ref _deviceLaunchParameterContent, value); }
@@ -1124,6 +1128,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         AdbPath = androidValues.AdbPath;
         AndroidFtpPath = androidValues.FtpPath;
         AndroidPakFtpPath = androidValues.PakFtpPath;
+        AndroidPakAesKey = androidValues.PakAesKey;
 
         var win64 = project.Settings.Win64;
         Win64Enabled = win64 is not null;
@@ -1132,6 +1137,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         Win64WorkingDirectory = win64Values.WorkingDirectory;
         Win64FtpPath = win64Values.FtpPath;
         Win64PakFtpPath = win64Values.PakFtpPath;
+        Win64PakAesKey = win64Values.PakAesKey;
 
         var ftp = project.Settings.FtpSettings;
         FtpHost = ftp.Host;
@@ -1173,14 +1179,16 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     GameRoot: DeviceGameRoot.Trim(),
                     AdbPath: AdbPath.Trim(),
                     FtpPath: AndroidFtpPath.Trim(),
-                    PakFtpPath: AndroidPakFtpPath.Trim())
+                    PakFtpPath: AndroidPakFtpPath.Trim(),
+                    PakAesKey: AndroidPakAesKey.Trim())
                 : null,
             Win64 = Win64Enabled
                 ? new Win64PlatformProfile(
                     Executable: Win64Executable.Trim(),
                     WorkingDirectory: Win64WorkingDirectory.Trim(),
                     FtpPath: Win64FtpPath.Trim(),
-                    PakFtpPath: Win64PakFtpPath.Trim())
+                    PakFtpPath: Win64PakFtpPath.Trim(),
+                    PakAesKey: Win64PakAesKey.Trim())
                 : null,
             Ftp = new FtpSettings(
                 Host: FtpHost.Trim(),
@@ -2070,8 +2078,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private async Task ScanPakAsync() => await RunAsync("Scanning pak assets...", async progress =>
     {
-        var inputPath = Path.GetFullPath(PakScanInputPath);
-        var config = new UnrealKit.Core.PakScan.PakScanConfig { AesKey = PakScanAesKey };
+        var inputPath = SelectedLocalPakPackage!.LocalDirectory;
+        var config = new UnrealKit.Core.PakScan.PakScanConfig
+        {
+            AesKey = PakAesKeyForPlatform(DownloadPlatform),
+            OodleDllPath = PakOodlePath.Trim(),
+            GameVersion = string.IsNullOrWhiteSpace(PakGameVersion) ? "GAME_UE5_6" : PakGameVersion.Trim(),
+        };
         var result = await new UnrealKit.Core.PakScan.PakScanService().ScanAsync(
             inputPath, config, progress, OperationCancellationToken);
 
@@ -2106,7 +2119,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     });
 
     private bool CanDownloadLatestPak() =>
-        !IsBusy && _project is not null && !string.IsNullOrWhiteSpace(PakScanPlatform);
+        !IsBusy && _project is not null && !string.IsNullOrWhiteSpace(DownloadPlatform);
 
     private Task OpenPakDownloadDirectoryAsync()
     {
@@ -2126,7 +2139,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private Task DownloadLatestPakAsync() => RunAsync("正在下载最新 Pak 包…", async progress =>
     {
-        var platform = PlatformNames.Parse(PakScanPlatform, nameof(PakScanPlatform));
+        var platform = PlatformNames.Parse(DownloadPlatform, nameof(DownloadPlatform));
         var profile = _project!.Settings.ProfileFor(platform);
         if (profile is null)
         {
@@ -2146,7 +2159,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             platform,
             _project.Settings.FtpSettings,
             pakFtpPath,
-            PakDownloadRootDirectory!);
+            PakDownloadRootDirectory!,
+            DownloadMode.Directory);
 
         var result = await new FtpDownloadService(new FluentFtpClientFactory())
             .DownloadAsync(request, progress, OperationCancellationToken);
@@ -2192,7 +2206,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             return;
         }
 
-        if (!PlatformNames.TryParse(PakScanPlatform, out var platform))
+        if (!PlatformNames.TryParse(DownloadPlatform, out var platform))
         {
             PakFolderSummary = "请选择平台以浏览本地已下载的 Pak 包。";
             return;
@@ -2208,7 +2222,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var entries = await Task.Run(() =>
             Directory.EnumerateDirectories(baseDirectory)
                 .Select(dir => new LocalPakPackageOption(Path.GetFileName(dir), dir))
-                .Where(opt => !string.IsNullOrWhiteSpace(opt.FolderName))
+                .Where(opt => !string.IsNullOrWhiteSpace(opt.FolderName)
+                    && Directory.EnumerateFiles(opt.LocalDirectory, "*", SearchOption.AllDirectories)
+                        .Any(f => f.EndsWith(".pak", StringComparison.OrdinalIgnoreCase)
+                               || f.EndsWith(".utoc", StringComparison.OrdinalIgnoreCase)
+                               || f.EndsWith(".ucas", StringComparison.OrdinalIgnoreCase)))
                 .OrderBy(opt => opt.FolderName, NaturalSortComparer.Instance)
                 .ToArray());
 
@@ -2278,7 +2296,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             platform,
             _project.Settings.FtpSettings,
             profile.FtpPath,
-            Path.Combine(_project.IntermediateDir, "Download", PlatformNames.ToName(platform)));
+            Path.Combine(_project.IntermediateDir, "Download", PlatformNames.ToName(platform)),
+            platform == TargetPlatform.Win64 ? DownloadMode.Directory : DownloadMode.Apk);
 
         var result = await new FtpDownloadService(new FluentFtpClientFactory())
             .DownloadAsync(request, progress, OperationCancellationToken);

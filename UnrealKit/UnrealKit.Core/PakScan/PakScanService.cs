@@ -1,3 +1,4 @@
+using CUE4Parse.Compression;
 using CUE4Parse.Encryption.Aes;
 using CUE4Parse.FileProvider;
 using CUE4Parse.UE4.Assets.Exports.Texture;
@@ -56,6 +57,26 @@ public sealed class PakScanService : IPakScanService
         }
 
         var game = ResolveGameVersion(config.GameVersion);
+
+        if (!string.IsNullOrWhiteSpace(config.OodleDllPath))
+        {
+            if (!File.Exists(config.OodleDllPath))
+            {
+                diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "PKS007",
+                    $"指定的 Oodle DLL 不存在，Oodle 压缩资产将无法解压：{config.OodleDllPath}",
+                    SuggestedFix: "请确认路径指向 oo2core_9_win64.dll 或同类文件"));
+            }
+            else
+            {
+                try { OodleHelper.Initialize(config.OodleDllPath); }
+                catch (Exception ex)
+                {
+                    diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "PKS007",
+                        $"Oodle DLL 加载失败，Oodle 压缩资产将无法解压：{ex.Message}"));
+                }
+            }
+        }
+
         var provider = new DefaultFileProvider(
             pakDirectory,
             SearchOption.AllDirectories,
@@ -78,6 +99,8 @@ public sealed class PakScanService : IPakScanService
                     SuggestedFix: "请确认密钥格式为十六进制字符串，例如 0x1A2B3C4D..."));
             }
         }
+
+        await provider.MountAsync();
 
         var allPaths = provider.Files.Keys
             .Where(p => p.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase))

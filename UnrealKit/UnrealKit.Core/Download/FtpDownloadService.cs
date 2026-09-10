@@ -108,11 +108,11 @@ public sealed class FtpDownloadService : IFtpDownloadService
                 "ftp-download", "Downloading", null, null,
                 $"Downloading '{latest}' for {platformName}."));
 
-            return request.Platform switch
+            return request.Mode switch
             {
-                TargetPlatform.Android => await DownloadAndroidAsync(client, request, sourcePath, latest, progress, cancellationToken),
-                TargetPlatform.Win64 => await DownloadWin64Async(client, request, sourcePath, latest, progress, cancellationToken),
-                _ => throw new ArgumentOutOfRangeException(nameof(request), request.Platform, "Unsupported platform.")
+                DownloadMode.Apk => await DownloadAndroidAsync(client, request, sourcePath, latest, progress, cancellationToken),
+                DownloadMode.Directory => await DownloadWin64Async(client, request, sourcePath, latest, progress, cancellationToken),
+                _ => throw new ArgumentOutOfRangeException(nameof(request), request.Mode, "Unsupported download mode.")
             };
         }
         finally
