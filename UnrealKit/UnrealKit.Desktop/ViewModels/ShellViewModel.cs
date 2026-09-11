@@ -101,6 +101,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private System.Windows.Media.Imaging.BitmapSource? _selectedTextureBitmap;
     private string _texturePreviewStatus = string.Empty;
     private CancellationTokenSource? _textureDecodeCts;
+    private byte[]? _lastDecodedTexturePng;
     private PakScanStaticMeshOption? _selectedPakStaticMesh;
     private PakScanSkeletalMeshOption? _selectedPakSkeletalMesh;
     private string _meshPreviewGlbPath = string.Empty;
@@ -298,8 +299,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand RunRenderDocCommand { get; }
     public ICommand OpenRenderDocOutputDirCommand { get; }
     public ICommand ScanPakCommand { get; }
-    public ICommand ExportPakScanHtmlCommand { get; }
-    public ICommand ExportPakScanCsvCommand  { get; }
+    public ICommand ExportPakScanHtmlCommand  { get; }
+    public ICommand ExportPakScanCsvCommand   { get; }
     public ICommand DownloadPakCommand { get; }
     public ICommand OpenPakDownloadDirectoryCommand { get; }
     public ICommand RefreshLocalPakPackagesCommand { get; }
@@ -510,6 +511,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         get => _selectedTextureBitmap;
         private set => SetField(ref _selectedTextureBitmap, value);
     }
+
+    public byte[]? LastDecodedTexturePng => _lastDecodedTexturePng;
 
     public string TexturePreviewStatus
     {
@@ -2305,10 +2308,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _textureDecodeCts = null;
 
         SelectedTextureBitmap = null;
+        _lastDecodedTexturePng = null;
 
         if (option is null)
         {
             TexturePreviewStatus = string.Empty;
+            RaiseCommandStates();
             return;
         }
 
@@ -2325,6 +2330,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             if (pngBytes is null || pngBytes.Length == 0)
             {
                 TexturePreviewStatus = "预览不可用（格式不支持或缺少 Bulk 数据）";
+                RaiseCommandStates();
                 return;
             }
 
@@ -2341,8 +2347,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
             if (!cts.Token.IsCancellationRequested)
             {
+                _lastDecodedTexturePng = pngBytes;
                 SelectedTextureBitmap = bitmap;
                 TexturePreviewStatus = $"{option.SizeX} × {option.SizeY}  {option.Format}";
+                RaiseCommandStates();
             }
         }
         catch (OperationCanceledException) { }
