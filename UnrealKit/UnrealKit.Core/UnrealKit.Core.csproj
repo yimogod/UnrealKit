@@ -1,14 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.104.2" />
-    <PackageReference Include="CUE4Parse" Version="1.2.2" />
+    <PackageReference Include="CUE4Parse" Version="1.2.2.202609" />
     <PackageReference Include="FluentFTP" Version="54.2.0" />
   </ItemGroup>
 
