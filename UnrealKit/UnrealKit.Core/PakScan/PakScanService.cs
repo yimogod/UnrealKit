@@ -9,6 +9,10 @@ using CUE4Parse.UE4.Assets.Objects;
 using CUE4Parse.UE4.Assets.Objects.Properties;
 using CUE4Parse.UE4.Objects.Core.Misc;
 using CUE4Parse.UE4.Versions;
+using CUE4Parse_Conversion.Dto;
+using CUE4Parse_Conversion.Formats.Meshes;
+using CUE4Parse_Conversion.Options;
+using CUE4Parse_Conversion.Textures;
 using UnrealKit.Core.Diagnostics;
 using UnrealKit.Core.Operations;
 
@@ -16,6 +20,8 @@ namespace UnrealKit.Core.PakScan;
 
 public sealed class PakScanService : IPakScanService
 {
+    private DefaultFileProvider? _provider;
+
     private static readonly IReadOnlyDictionary<string, EGame> GameVersionMap =
         new Dictionary<string, EGame>(StringComparer.OrdinalIgnoreCase)
         {
@@ -36,6 +42,7 @@ public sealed class PakScanService : IPakScanService
         PakScanConfig? config = null,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        _provider = null;
         config ??= PakScanConfig.Default;
 
         if (!Directory.Exists(pakDirectory))
@@ -87,6 +94,7 @@ public sealed class PakScanService : IPakScanService
             StringComparer.OrdinalIgnoreCase);
 
         provider.Initialize();
+        _provider = provider;
 
         if (!string.IsNullOrWhiteSpace(config.AesKey))
         {
@@ -264,6 +272,55 @@ public sealed class PakScanService : IPakScanService
         var report = new PakScanReport(pakDirectory, textures.Count + staticMeshes.Count + skeletalMeshes.Count,
             textures.Count, textures, staticMeshes.Count, staticMeshes, skeletalMeshes.Count, skeletalMeshes);
         return new PakScanResult(pakDirectory, report, diagnostics);
+    }
+
+    public Task<byte[]?> DecodeTexturePngAsync(string objectPath, CancellationToken cancellationToken = default)
+    {
+        var provider = _provider;
+        if (provider is null) return Task.FromResult<byte[]?>(null);
+
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!provider.TryLoadPackageObject<UTexture2D>(objectPath, out var tex) || tex is null)
+                return null;
+            cancellationToken.ThrowIfCancellationRequested();
+            var ctex = tex.Decode();
+            if (ctex is null) return null;
+            return ctex.Encode(ETextureFormat.Png, saveHdrAsHdr: false, out _);
+        }, cancellationToken);
+    }
+
+    public Task<byte[]?> ExportMeshGlbAsync(string objectPath, CancellationToken cancellationToken = default)
+    {
+        var provider = _provider;
+        if (provider is null) return Task.FromResult<byte[]?>(null);
+
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var options = new ExportOptions(EMeshFormat.Gltf2, naniteMeshFormat: ENaniteMeshFormat.NoNanite, meshQuality: EMeshQuality.Highest);
+
+            if (provider.TryLoadPackageObject<UStaticMesh>(objectPath, out var sm) && sm is not null)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using var dto = new StaticMeshDto(sm, options.MeshQuality, options.NaniteMeshFormat);
+                if (dto.LODs.Count == 0) return null;
+                var files = new GltfMeshFormat().BuildStaticMesh(sm.Name, objectPath, options, dto);
+                return files.FirstOrDefault(f => f.Extension == "glb").Data;
+            }
+
+            if (provider.TryLoadPackageObject<USkeletalMesh>(objectPath, out var skm) && skm is not null)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using var dto = new SkeletalMeshDto(skm, options.MeshQuality, options.NaniteMeshFormat, exportMorphTarget: false);
+                if (dto.LODs.Count == 0) return null;
+                var files = new GltfMeshFormat().BuildSkeletalMesh(skm.Name, objectPath, options, dto);
+                return files.FirstOrDefault(f => f.Extension == "glb").Data;
+            }
+
+            return null;
+        }, cancellationToken);
     }
 
     private static string FormatElapsed(TimeSpan elapsed) =>

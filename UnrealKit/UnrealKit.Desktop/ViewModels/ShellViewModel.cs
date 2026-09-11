@@ -96,15 +96,21 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _pakOodlePath = UnrealKit.Core.PakScan.PakScanConfig.ResolveDefaultOodlePath();
     private string _pakGameVersion = "GAME_UE5_6";
     private UnrealKit.Core.PakScan.PakScanResult? _lastPakScanResult;
-    // 分页原始数据
-    private List<PakScanTextureOption>      _allPakTextures     = [];
-    private List<PakScanStaticMeshOption>   _allPakStaticMeshes = [];
-    private List<PakScanSkeletalMeshOption> _allPakSkeletalMeshes = [];
-    // 分页状态
-    private int _pakTexturePage     = 1;
-    private int _pakStaticMeshPage  = 1;
-    private int _pakSkeletalMeshPage = 1;
+    private readonly UnrealKit.Core.PakScan.PakScanService _pakScanService = new();
+    private PakScanTextureOption? _selectedPakTexture;
+    private System.Windows.Media.Imaging.BitmapSource? _selectedTextureBitmap;
+    private string _texturePreviewStatus = string.Empty;
+    private CancellationTokenSource? _textureDecodeCts;
+    private PakScanStaticMeshOption? _selectedPakStaticMesh;
+    private PakScanSkeletalMeshOption? _selectedPakSkeletalMesh;
+    private string _meshPreviewGlbPath = string.Empty;
+    private string _meshPreviewStatus = string.Empty;
+    private CancellationTokenSource? _meshExportCts;
+    // 分页+搜索列表（各自独立，共享 _pakPageSize）
     private int _pakPageSize = 200;
+    public PagedSearchList<PakScanTextureOption>      PakTextures      { get; }
+    public PagedSearchList<PakScanStaticMeshOption>   PakStaticMeshes  { get; }
+    public PagedSearchList<PakScanSkeletalMeshOption> PakSkeletalMeshes { get; }
     private LocalPakPackageOption? _selectedLocalPakPackage;
     private string _consoleCommandText = string.Empty;
     private string _consoleOutput = string.Empty;
@@ -150,6 +156,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         IEditorSettingStore? editorSettingStore = null,
         IUserSettingStore? userSettingStore = null)
     {
+        PakTextures       = new PagedSearchList<PakScanTextureOption>     (t => t.Name, t => t.Path, () => _pakPageSize);
+        PakStaticMeshes   = new PagedSearchList<PakScanStaticMeshOption>  (m => m.Name, m => m.Path, () => _pakPageSize);
+        PakSkeletalMeshes = new PagedSearchList<PakScanSkeletalMeshOption>(m => m.Name, m => m.Path, () => _pakPageSize);
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
@@ -186,12 +195,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         ScanPakCommand = new AsyncDelegateCommand(ScanPakAsync, () => !IsBusy && SelectedLocalPakPackage is not null);
         ExportPakScanHtmlCommand = new DelegateCommand(ExportPakScanHtml, () => _lastPakScanResult is not null);
         ExportPakScanCsvCommand  = new DelegateCommand(ExportPakScanCsv,  () => _lastPakScanResult is not null);
-        PakTexturePrevPageCommand      = new DelegateCommand(() => SetPakTexturePage(_pakTexturePage - 1),      () => _pakTexturePage > 1);
-        PakTextureNextPageCommand      = new DelegateCommand(() => SetPakTexturePage(_pakTexturePage + 1),      () => _pakTexturePage < PakTexturePageCount);
-        PakStaticMeshPrevPageCommand   = new DelegateCommand(() => SetPakStaticMeshPage(_pakStaticMeshPage - 1),  () => _pakStaticMeshPage > 1);
-        PakStaticMeshNextPageCommand   = new DelegateCommand(() => SetPakStaticMeshPage(_pakStaticMeshPage + 1),  () => _pakStaticMeshPage < PakStaticMeshPageCount);
-        PakSkeletalMeshPrevPageCommand = new DelegateCommand(() => SetPakSkeletalMeshPage(_pakSkeletalMeshPage - 1), () => _pakSkeletalMeshPage > 1);
-        PakSkeletalMeshNextPageCommand = new DelegateCommand(() => SetPakSkeletalMeshPage(_pakSkeletalMeshPage + 1), () => _pakSkeletalMeshPage < PakSkeletalMeshPageCount);
         DownloadPakCommand = new AsyncDelegateCommand(DownloadLatestPakAsync, CanDownloadLatestPak);
         OpenPakDownloadDirectoryCommand = new AsyncDelegateCommand(
             OpenPakDownloadDirectoryAsync,
@@ -263,9 +266,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<TrendDiagnosticOption> TrendDiagnostics { get; } = [];
     public ObservableCollection<RenderDocDiagnosticOption> RenderDocDiagnostics { get; } = [];
     public ObservableCollection<DownloadedPackageOption> DownloadedPackages { get; } = [];
-    public ObservableCollection<PakScanTextureOption> PakScanTextures { get; } = [];
-    public ObservableCollection<PakScanStaticMeshOption>   PakScanStaticMeshes   { get; } = [];
-    public ObservableCollection<PakScanSkeletalMeshOption> PakScanSkeletalMeshes { get; } = [];
+    public ObservableCollection<PakScanTextureOption>      PakScanTextures       => PakTextures.Items;
+    public ObservableCollection<PakScanStaticMeshOption>   PakScanStaticMeshes   => PakStaticMeshes.Items;
+    public ObservableCollection<PakScanSkeletalMeshOption> PakScanSkeletalMeshes => PakSkeletalMeshes.Items;
     public ObservableCollection<PakScanDiagnosticOption> PakScanDiagnostics { get; } = [];
     public ObservableCollection<LocalPakPackageOption> LocalPakPackages { get; } = [];
     public ICommand CreateProjectCommand { get; }
@@ -297,12 +300,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand ScanPakCommand { get; }
     public ICommand ExportPakScanHtmlCommand { get; }
     public ICommand ExportPakScanCsvCommand  { get; }
-    public ICommand PakTexturePrevPageCommand     { get; }
-    public ICommand PakTextureNextPageCommand     { get; }
-    public ICommand PakStaticMeshPrevPageCommand  { get; }
-    public ICommand PakStaticMeshNextPageCommand  { get; }
-    public ICommand PakSkeletalMeshPrevPageCommand { get; }
-    public ICommand PakSkeletalMeshNextPageCommand { get; }
     public ICommand DownloadPakCommand { get; }
     public ICommand OpenPakDownloadDirectoryCommand { get; }
     public ICommand RefreshLocalPakPackagesCommand { get; }
@@ -498,6 +495,60 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     public string PakScanDescription { get => _pakScanDescription; private set => SetField(ref _pakScanDescription, value); }
 
+    public PakScanTextureOption? SelectedPakTexture
+    {
+        get => _selectedPakTexture;
+        set
+        {
+            if (!SetField(ref _selectedPakTexture, value)) return;
+            _ = DecodeSelectedTextureAsync(value);
+        }
+    }
+
+    public System.Windows.Media.Imaging.BitmapSource? SelectedTextureBitmap
+    {
+        get => _selectedTextureBitmap;
+        private set => SetField(ref _selectedTextureBitmap, value);
+    }
+
+    public string TexturePreviewStatus
+    {
+        get => _texturePreviewStatus;
+        private set => SetField(ref _texturePreviewStatus, value);
+    }
+
+    public PakScanStaticMeshOption? SelectedPakStaticMesh
+    {
+        get => _selectedPakStaticMesh;
+        set
+        {
+            if (!SetField(ref _selectedPakStaticMesh, value)) return;
+            _ = ExportSelectedMeshGlbAsync(value?.Path);
+        }
+    }
+
+    public PakScanSkeletalMeshOption? SelectedPakSkeletalMesh
+    {
+        get => _selectedPakSkeletalMesh;
+        set
+        {
+            if (!SetField(ref _selectedPakSkeletalMesh, value)) return;
+            _ = ExportSelectedMeshGlbAsync(value?.Path);
+        }
+    }
+
+    public string MeshPreviewGlbPath
+    {
+        get => _meshPreviewGlbPath;
+        private set => SetField(ref _meshPreviewGlbPath, value);
+    }
+
+    public string MeshPreviewStatus
+    {
+        get => _meshPreviewStatus;
+        private set => SetField(ref _meshPreviewStatus, value);
+    }
+
     public int[] PakPageSizeOptions { get; } = [100, 200, 400];
 
     public int PakPageSize
@@ -506,23 +557,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         set
         {
             if (!SetField(ref _pakPageSize, value)) return;
-            SetPakTexturePage(1);
-            SetPakStaticMeshPage(1);
-            SetPakSkeletalMeshPage(1);
+            PakTextures.GoToPage(1);
+            PakStaticMeshes.GoToPage(1);
+            PakSkeletalMeshes.GoToPage(1);
         }
     }
-
-    public int PakTexturePage     => _pakTexturePage;
-    public int PakTexturePageCount => (int)Math.Ceiling(_allPakTextures.Count / (double)Math.Max(1, _pakPageSize));
-    public string PakTexturePageInfo => $"{_pakTexturePage} / {Math.Max(1, PakTexturePageCount)}  （共 {_allPakTextures.Count} 条）";
-
-    public int PakStaticMeshPage      => _pakStaticMeshPage;
-    public int PakStaticMeshPageCount => (int)Math.Ceiling(_allPakStaticMeshes.Count / (double)Math.Max(1, _pakPageSize));
-    public string PakStaticMeshPageInfo => $"{_pakStaticMeshPage} / {Math.Max(1, PakStaticMeshPageCount)}  （共 {_allPakStaticMeshes.Count} 条）";
-
-    public int PakSkeletalMeshPage      => _pakSkeletalMeshPage;
-    public int PakSkeletalMeshPageCount => (int)Math.Ceiling(_allPakSkeletalMeshes.Count / (double)Math.Max(1, _pakPageSize));
-    public string PakSkeletalMeshPageInfo => $"{_pakSkeletalMeshPage} / {Math.Max(1, PakSkeletalMeshPageCount)}  （共 {_allPakSkeletalMeshes.Count} 条）";
 
     public string PakDownloadSummary { get => _pakDownloadSummary; private set => SetField(ref _pakDownloadSummary, value); }
 
@@ -2133,6 +2172,17 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private async Task ScanPakAsync() => await RunAsync("Scanning pak assets...", async progress =>
     {
+        SelectedTextureBitmap = null;
+        SelectedPakTexture = null;
+        TexturePreviewStatus = string.Empty;
+        SelectedPakStaticMesh = null;
+        SelectedPakSkeletalMesh = null;
+        MeshPreviewGlbPath = string.Empty;
+        MeshPreviewStatus = string.Empty;
+        PakTextures.Clear();
+        PakStaticMeshes.Clear();
+        PakSkeletalMeshes.Clear();
+
         var inputPath = SelectedLocalPakPackage!.LocalDirectory;
         var config = new UnrealKit.Core.PakScan.PakScanConfig
         {
@@ -2159,27 +2209,24 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
             if (!needFlush) return;
 
-            _allPakTextures = textures.Select(t => new PakScanTextureOption(
+            PakTextures.Reset(textures.Select(t => new PakScanTextureOption(
                 t.Name, t.ObjectPath,
                 t.SizeX.ToString(), t.SizeY.ToString(),
                 t.PixelFormat,
                 t.LodBias.ToString(), t.LodGroup,
                 t.NumMips.ToString(),
-                (t.EstimatedSizeBytes / 1024.0 / 1024.0).ToString("F2"))).ToList();
-            _allPakStaticMeshes = staticMeshes.Select(m => new PakScanStaticMeshOption(
+                (t.EstimatedSizeBytes / 1024.0 / 1024.0).ToString("F2"))));
+            PakStaticMeshes.Reset(staticMeshes.Select(m => new PakScanStaticMeshOption(
                 m.Name, m.ObjectPath,
                 m.LodCount.ToString(), m.MaterialCount.ToString(),
-                m.VertexCount.ToString(), m.TriangleCount.ToString())).ToList();
-            _allPakSkeletalMeshes = skeletalMeshes.Select(m => new PakScanSkeletalMeshOption(
+                m.VertexCount.ToString(), m.TriangleCount.ToString())));
+            PakSkeletalMeshes.Reset(skeletalMeshes.Select(m => new PakScanSkeletalMeshOption(
                 m.Name, m.ObjectPath,
                 m.LodCount.ToString(), m.MaterialCount.ToString(), m.BoneCount.ToString(),
-                m.VertexCount.ToString(), m.TriangleCount.ToString())).ToList();
+                m.VertexCount.ToString(), m.TriangleCount.ToString())));
             var diagOpts = diagnostics.Select(d => new PakScanDiagnosticOption(
                 d.Severity.ToString(), d.Code, d.Message)).ToList();
 
-            SetPakTexturePage(1);
-            SetPakStaticMeshPage(1);
-            SetPakSkeletalMeshPage(1);
             PakScanDiagnostics.Reset(diagOpts);
 
             lastFlushedTex  = textures.Count;
@@ -2187,7 +2234,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             lastFlushedSkm  = skeletalMeshes.Count;
         }
 
-        var service = new UnrealKit.Core.PakScan.PakScanService();
+        var service = _pakScanService;
         await foreach (var entry in service.ScanStreamAsync(inputPath, config, OperationCancellationToken))
         {
             switch (entry)
@@ -2251,43 +2298,110 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         RaiseCommandStates();
     });
 
-    private void SetPakTexturePage(int page)
+    private async Task DecodeSelectedTextureAsync(PakScanTextureOption? option)
     {
-        int total = (int)Math.Ceiling(_allPakTextures.Count / (double)Math.Max(1, _pakPageSize));
-        _pakTexturePage = Math.Clamp(page, 1, Math.Max(1, total));
-        var slice = _allPakTextures.Skip((_pakTexturePage - 1) * _pakPageSize).Take(_pakPageSize).ToList();
-        PakScanTextures.Reset(slice);
-        OnPropertyChanged(nameof(PakTexturePage));
-        OnPropertyChanged(nameof(PakTexturePageCount));
-        OnPropertyChanged(nameof(PakTexturePageInfo));
-        (PakTexturePrevPageCommand as DelegateCommand)?.RaiseCanExecuteChanged();
-        (PakTextureNextPageCommand as DelegateCommand)?.RaiseCanExecuteChanged();
+        _textureDecodeCts?.Cancel();
+        _textureDecodeCts?.Dispose();
+        _textureDecodeCts = null;
+
+        SelectedTextureBitmap = null;
+
+        if (option is null)
+        {
+            TexturePreviewStatus = string.Empty;
+            return;
+        }
+
+        TexturePreviewStatus = "正在解码…";
+        var cts = new CancellationTokenSource();
+        _textureDecodeCts = cts;
+
+        try
+        {
+            var pngBytes = await _pakScanService.DecodeTexturePngAsync(option.Path, cts.Token);
+
+            if (cts.Token.IsCancellationRequested) return;
+
+            if (pngBytes is null || pngBytes.Length == 0)
+            {
+                TexturePreviewStatus = "预览不可用（格式不支持或缺少 Bulk 数据）";
+                return;
+            }
+
+            var bitmap = await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                var img = new System.Windows.Media.Imaging.BitmapImage();
+                img.BeginInit();
+                img.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                img.StreamSource = new System.IO.MemoryStream(pngBytes);
+                img.EndInit();
+                img.Freeze();
+                return (System.Windows.Media.Imaging.BitmapSource)img;
+            });
+
+            if (!cts.Token.IsCancellationRequested)
+            {
+                SelectedTextureBitmap = bitmap;
+                TexturePreviewStatus = $"{option.SizeX} × {option.SizeY}  {option.Format}";
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (!cts.IsCancellationRequested)
+                TexturePreviewStatus = $"解码失败：{ex.Message}";
+        }
     }
 
-    private void SetPakStaticMeshPage(int page)
+    private async Task ExportSelectedMeshGlbAsync(string? objectPath)
     {
-        int total = (int)Math.Ceiling(_allPakStaticMeshes.Count / (double)Math.Max(1, _pakPageSize));
-        _pakStaticMeshPage = Math.Clamp(page, 1, Math.Max(1, total));
-        var slice = _allPakStaticMeshes.Skip((_pakStaticMeshPage - 1) * _pakPageSize).Take(_pakPageSize).ToList();
-        PakScanStaticMeshes.Reset(slice);
-        OnPropertyChanged(nameof(PakStaticMeshPage));
-        OnPropertyChanged(nameof(PakStaticMeshPageCount));
-        OnPropertyChanged(nameof(PakStaticMeshPageInfo));
-        (PakStaticMeshPrevPageCommand as DelegateCommand)?.RaiseCanExecuteChanged();
-        (PakStaticMeshNextPageCommand as DelegateCommand)?.RaiseCanExecuteChanged();
-    }
+        _meshExportCts?.Cancel();
+        _meshExportCts?.Dispose();
+        _meshExportCts = null;
 
-    private void SetPakSkeletalMeshPage(int page)
-    {
-        int total = (int)Math.Ceiling(_allPakSkeletalMeshes.Count / (double)Math.Max(1, _pakPageSize));
-        _pakSkeletalMeshPage = Math.Clamp(page, 1, Math.Max(1, total));
-        var slice = _allPakSkeletalMeshes.Skip((_pakSkeletalMeshPage - 1) * _pakPageSize).Take(_pakPageSize).ToList();
-        PakScanSkeletalMeshes.Reset(slice);
-        OnPropertyChanged(nameof(PakSkeletalMeshPage));
-        OnPropertyChanged(nameof(PakSkeletalMeshPageCount));
-        OnPropertyChanged(nameof(PakSkeletalMeshPageInfo));
-        (PakSkeletalMeshPrevPageCommand as DelegateCommand)?.RaiseCanExecuteChanged();
-        (PakSkeletalMeshNextPageCommand as DelegateCommand)?.RaiseCanExecuteChanged();
+        MeshPreviewGlbPath = string.Empty;
+
+        if (objectPath is null)
+        {
+            MeshPreviewStatus = string.Empty;
+            return;
+        }
+
+        MeshPreviewStatus = "正在导出 GLB…";
+        var cts = new CancellationTokenSource();
+        _meshExportCts = cts;
+
+        try
+        {
+            var glbBytes = await _pakScanService.ExportMeshGlbAsync(objectPath, cts.Token);
+
+            if (cts.Token.IsCancellationRequested) return;
+
+            if (glbBytes is null || glbBytes.Length == 0)
+            {
+                MeshPreviewStatus = "预览不可用（无 LOD 数据或加载失败）";
+                return;
+            }
+
+            // 写入临时文件供 WebView2 加载（Base64 data URI 超大时会有问题）
+            var tmpPath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), "unrealkit_mesh_preview",
+                System.IO.Path.GetFileNameWithoutExtension(objectPath) + ".glb");
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(tmpPath)!);
+            await System.IO.File.WriteAllBytesAsync(tmpPath, glbBytes, cts.Token);
+
+            if (!cts.Token.IsCancellationRequested)
+            {
+                MeshPreviewGlbPath = tmpPath;
+                MeshPreviewStatus = string.Empty;
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (!cts.IsCancellationRequested)
+                MeshPreviewStatus = $"导出失败：{ex.Message}";
+        }
     }
 
     private void ExportPakScanHtml()

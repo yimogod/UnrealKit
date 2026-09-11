@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mesh Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a1a; overflow: hidden; width: 100vw; height: 100vh; }
+  canvas { display: block; }
+  #status {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: #aaa; font-family: sans-serif; font-size: 14px; text-align: center;
+    pointer-events: none;
+  }
+  #info {
+    position: absolute; bottom: 8px; left: 8px;
+    color: #666; font-family: monospace; font-size: 11px;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="status">正在加载…</div>
+<div id="info"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ── GLTFLoader (inline, r128-compatible) ─────────────────────────────────────
+// Minimal GLTF2/GLB loader extracted from three.js examples
+(function () {
+  'use strict';
+
+  const _taskCache = new WeakMap();
+
+  class GLTFLoader extends THREE.Loader {
+    constructor(manager) { super(manager); this.dracoLoader = null; this.ktx2Loader = null; this.meshoptDecoder = null; this.pluginCallbacks = []; }
+    load(url, onLoad, onProgress, onError) {
+      const scope = this;
+      let resourcePath;
+      if (this.resourcePath !== '') resourcePath = this.resourcePath;
+      else if (this.path !== '') resourcePath = this.path;
+      else resourcePath = THREE.LoaderUtils.extractUrlBase(url);
+      this.manager.itemStart(url);
+      const _onError = e => { onError && onError(e); scope.manager.itemError(url); scope.manager.itemEnd(url); };
+      const loader = new THREE.FileLoader(this.manager);
+      loader.setPath(this.path);
+      loader.setResponseType('arraybuffer');
+      loader.setRequestHeader(this.requestHeader);
+      loader.setWithCredentials(this.withCredentials);
+      loader.load(url, data => {
+        try { scope.parse(data, resourcePath, gltf => { onLoad && onLoad(gltf); scope.manager.itemEnd(url); }, _onError); }
+        catch (e) { _onError(e); }
+      }, onProgress, _onError);
+    }
+    setDRACOLoader(v) { this.dracoLoader = v; return this; }
+    setDDSLoader() { throw new Error('THREE.GLTFLoader: "MSFT_texture_dds" plugin has been removed.'); }
+    setKTX2Loader(v) { this.ktx2Loader = v; return this; }
+    setMeshoptDecoder(v) { this.meshoptDecoder = v; return this; }
+    register(c) { if (!this.pluginCallbacks.includes(c)) this.pluginCallbacks.push(c); return this; }
+    unregister(c) { if (this.pluginCallbacks.includes(c)) this.pluginCallbacks.splice(this.pluginCallbacks.indexOf(c), 1); return this; }
+    parse(data, path, onLoad, onError) {
+      let content; const extensions = {}; const plugins = {};
+      if (typeof data === 'string') { content = data; }
+      else {
+        const magic = THREE.LoaderUtils.decodeText(new Uint8Array(data, 0, 4));
+        if (magic === 'glTF') { const glb = new GLBParser(data); content = glb.parse(); Object.assign(extensions, glb.extensions); }
+        else { content = THREE.LoaderUtils.decodeText(new Uint8Array(data)); }
+      }
+      const json = JSON.parse(content);
+      if (json.asset === undefined || json.asset.version[0] < 2) { onError && onError(new Error('Unsupported asset version.')); return; }
+      const parser = new GLTFParser(json, { path: path || this.resourcePath || '', crossOrigin: this.crossOrigin, requestHeader: this.requestHeader, manager: this.manager, ktx2Loader: this.ktx2Loader, meshoptDecoder: this.meshoptDecoder });
+      parser.fileLoader.setRequestHeader(this.requestHeader);
+      for (let i = 0; i < this.pluginCallbacks.length; i++) { const plugin = this.pluginCallbacks[i](parser); plugins[plugin.name] = plugin; parser.plugins[plugin.name] = plugin; }
+      parser.parse(onLoad, onError);
+    }
+    parseAsync(data, path) { return new Promise((res, rej) => this.parse(data, path, res, rej)); }
+  }
+
+  // Tiny GLB binary parser
+  class GLBParser {
+    constructor(buffer) { this.buffer = buffer; this.extensions = {}; }
+    parse() {
+      const view = new DataView(this.buffer);
+      let offset = 12; // skip magic+version+length
+      let json = null; let bin = null;
+      while (offset < view.byteLength) {
+        const len = view.getUint32(offset, true); offset += 4;
+        const type = view.getUint32(offset, true); offset += 4;
+        if (type === 0x4E4F534A) json = THREE.LoaderUtils.decodeText(new Uint8Array(this.buffer, offset, len));
+        else if (type === 0x004E4942) bin = this.buffer.slice(offset, offset + len);
+        offset += len;
+      }
+      this._bin = bin;
+      return json;
+    }
+    get extensions() { return this._extensions || {}; }
+  }
+
+  // Stripped-down GLTF parser — handles only what we need for mesh preview
+  class GLTFParser {
+    constructor(json, options) {
+      this.json = json; this.options = options;
+      this.extensions = {}; this.plugins = {};
+      this.cache = new Map(); this.nodeCache = {};
+      this.associations = new Map();
+      this.primitiveCache = {};
+      this.meshCache = { refs: {}, uses: {} };
+      this.cameraCache = { refs: {}, uses: {} };
+      this.lightCache = { refs: {}, uses: {} };
+      this.sourceCache = {}; this.textureCache = {};
+      this.nodeNamesUsed = {};
+      this.fileLoader = new THREE.FileLoader(options.manager || THREE.DefaultLoadingManager);
+      this.fileLoader.setResponseType('arraybuffer');
+      if (options.crossOrigin === 'use-credentials') this.fileLoader.setWithCredentials(true);
+      this.textureLoader = new THREE.TextureLoader(options.manager || THREE.DefaultLoadingManager);
+      this.textureLoader.setCrossOrigin(options.crossOrigin);
+      this.textureLoader.setPath(options.path || '');
+      // store bin chunk from GLB if present
+      this._bin = options.bin || null;
+    }
+    parse(onLoad, onError) {
+      const json = this.json;
+      const parser = this;
+      Promise.all([parser.getDependencies('scene'), parser.getDependencies('animation'), parser.getDependencies('camera')]).then(deps => {
+        const result = { scene: deps[0][json.scene || 0], scenes: deps[0], animations: deps[1], cameras: deps[2], asset: json.asset, parser: parser, userData: {} };
+        onLoad(result);
+      }).catch(onError);
+    }
+    getDependency(type, index) {
+      const key = type + ':' + index;
+      if (this.cache.has(key)) return this.cache.get(key);
+      let p;
+      if (type === 'scene') p = this.loadScene(index);
+      else if (type === 'node') p = this.loadNode(index);
+      else if (type === 'mesh') p = this.loadMesh(index);
+      else if (type === 'accessor') p = this.loadAccessor(index);
+      else if (type === 'bufferView') p = this.loadBufferView(index);
+      else if (type === 'buffer') p = this.loadBuffer(index);
+      else if (type === 'material') p = this.loadMaterial(index);
+      else if (type === 'texture') p = this.loadTexture(index);
+      else if (type === 'skin') p = this.loadSkin(index);
+      else if (type === 'animation') p = this.loadAnimation(index);
+      else if (type === 'camera') p = this.loadCamera(index);
+      else p = Promise.resolve();
+      this.cache.set(key, p);
+      return p;
+    }
+    getDependencies(type) {
+      const defs = this.json[type + 's'] || [];
+      return Promise.all(defs.map((_, i) => this.getDependency(type, i)));
+    }
+    loadBuffer(idx) {
+      const buf = this.json.buffers[idx];
+      if (buf.uri !== undefined) {
+        if (buf.uri.startsWith('data:')) {
+          const base64 = buf.uri.split(',')[1];
+          const bin = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+          return Promise.resolve(bin.buffer);
+        }
+        return this.fileLoader.loadAsync(THREE.LoaderUtils.resolveURL(buf.uri, this.options.path));
+      }
+      // GLB bin chunk (idx 0)
+      if (this.options.body) return Promise.resolve(this.options.body);
+      return Promise.reject(new Error('No buffer data'));
+    }
+    loadBufferView(idx) {
+      const bv = this.json.bufferViews[idx];
+      return this.getDependency('buffer', bv.buffer).then(buf => {
+        const start = (bv.byteOffset || 0);
+        return buf.slice(start, start + bv.byteLength);
+      });
+    }
+    loadAccessor(idx) {
+      const a = this.json.accessors[idx];
+      const typeMap = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT2: 4, MAT3: 9, MAT4: 16 };
+      const compMap = { 5120: Int8Array, 5121: Uint8Array, 5122: Int16Array, 5123: Uint16Array, 5125: Uint32Array, 5126: Float32Array };
+      return this.getDependency('bufferView', a.bufferView).then(bv => {
+        const comp = compMap[a.componentType];
+        const count = a.count * typeMap[a.type];
+        const arr = new comp(bv, a.byteOffset || 0, count);
+        const ba = new THREE.BufferAttribute(arr, typeMap[a.type]);
+        if (a.normalized) ba.normalized = true;
+        return ba;
+      });
+    }
+    loadMaterial(idx) {
+      const m = this.json.materials ? this.json.materials[idx] : {};
+      const mat = new THREE.MeshStandardMaterial();
+      if (m.name) mat.name = m.name;
+      const pbr = m.pbrMetallicRoughness || {};
+      const base = pbr.baseColorFactor;
+      if (base) mat.color.setRGB(base[0], base[1], base[2]);
+      mat.metalness = pbr.metallicFactor !== undefined ? pbr.metallicFactor : 1;
+      mat.roughness = pbr.roughnessFactor !== undefined ? pbr.roughnessFactor : 1;
+      if (m.doubleSided) mat.side = THREE.DoubleSide;
+      if (m.alphaMode === 'BLEND') { mat.transparent = true; mat.depthWrite = false; }
+      else if (m.alphaMode === 'MASK') { mat.alphaTest = m.alphaCutoff !== undefined ? m.alphaCutoff : 0.5; }
+      return Promise.resolve(mat);
+    }
+    loadMesh(idx) {
+      const def = this.json.meshes[idx];
+      const group = new THREE.Group();
+      if (def.name) group.name = def.name;
+      return Promise.all(def.primitives.map(prim => {
+        const matP = prim.material !== undefined ? this.getDependency('material', prim.material) : Promise.resolve(new THREE.MeshStandardMaterial());
+        const geomP = this.buildGeometry(prim);
+        return Promise.all([geomP, matP]).then(([geom, mat]) => {
+          const mesh = new THREE.Mesh(geom, mat);
+          return mesh;
+        });
+      })).then(meshes => { meshes.forEach(m => group.add(m)); return group; });
+    }
+    buildGeometry(prim) {
+      const attrs = prim.attributes;
+      const promises = [];
+      const keys = Object.keys(attrs);
+      keys.forEach(k => promises.push(this.getDependency('accessor', attrs[k])));
+      if (prim.indices !== undefined) promises.push(this.getDependency('accessor', prim.indices));
+      return Promise.all(promises).then(results => {
+        const geom = new THREE.BufferGeometry();
+        keys.forEach((k, i) => {
+          let name = k.toLowerCase();
+          if (name === 'texcoord_0') name = 'uv';
+          else if (name === 'texcoord_1') name = 'uv2';
+          else if (name === 'color_0') name = 'color';
+          else if (name === 'joints_0') name = 'skinIndex';
+          else if (name === 'weights_0') name = 'skinWeight';
+          geom.setAttribute(name, results[i]);
+        });
+        if (prim.indices !== undefined) geom.setIndex(results[keys.length]);
+        return geom;
+      });
+    }
+    loadNode(idx) {
+      const def = this.json.nodes[idx];
+      return Promise.all([
+        def.mesh !== undefined ? this.getDependency('mesh', def.mesh) : Promise.resolve(null),
+        def.children ? Promise.all(def.children.map(c => this.getDependency('node', c))) : Promise.resolve([])
+      ]).then(([mesh, children]) => {
+        let obj = mesh || new THREE.Object3D();
+        if (def.name) obj.name = def.name;
+        children.forEach(c => obj.add(c));
+        if (def.matrix) obj.matrix.fromArray(def.matrix), obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
+        else {
+          if (def.translation) obj.position.fromArray(def.translation);
+          if (def.rotation) obj.quaternion.fromArray(def.rotation);
+          if (def.scale) obj.scale.fromArray(def.scale);
+        }
+        return obj;
+      });
+    }
+    loadScene(idx) {
+      const def = this.json.scenes[idx];
+      const group = new THREE.Group();
+      if (def.name) group.name = def.name;
+      return Promise.all((def.nodes || []).map(n => this.getDependency('node', n))).then(nodes => {
+        nodes.forEach(n => group.add(n));
+        return group;
+      });
+    }
+    loadSkin() { return Promise.resolve(null); }
+    loadAnimation() { return Promise.resolve(null); }
+    loadCamera() { return Promise.resolve(null); }
+    loadTexture() { return Promise.resolve(null); }
+  }
+
+  THREE.GLTFLoader = GLTFLoader;
+})();
+
+// ── Viewer ────────────────────────────────────────────────────────────────────
+const status = document.getElementById('status');
+const infoEl = document.getElementById('info');
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = false;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a1a);
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(1, 2, 3);
+scene.add(dirLight);
+const dirLight2 = new THREE.DirectionalLight(0x8888ff, 0.4);
+dirLight2.position.set(-2, -1, -1);
+scene.add(dirLight2);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.001, 10000);
+camera.position.set(0, 0, 5);
+
+// Grid
+const grid = new THREE.GridHelper(10, 20, 0x333333, 0x222222);
+scene.add(grid);
+
+// Orbit controls (simple)
+let isDragging = false, lastX = 0, lastY = 0;
+let spherical = { theta: 0.5, phi: 1.2, radius: 5 };
+let target = new THREE.Vector3(0, 0, 0);
+
+function updateCamera() {
+  camera.position.set(
+    target.x + spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta),
+    target.y + spherical.radius * Math.cos(spherical.phi),
+    target.z + spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta)
+  );
+  camera.lookAt(target);
+}
+
+renderer.domElement.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+renderer.domElement.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = (e.clientX - lastX) * 0.01;
+  const dy = (e.clientY - lastY) * 0.01;
+  lastX = e.clientX; lastY = e.clientY;
+  spherical.theta -= dx;
+  spherical.phi = Math.max(0.05, Math.min(Math.PI - 0.05, spherical.phi + dy));
+  updateCamera();
+});
+renderer.domElement.addEventListener('mouseup', () => isDragging = false);
+renderer.domElement.addEventListener('wheel', e => {
+  spherical.radius = Math.max(0.01, spherical.radius * (1 + e.deltaY * 0.001));
+  updateCamera();
+}, { passive: true });
+
+function resize() {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+(function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); })();
+
+// ── Load GLB ─────────────────────────────────────────────────────────────────
+let currentMesh = null;
+
+function loadGlb(url) {
+  if (currentMesh) { scene.remove(currentMesh); currentMesh = null; }
+  status.textContent = '正在加载…';
+  status.style.display = 'block';
+
+  const loader = new THREE.GLTFLoader();
+  loader.load(url,
+    gltf => {
+      status.style.display = 'none';
+      const model = gltf.scene;
+
+      // Fit model into view
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+
+      model.position.sub(center);
+      grid.position.y = -size.y / 2;
+
+      spherical.radius = maxDim * 2.2;
+      target.set(0, 0, 0);
+      spherical.theta = 0.5;
+      spherical.phi = 1.1;
+      updateCamera();
+
+      scene.add(model);
+      currentMesh = model;
+
+      // Count triangles
+      let tris = 0;
+      model.traverse(o => { if (o.isMesh && o.geometry.index) tris += o.geometry.index.count / 3; });
+      infoEl.textContent = `${Math.round(tris).toLocaleString()} triangles  |  LMB drag: rotate  |  scroll: zoom`;
+    },
+    undefined,
+    err => {
+      status.textContent = '加载失败：' + (err.message || err);
+    }
+  );
+}
+
+// C# host calls window.loadGlb(path)
+window.loadGlb = loadGlb;
+</script>
+</body>
+</html>
