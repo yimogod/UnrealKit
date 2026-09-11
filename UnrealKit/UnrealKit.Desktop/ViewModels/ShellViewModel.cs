@@ -93,7 +93,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _pakScanDescription = "选择游戏包目录（含 .pak / .utoc / .ucas），点击扫描。";
     private string _pakDownloadSummary = "请先打开工程并配置 FTP 下载，然后选择平台下载最新 Pak 包。";
     private string _pakFolderSummary = "打开工程后显示本地已下载的 Pak 包。";
-    private string _pakOodlePath = string.Empty;
+    private string _pakOodlePath = UnrealKit.Core.PakScan.PakScanConfig.ResolveDefaultOodlePath();
     private string _pakGameVersion = "GAME_UE5_6";
     private UnrealKit.Core.PakScan.PakScanResult? _lastPakScanResult;
     private LocalPakPackageOption? _selectedLocalPakPackage;
@@ -2095,38 +2095,46 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var result = await new UnrealKit.Core.PakScan.PakScanService().ScanAsync(
             inputPath, config, progress, OperationCancellationToken);
 
-        PakScanTextures.Clear();
-        PakScanMeshes.Clear();
-        PakScanDiagnostics.Clear();
         _lastPakScanResult = result;
+
+        // 先在后台线程把所有 option 对象构建好，再一次性 Reset，只触发一次 CollectionChanged，
+        // 避免逐条 Add 时 DataGrid 高频重排把 UI 线程堵死。
+        List<PakScanTextureOption> textureOptions;
+        List<PakScanMeshOption> meshOptions;
+        List<PakScanDiagnosticOption> diagOptions;
 
         if (result.Report is not null)
         {
             PakScanDescription = $"扫描完成：{result.Report.TextureCount} 个 Texture2D / {result.Report.StaticMeshCount} 个 StaticMesh / {result.Report.SkeletalMeshCount} 个 SkeletalMesh / 共 {result.Report.TotalAssetsScanned} 个资产";
-            foreach (var t in result.Report.Textures)
-            {
-                PakScanTextures.Add(new PakScanTextureOption(
+            textureOptions = result.Report.Textures
+                .Select(t => new PakScanTextureOption(
                     t.Name, t.ObjectPath,
                     t.SizeX.ToString(), t.SizeY.ToString(),
                     t.PixelFormat,
                     t.LodBias.ToString(), t.LodGroup,
                     t.NumMips.ToString(),
-                    (t.EstimatedSizeBytes / 1024.0 / 1024.0).ToString("F2")));
-            }
-            foreach (var m in result.Report.Meshes)
-            {
-                PakScanMeshes.Add(new PakScanMeshOption(
+                    (t.EstimatedSizeBytes / 1024.0 / 1024.0).ToString("F2")))
+                .ToList();
+            meshOptions = result.Report.Meshes
+                .Select(m => new PakScanMeshOption(
                     m.Name, m.ObjectPath, m.Kind.ToString(),
-                    m.LodCount.ToString(), m.MaterialCount.ToString(), m.BoneCount.ToString()));
-            }
+                    m.LodCount.ToString(), m.MaterialCount.ToString(), m.BoneCount.ToString()))
+                .ToList();
         }
         else
         {
             PakScanDescription = "扫描失败，请查看诊断信息。";
+            textureOptions = [];
+            meshOptions = [];
         }
 
-        foreach (var d in result.Diagnostics)
-            PakScanDiagnostics.Add(new PakScanDiagnosticOption(d.Severity.ToString(), d.Code, d.Message));
+        diagOptions = result.Diagnostics
+            .Select(d => new PakScanDiagnosticOption(d.Severity.ToString(), d.Code, d.Message))
+            .ToList();
+
+        PakScanTextures.Reset(textureOptions);
+        PakScanMeshes.Reset(meshOptions);
+        PakScanDiagnostics.Reset(diagOptions);
 
         StatusMessage = result.IsSuccess
             ? $"Pak 扫描完成：{result.Report?.TextureCount ?? 0} 个纹理 / {result.Report?.StaticMeshCount ?? 0} StaticMesh / {result.Report?.SkeletalMeshCount ?? 0} SkeletalMesh"

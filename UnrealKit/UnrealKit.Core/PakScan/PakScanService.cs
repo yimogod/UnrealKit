@@ -1,6 +1,9 @@
+using System.Collections.Concurrent;
 using CUE4Parse.Compression;
 using CUE4Parse.Encryption.Aes;
 using CUE4Parse.FileProvider;
+using CUE4Parse.UE4.Assets.Exports.SkeletalMesh;
+using CUE4Parse.UE4.Assets.Exports.StaticMesh;
 using CUE4Parse.UE4.Assets.Exports.Texture;
 using CUE4Parse.UE4.Assets.Objects;
 using CUE4Parse.UE4.Assets.Objects.Properties;
@@ -109,48 +112,92 @@ public sealed class PakScanService : IPakScanService
 
         var totalCount = allPaths.Count;
         var scannedCount = 0;
-        var textures = new List<PakTextureEntry>();
+        var textures = new ConcurrentBag<PakTextureEntry>();
+        var meshes = new ConcurrentBag<PakMeshEntry>();
+        var concurrentDiags = new ConcurrentBag<Diagnostic>();
 
         progress?.Report(new OperationProgress("pakScan", "Scan", 0, totalCount, $"开始扫描，共 {totalCount} 个资产…"));
 
-        foreach (var path in allPaths)
+        var parallelism = config.MaxDegreeOfParallelism > 0
+            ? config.MaxDegreeOfParallelism
+            : Math.Max(1, Environment.ProcessorCount / 2);
+
+        var parallelOptions = new ParallelOptions
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            scannedCount++;
+            MaxDegreeOfParallelism = parallelism,
+            CancellationToken = cancellationToken,
+        };
 
-            if (scannedCount % 50 == 0)
-            {
-                progress?.Report(new OperationProgress("pakScan", "Scan", scannedCount, totalCount,
-                    $"扫描中… {scannedCount}/{totalCount}"));
-            }
+        // 进度节流：每 200ms 上报一次，避免 UI 线程被高频回调淹没（几万资产并发上报会卡界面）
+        long lastReportTick = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
+        void ReportProgress(int current, string currentPath)
+        {
+            if (progress is null) return;
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var last = Interlocked.Read(ref lastReportTick);
+            if (now - last < 200) return;
+            if (Interlocked.CompareExchange(ref lastReportTick, now, last) != last) return;
+            progress.Report(new OperationProgress("pakScan", "Scan", current, totalCount,
+                $"[{current}/{totalCount}] {currentPath}"));
+        }
+
+        // FileProviderDictionary 内部全用 ConcurrentDictionary，LoadPackage 每次新建独立 Package，
+        // 没有共享可变状态，TryLoadPackageObject 可以安全并发调用。
+        await Parallel.ForEachAsync(allPaths, parallelOptions, (path, ct) =>
+        {
+            ct.ThrowIfCancellationRequested();
             try
             {
                 var objectPath = path[..^".uasset".Length];
-                if (!provider.TryLoadPackageObject<UTexture2D>(objectPath, out var tex) || tex is null)
-                    continue;
 
-                var entry = BuildEntry(tex, objectPath, config, diagnostics);
-                textures.Add(entry);
+                if (provider.TryLoadPackageObject<UTexture2D>(objectPath, out var tex) && tex is not null)
+                {
+                    var localDiags = new List<Diagnostic>();
+                    textures.Add(BuildTextureEntry(tex, objectPath, config, localDiags));
+                    foreach (var d in localDiags)
+                        concurrentDiags.Add(d);
+                }
+                else if (provider.TryLoadPackageObject<UStaticMesh>(objectPath, out var sm) && sm is not null)
+                {
+                    meshes.Add(BuildStaticMeshEntry(sm, objectPath));
+                }
+                else if (provider.TryLoadPackageObject<USkeletalMesh>(objectPath, out var skm) && skm is not null)
+                {
+                    meshes.Add(BuildSkeletalMeshEntry(skm, objectPath));
+                }
             }
             catch (Exception ex)
             {
-                diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "PKS005",
+                concurrentDiags.Add(new Diagnostic(DiagnosticSeverity.Warning, "PKS005",
                     $"资产反序列化失败，已跳过：{path} — {ex.Message}", path));
             }
-        }
+
+            var current = Interlocked.Increment(ref scannedCount);
+            ReportProgress(current, path);
+            return ValueTask.CompletedTask;
+        });
+
+        foreach (var d in concurrentDiags)
+            diagnostics.Add(d);
+
+        var textureList = textures.ToList();
+        var meshList = meshes.ToList();
+        var staticMeshCount = meshList.Count(m => m.Kind == PakMeshKind.StaticMesh);
+        var skeletalMeshCount = meshList.Count(m => m.Kind == PakMeshKind.SkeletalMesh);
 
         progress?.Report(new OperationProgress("pakScan", "Done", totalCount, totalCount,
-            $"扫描完成：{textures.Count} 个纹理，共 {scannedCount} 个资产"));
+            $"扫描完成：{textureList.Count} 个纹理，{staticMeshCount} 个 StaticMesh，{skeletalMeshCount} 个 SkeletalMesh，共 {scannedCount} 个资产"));
 
         diagnostics.Add(new Diagnostic(DiagnosticSeverity.Information, "PKS006",
-            $"扫描完成：{textures.Count} 个 Texture2D，共扫描 {scannedCount} 个资产"));
+            $"扫描完成：{textureList.Count} 个 Texture2D，{staticMeshCount} 个 StaticMesh，{skeletalMeshCount} 个 SkeletalMesh，共扫描 {scannedCount} 个资产"));
 
-        var report = new PakScanReport(pakDirectory, scannedCount, textures.Count, textures);
+        var report = new PakScanReport(pakDirectory, scannedCount, textureList.Count, textureList,
+            staticMeshCount, skeletalMeshCount, meshList);
         return new PakScanResult(pakDirectory, report, diagnostics);
     }
 
-    private static PakTextureEntry BuildEntry(
+    private static PakTextureEntry BuildTextureEntry(
         UTexture2D tex,
         string objectPath,
         PakScanConfig config,
@@ -255,6 +302,21 @@ public sealed class PakScanService : IPakScanService
             // Default: assume 4 bytes per texel
             _ => (long)width * height * 4,
         };
+    }
+
+    private static PakMeshEntry BuildStaticMeshEntry(UStaticMesh sm, string objectPath)
+    {
+        int lodCount = sm.RenderData?.LODs?.Length ?? 0;
+        int materialCount = sm.StaticMaterials?.Length ?? sm.Materials?.Length ?? 0;
+        return new PakMeshEntry(sm.Name, objectPath, PakMeshKind.StaticMesh, lodCount, materialCount, 0);
+    }
+
+    private static PakMeshEntry BuildSkeletalMeshEntry(USkeletalMesh skm, string objectPath)
+    {
+        int lodCount = skm.LODModels?.Length ?? 0;
+        int materialCount = skm.SkeletalMaterials?.Length ?? skm.Materials?.Length ?? 0;
+        int boneCount = skm.ReferenceSkeleton?.FinalRefBoneInfo?.Length ?? 0;
+        return new PakMeshEntry(skm.Name, objectPath, PakMeshKind.SkeletalMesh, lodCount, materialCount, boneCount);
     }
 
     private static EGame ResolveGameVersion(string version)

@@ -24,6 +24,7 @@
                 <TextBox Grid.Column="4" Text="{Binding PakGameVersion, UpdateSourceTrigger=PropertyChanged}"
                          FontFamily="Consolas" ToolTip="如 GAME_UE5_6（默认），GAME_UE5_3 等" />
             </Grid>
+            <TextBlock Text="{Binding PakScanDescription}" />
             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                 <Button Content="扫描" Command="{Binding ScanPakCommand}" Padding="18,8" />
                 <Button Content="导出 HTML" Command="{Binding ExportPakScanHtmlCommand}" Padding="14,8" Margin="8,0,0,0" />
@@ -32,20 +33,19 @@
         </StackPanel>
         <ScrollViewer Grid.Row="1" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Text="{Binding PakScanDescription}" Style="{StaticResource ResultSummaryTextStyle}" />
                 <TabControl MinHeight="350" Margin="0,12,0,0">
                     <TabItem Header="Textures">
                         <DataGrid ItemsSource="{Binding PakScanTextures}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" />
-                                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="300" />
+                                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="650" />
                                 <DataGridTextColumn Header="SizeX" Binding="{Binding SizeX}" Width="60" />
                                 <DataGridTextColumn Header="SizeY" Binding="{Binding SizeY}" Width="60" />
-                                <DataGridTextColumn Header="Format" Binding="{Binding Format}" Width="120" />
-                                <DataGridTextColumn Header="LodBias" Binding="{Binding LodBias}" Width="65" />
+                                <DataGridTextColumn Header="Format" Binding="{Binding Format}" Width="100" />
+                                <DataGridTextColumn Header="LodBias" Binding="{Binding LodBias}" Width="40" />
                                 <DataGridTextColumn Header="LodGroup" Binding="{Binding LodGroup}" Width="160" />
                                 <DataGridTextColumn Header="Mips" Binding="{Binding NumMips}" Width="50" />
-                                <DataGridTextColumn Header="Est. MB" Binding="{Binding EstimatedSizeMB}" Width="70" />
+                                <DataGridTextColumn Header="Est. MB" Binding="{Binding EstimatedSizeMB}" Width="*" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </TabItem>
