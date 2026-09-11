@@ -164,11 +164,16 @@ internal static class ParseResultWriters
 
     internal static void WritePakScanHtml(PakScanResult result, string? outputFile)
     {
-        var html = PakScanHtmlBuilder.Build(result);
-        var path = outputFile ?? Path.Combine(
+        var texHtml  = PakScanHtmlBuilder.Build(result);
+        var meshHtml = PakScanMeshHtmlBuilder.Build(result);
+
+        var texPath = outputFile ?? Path.Combine(
             Path.GetTempPath(),
             $"PakScanTextures_{DateTime.Now:yyyyMMdd_HHmmss}.html");
-        HtmlTableReport.WriteAndOpen(html, path);
+        var meshPath = Path.ChangeExtension(texPath, null) + "_Meshes.html";
+
+        HtmlTableReport.WriteAndOpen(texHtml,  texPath);
+        HtmlTableReport.WriteAndOpen(meshHtml, meshPath);
         CliOutput.WriteDiagnostics(result.Diagnostics);
     }
 
@@ -187,23 +192,38 @@ internal static class ParseResultWriters
         if (result.Report is not null)
         {
             var report = result.Report;
-            var header = "Name\tPath\tSizeX\tSizeY\tFormat\tLodBias\tLodGroup\tNumMips\tEstimatedSizeBytes";
-            var lines = report.Textures.Select(t =>
+
+            // Textures section
+            var texHeader = "Name\tPath\tSizeX\tSizeY\tFormat\tLodBias\tLodGroup\tNumMips\tEstimatedSizeBytes";
+            var texLines  = report.Textures.Select(t =>
                 $"{t.Name}\t{t.ObjectPath}\t{t.SizeX}\t{t.SizeY}\t{t.PixelFormat}\t{t.LodBias}\t{t.LodGroup}\t{t.NumMips}\t{t.EstimatedSizeBytes}");
+
+            // Meshes section
+            var meshHeader = "Name\tPath\tKind\tLodCount\tMaterialCount\tBoneCount";
+            var meshLines  = report.Meshes.Select(m =>
+                $"{m.Name}\t{m.ObjectPath}\t{m.Kind}\t{m.LodCount}\t{m.MaterialCount}\t{m.BoneCount}");
 
             if (outputFile is not null)
             {
-                File.WriteAllLines(outputFile, lines.Prepend(header));
-                Console.WriteLine($"Pak scan complete: {report.TextureCount} texture(s) written to {outputFile}");
+                File.WriteAllLines(outputFile, texLines.Prepend(texHeader));
+                var meshFile = Path.ChangeExtension(outputFile, null) + "_Meshes.tsv";
+                File.WriteAllLines(meshFile, meshLines.Prepend(meshHeader));
+                Console.WriteLine($"Pak scan complete: {report.TextureCount} texture(s) → {outputFile}");
+                Console.WriteLine($"                   {report.StaticMeshCount} StaticMesh / {report.SkeletalMeshCount} SkeletalMesh → {meshFile}");
             }
             else
             {
-                Console.WriteLine(header);
-                foreach (var line in lines)
+                Console.WriteLine(texHeader);
+                foreach (var line in texLines)
                     Console.WriteLine(line);
 
                 Console.WriteLine();
-                Console.WriteLine($"Total: {report.TextureCount} Texture2D asset(s) / {report.TotalAssetsScanned} total assets scanned");
+                Console.WriteLine(meshHeader);
+                foreach (var line in meshLines)
+                    Console.WriteLine(line);
+
+                Console.WriteLine();
+                Console.WriteLine($"Total: {report.TextureCount} Texture2D / {report.StaticMeshCount} StaticMesh / {report.SkeletalMeshCount} SkeletalMesh / {report.TotalAssetsScanned} total assets scanned");
                 Console.WriteLine($"Directory: {report.InputDirectory}");
             }
         }

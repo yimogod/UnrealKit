@@ -199,6 +199,10 @@ public sealed record PakScanTextureOption(
     string Format, string LodBias, string LodGroup,
     string NumMips, string EstimatedSizeMB);
 
+public sealed record PakScanMeshOption(
+    string Name, string Path, string Kind,
+    string LodCount, string MaterialCount, string BoneCount);
+
 public sealed record PakScanDiagnosticOption(string Severity, string Code, string Message);
 
 /// <summary>

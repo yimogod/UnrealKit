@@ -156,11 +156,6 @@ public sealed class MemReportExportService : IMemReportExportService
         _ => throw new ArgumentException("MemReport export output must use a .csv or .tsv extension.", nameof(path))
     };
 
-    private static string JoinDelimited(IEnumerable<string?> fields, char delimiter) => string.Join(delimiter, fields.Select(field => Escape(field, delimiter)));
-
-    private static string Escape(string? field, char delimiter)
-    {
-        if (string.IsNullOrEmpty(field)) return string.Empty;
-        return field.IndexOfAny([delimiter, '"', '\r', '\n']) >= 0 ? $"\"{field.Replace("\"", "\"\"")}\"" : field;
-    }
+    private static string JoinDelimited(IEnumerable<string?> fields, char delimiter) =>
+        CsvWriter.JoinRow(fields, delimiter);
 }

@@ -7,9 +7,6 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <StackPanel>
-            <TextBlock Text="Pak 静态包扫描" Style="{StaticResource SectionTitleTextStyle}" />
-            <TextBlock Text="扫描已在「安装包」页下载的 Pak 包，离线批量提取 Texture2D 资产信息，无需连接设备。"
-                       Style="{StaticResource SectionDescriptionTextStyle}" />
             <TextBlock Text="{Binding SelectedLocalPakPackage.LocalDirectory, StringFormat='包目录：{0}', FallbackValue='未选择 Pak 包。请先在「安装包」页选择一个本地 Pak 包。'}"
                        Style="{StaticResource HintTextStyle}" Margin="0,12,0,0" FontFamily="Consolas" TextWrapping="Wrap" />
             <Grid Margin="0,8,0,0">
@@ -30,6 +27,7 @@
             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                 <Button Content="扫描" Command="{Binding ScanPakCommand}" Padding="18,8" />
                 <Button Content="导出 HTML" Command="{Binding ExportPakScanHtmlCommand}" Padding="14,8" Margin="8,0,0,0" />
+                <Button Content="导出 CSV"  Command="{Binding ExportPakScanCsvCommand}"  Padding="14,8" Margin="8,0,0,0" />
             </StackPanel>
         </StackPanel>
         <ScrollViewer Grid.Row="1" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
@@ -48,6 +46,18 @@
                                 <DataGridTextColumn Header="LodGroup" Binding="{Binding LodGroup}" Width="160" />
                                 <DataGridTextColumn Header="Mips" Binding="{Binding NumMips}" Width="50" />
                                 <DataGridTextColumn Header="Est. MB" Binding="{Binding EstimatedSizeMB}" Width="70" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </TabItem>
+                    <TabItem Header="Meshes">
+                        <DataGrid ItemsSource="{Binding PakScanMeshes}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" />
+                                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="300" />
+                                <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="110" />
+                                <DataGridTextColumn Header="LODs" Binding="{Binding LodCount}" Width="55" />
+                                <DataGridTextColumn Header="Materials" Binding="{Binding MaterialCount}" Width="75" />
+                                <DataGridTextColumn Header="Bones" Binding="{Binding BoneCount}" Width="60" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </TabItem>

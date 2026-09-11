@@ -131,11 +131,6 @@ public sealed class MemInfoExportService : IMemInfoExportService
         section, name, metric, value, lineNumber?.ToString(CultureInfo.InvariantCulture)
     ];
 
-    private static string JoinDelimited(IEnumerable<string?> fields, char delimiter) => string.Join(delimiter, fields.Select(field => Escape(field, delimiter)));
-
-    private static string Escape(string? field, char delimiter)
-    {
-        if (string.IsNullOrEmpty(field)) return string.Empty;
-        return field.IndexOfAny([delimiter, '"', '\r', '\n']) >= 0 ? $"\"{field.Replace("\"", "\"\"")}\"" : field;
-    }
+    private static string JoinDelimited(IEnumerable<string?> fields, char delimiter) =>
+        CsvWriter.JoinRow(fields, delimiter);
 }

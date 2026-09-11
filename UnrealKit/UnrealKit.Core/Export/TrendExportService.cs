@@ -175,17 +175,5 @@ public sealed class TrendExportService : ITrendExportService
         value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private static string JoinDelimited(IEnumerable<string?> fields, char delimiter) =>
-        string.Join(delimiter, fields.Select(field => Escape(field, delimiter)));
-
-    private static string Escape(string? field, char delimiter)
-    {
-        if (string.IsNullOrEmpty(field))
-        {
-            return string.Empty;
-        }
-
-        return field.IndexOfAny([delimiter, '"', '\r', '\n']) >= 0
-            ? $"\"{field.Replace("\"", "\"\"", StringComparison.Ordinal)}\""
-            : field;
-    }
+        CsvWriter.JoinRow(fields, delimiter);
 }

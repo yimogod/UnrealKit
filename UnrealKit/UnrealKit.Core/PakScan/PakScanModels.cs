@@ -13,11 +13,24 @@ public sealed record PakTextureEntry(
     int NumMips,
     long EstimatedSizeBytes);
 
+public enum PakMeshKind { StaticMesh, SkeletalMesh }
+
+public sealed record PakMeshEntry(
+    string Name,
+    string ObjectPath,
+    PakMeshKind Kind,
+    int LodCount,
+    int MaterialCount,
+    int BoneCount);
+
 public sealed record PakScanReport(
     string InputDirectory,
     int TotalAssetsScanned,
     int TextureCount,
-    IReadOnlyList<PakTextureEntry> Textures);
+    IReadOnlyList<PakTextureEntry> Textures,
+    int StaticMeshCount,
+    int SkeletalMeshCount,
+    IReadOnlyList<PakMeshEntry> Meshes);
 
 public sealed record PakScanResult(
     string InputPath,

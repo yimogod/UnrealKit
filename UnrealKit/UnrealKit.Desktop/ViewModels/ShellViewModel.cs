@@ -176,6 +176,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         OpenRenderDocOutputDirCommand = new DelegateCommand(OpenRenderDocOutputDir, () => !string.IsNullOrWhiteSpace(_renderDocOutputDir) && Directory.Exists(_renderDocOutputDir));
         ScanPakCommand = new AsyncDelegateCommand(ScanPakAsync, () => !IsBusy && SelectedLocalPakPackage is not null);
         ExportPakScanHtmlCommand = new DelegateCommand(ExportPakScanHtml, () => _lastPakScanResult is not null);
+        ExportPakScanCsvCommand  = new DelegateCommand(ExportPakScanCsv,  () => _lastPakScanResult is not null);
         DownloadPakCommand = new AsyncDelegateCommand(DownloadLatestPakAsync, CanDownloadLatestPak);
         OpenPakDownloadDirectoryCommand = new AsyncDelegateCommand(
             OpenPakDownloadDirectoryAsync,
@@ -248,6 +249,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<RenderDocDiagnosticOption> RenderDocDiagnostics { get; } = [];
     public ObservableCollection<DownloadedPackageOption> DownloadedPackages { get; } = [];
     public ObservableCollection<PakScanTextureOption> PakScanTextures { get; } = [];
+    public ObservableCollection<PakScanMeshOption> PakScanMeshes { get; } = [];
     public ObservableCollection<PakScanDiagnosticOption> PakScanDiagnostics { get; } = [];
     public ObservableCollection<LocalPakPackageOption> LocalPakPackages { get; } = [];
     public ICommand CreateProjectCommand { get; }
@@ -278,6 +280,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand OpenRenderDocOutputDirCommand { get; }
     public ICommand ScanPakCommand { get; }
     public ICommand ExportPakScanHtmlCommand { get; }
+    public ICommand ExportPakScanCsvCommand  { get; }
     public ICommand DownloadPakCommand { get; }
     public ICommand OpenPakDownloadDirectoryCommand { get; }
     public ICommand RefreshLocalPakPackagesCommand { get; }
@@ -2093,12 +2096,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             inputPath, config, progress, OperationCancellationToken);
 
         PakScanTextures.Clear();
+        PakScanMeshes.Clear();
         PakScanDiagnostics.Clear();
         _lastPakScanResult = result;
 
         if (result.Report is not null)
         {
-            PakScanDescription = $"扫描完成：{result.Report.TextureCount} 个 Texture2D / 共 {result.Report.TotalAssetsScanned} 个资产";
+            PakScanDescription = $"扫描完成：{result.Report.TextureCount} 个 Texture2D / {result.Report.StaticMeshCount} 个 StaticMesh / {result.Report.SkeletalMeshCount} 个 SkeletalMesh / 共 {result.Report.TotalAssetsScanned} 个资产";
             foreach (var t in result.Report.Textures)
             {
                 PakScanTextures.Add(new PakScanTextureOption(
@@ -2108,6 +2112,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     t.LodBias.ToString(), t.LodGroup,
                     t.NumMips.ToString(),
                     (t.EstimatedSizeBytes / 1024.0 / 1024.0).ToString("F2")));
+            }
+            foreach (var m in result.Report.Meshes)
+            {
+                PakScanMeshes.Add(new PakScanMeshOption(
+                    m.Name, m.ObjectPath, m.Kind.ToString(),
+                    m.LodCount.ToString(), m.MaterialCount.ToString(), m.BoneCount.ToString()));
             }
         }
         else
@@ -2119,7 +2129,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             PakScanDiagnostics.Add(new PakScanDiagnosticOption(d.Severity.ToString(), d.Code, d.Message));
 
         StatusMessage = result.IsSuccess
-            ? $"Pak 扫描完成：{result.Report?.TextureCount ?? 0} 个纹理"
+            ? $"Pak 扫描完成：{result.Report?.TextureCount ?? 0} 个纹理 / {result.Report?.StaticMeshCount ?? 0} StaticMesh / {result.Report?.SkeletalMeshCount ?? 0} SkeletalMesh"
             : "Pak 扫描完成（有错误）";
         RaiseCommandStates();
     });
@@ -2130,6 +2140,21 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var html = PakScanHtmlBuilder.Build(_lastPakScanResult);
         var path = Path.Combine(Path.GetTempPath(), $"PakScanTextures_{DateTime.Now:yyyyMMdd_HHmmss}.html");
         HtmlTableReport.WriteAndOpen(html, path);
+    }
+
+    private void ExportPakScanCsv()
+    {
+        if (_lastPakScanResult is null) return;
+        var stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        var texCsv  = PakScanCsvBuilder.Build(_lastPakScanResult);
+        var texPath = Path.Combine(Path.GetTempPath(), $"PakScanTextures_{stamp}.csv");
+        CsvTableReport.WriteAndOpen(texCsv, texPath);
+        AddOperationLog("Info", $"CSV exported: {texPath}");
+
+        var meshCsv  = PakScanCsvBuilder.BuildMeshCsv(_lastPakScanResult);
+        var meshPath = Path.Combine(Path.GetTempPath(), $"PakScanMeshes_{stamp}.csv");
+        CsvTableReport.WriteAndOpen(meshCsv, meshPath);
+        AddOperationLog("Info", $"CSV exported: {meshPath}");
     }
 
     private bool CanDownloadLatestPak() =>
@@ -2802,6 +2827,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _applyConsoleCommandPresetCommand.RaiseCanExecuteChanged();
         (OpenSavedDirectoryCommand as DelegateCommand)?.RaiseCanExecuteChanged();
         (ExportPakScanHtmlCommand as DelegateCommand)?.RaiseCanExecuteChanged();
+        (ExportPakScanCsvCommand  as DelegateCommand)?.RaiseCanExecuteChanged();
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

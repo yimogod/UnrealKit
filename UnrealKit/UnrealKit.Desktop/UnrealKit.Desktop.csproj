@@ -5,7 +5,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Scriban" Version="7.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="..\UnrealKit.Cli\Support\HtmlTableReport.cs" Link="Support\HtmlTableReport.cs" />
+    <Compile Include="..\UnrealKit.Cli\Support\CsvTableReport.cs"  Link="Support\CsvTableReport.cs" />
+    <EmbeddedResource Include="..\UnrealKit.Cli\Support\HtmlTableReport.sbnhtml" Link="Support\HtmlTableReport.sbnhtml" />
   </ItemGroup>
 
   <PropertyGroup>

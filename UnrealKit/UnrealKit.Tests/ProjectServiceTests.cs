@@ -44,7 +44,7 @@ public sealed class ProjectServiceTests : IDisposable
         var service = new ProjectService();
         var project = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "MemoryReview"));
         var descriptor = await File.ReadAllTextAsync(project.Project.ProjectFilePath);
-        await File.WriteAllTextAsync(project.Project.ProjectFilePath, descriptor.Replace("FormatVersion=1", "FormatVersion=999", StringComparison.Ordinal));
+        await File.WriteAllTextAsync(project.Project.ProjectFilePath, System.Text.RegularExpressions.Regex.Replace(descriptor, @"FormatVersion=\d+", "FormatVersion=999"));
 
         var validation = await service.ValidateProjectAsync(project.Project.ProjectFilePath);
 

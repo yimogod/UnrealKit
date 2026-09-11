@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ title }}</title>
+<style>
+:root{
+  --bg:#f5f5f5;--surface:#fff;--border:#ddd;--text:#222;--muted:#666;
+  --accent:#0078d4;--warn:#d97706;--err:#dc2626;
+  --row-even:#fafafa;--row-hover:#e8f0fe;--tag-bg:#e0e7ff;--tag-text:#3730a3;
+}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#1a1a1a;--surface:#242424;--border:#3a3a3a;--text:#e8e8e8;--muted:#999;
+    --accent:#4ea8de;--warn:#fbbf24;--err:#f87171;
+    --row-even:#2a2a2a;--row-hover:#1e3a5f;--tag-bg:#312e81;--tag-text:#a5b4fc;
+  }
+}
+*,::before,::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;font-size:13px;background:var(--bg);color:var(--text);padding:16px}
+h1{font-size:16px;font-weight:600;margin-bottom:4px;word-break:break-all}
+.meta{color:var(--muted);font-size:12px;margin-bottom:12px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center}
+.toolbar input,.toolbar select{background:var(--surface);color:var(--text);border:1px solid var(--border);
+  border-radius:4px;padding:4px 8px;font-size:12px;outline:none}
+.toolbar input:focus,.toolbar select:focus{border-color:var(--accent)}
+.toolbar input[type=search]{width:240px}
+.toolbar .spacer{flex:1}
+.count{font-size:12px;color:var(--muted);white-space:nowrap}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:6px}
+table{width:100%;border-collapse:collapse;background:var(--surface)}
+thead{position:sticky;top:0;z-index:1}
+th{background:var(--surface);border-bottom:2px solid var(--border);padding:6px 8px;
+  text-align:left;font-size:12px;font-weight:600;user-select:none;white-space:nowrap}
+th.sortable{cursor:pointer}
+th.sortable:hover{color:var(--accent)}
+th .si{font-size:10px;margin-left:3px;opacity:.4}
+th.asc .si::after{content:'▲';opacity:1}
+th.desc .si::after{content:'▼';opacity:1}
+th.sortable:not(.asc):not(.desc) .si::after{content:'⇅'}
+td{padding:5px 8px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle}
+tr:nth-child(even) td{background:var(--row-even)}
+tr:hover td{background:var(--row-hover)}
+.c-text{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-path{max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11px}
+.tag{display:inline-block;padding:1px 6px;border-radius:10px;font-size:11px;
+  background:var(--tag-bg);color:var(--tag-text);white-space:nowrap}
+.bar-cell{display:flex;align-items:center;gap:6px}
+.bar{height:8px;border-radius:2px;background:var(--accent);opacity:.6;min-width:2px}
+.nowrap{white-space:nowrap}
+.pager{display:flex;align-items:center;gap:6px;margin-top:10px;justify-content:flex-end}
+.pager button{background:var(--surface);color:var(--text);border:1px solid var(--border);
+  border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer}
+.pager button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.pager button:disabled{opacity:.4;cursor:default}
+.pager .pi{font-size:12px;color:var(--muted)}
+.diagnostics{margin-top:12px}
+.diag{font-size:12px;padding:4px 8px;border-radius:4px;margin-bottom:4px;border-left:3px solid transparent}
+.diag-warning{background:#fffbeb;border-color:var(--warn);color:#92400e}
+.diag-error{background:#fef2f2;border-color:var(--err);color:#7f1d1d}
+.diag-info{background:#eff6ff;border-color:var(--accent);color:#1e40af}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .diag-warning{background:#2d2007;color:#fde68a}
+  :root:not([data-theme="light"]) .diag-error{background:#2d0707;color:#fca5a5}
+  :root:not([data-theme="light"]) .diag-info{background:#07192d;color:#93c5fd}
+}
+.empty{text-align:center;color:var(--muted);padding:32px}
+</style>
+</head>
+<body>
+<h1>{{ title }}</h1>
+{{ if meta_html != "" }}<div class="meta">{{ meta_html }}</div>{{ end }}
+<div class="toolbar">
+  <input type="search" id="_search" placeholder="{{ search_placeholder }}" oninput="onFilter()">
+  {{ filter_html }}
+  <span class="spacer"></span>
+  <span class="count" id="_count"></span>
+  <select id="_ps" onchange="onPsChange()">
+    <option value="100">100 条/页</option>
+    <option value="250" selected>250 条/页</option>
+    <option value="500">500 条/页</option>
+    <option value="1000">1000 条/页</option>
+  </select>
+</div>
+<div class="table-wrap">
+<table>
+  <thead><tr>
+    {{ thead_html }}
+  </tr></thead>
+  <tbody id="_tbody"></tbody>
+</table>
+</div>
+<div class="pager">
+  <button id="_bf" onclick="go(1)">«</button>
+  <button id="_bp" onclick="go(cur-1)">‹</button>
+  <span class="pi" id="_pi"></span>
+  <button id="_bn" onclick="go(cur+1)">›</button>
+  <button id="_bl" onclick="go(tp)">»</button>
+</div>
+{{ if diag_html != "" }}<div class="diagnostics">{{ diag_html }}</div>{{ end }}
+<script>
+var RAW={{ data_json }};
+var COLS={{ cols_json }};
+var BK={{ bytes_key_json }};
+var CC={{ col_count }};
+var flt=RAW.slice(),sK={{ sort_key_json }},sD={{ sort_dir }},cur=1,ps=250,tp=1;
+var maxB=BK?RAW.reduce(function(m,r){return Math.max(m,r[BK]||0);},0)||1:1;
+
+function esc(s){
+  s=String(s); var r='';
+  for(var i=0;i<s.length;i++){
+    var c=s[i];
+    if(c==='&')r+='&amp;';
+    else if(c==='<')r+='&lt;';
+    else if(c==='>') r+='&gt;';
+    else if(c==='"')r+='&quot;';
+    else r+=c;
+  }
+  return r;
+}
+function fmtB(b){
+  if(b===0)return'0 B';
+  var u=['B','KB','MB','GB'],i=0;
+  while(b>=1024&&i<u.length-1){b/=1024;i++;}
+  return b.toFixed(i>0?1:0)+' '+u[i];
+}
+function renderRow(r){
+  var h='<tr>';
+  for(var i=0;i<COLS.length;i++){
+    var c=COLS[i],v=r[c.k];
+    if(v==null)v='';
+    if(c.t===0){
+      h+='<td class="c-text" title="'+esc(v)+'">'+esc(v)+'</td>';
+    }else if(c.t===1){
+      h+='<td>'+v+'</td>';
+    }else if(c.t===2){
+      if(c.k===BK){
+        var w=Math.max(2,Math.round(v/maxB*80));
+        h+='<td><div class="bar-cell"><div class="bar" style="width:'+w+'px"></div>'
+          +'<span class="nowrap">'+fmtB(v)+'</span></div></td>';
+      }else{
+        h+='<td class="nowrap">'+fmtB(v)+'</td>';
+      }
+    }else if(c.t===3){
+      h+='<td><span class="tag">'+esc(v)+'</span></td>';
+    }else{
+      h+='<td class="c-path" title="'+esc(v)+'">'+esc(v)+'</td>';
+    }
+  }
+  return h+'</tr>';
+}
+function render(){
+  var tbody=document.getElementById('_tbody');
+  var s=(cur-1)*ps,e=Math.min(s+ps,flt.length);
+  if(!flt.length){
+    tbody.innerHTML='<tr><td colspan="'+CC+'" class="empty">没有匹配的数据</td></tr>';
+    return;
+  }
+  var rows=[];
+  for(var i=s;i<e;i++)rows.push(renderRow(flt[i]));
+  tbody.innerHTML=rows.join('');
+}
+function updPager(){
+  tp=Math.max(1,Math.ceil(flt.length/ps));
+  document.getElementById('_pi').textContent='第 '+cur+' / '+tp+' 页';
+  ['_bf','_bp'].forEach(function(id){document.getElementById(id).disabled=cur<=1;});
+  ['_bn','_bl'].forEach(function(id){document.getElementById(id).disabled=cur>=tp;});
+  document.getElementById('_count').textContent='共 '+flt.length.toLocaleString()+' 条';
+}
+function go(p){p=Math.max(1,Math.min(p,tp));if(p===cur)return;cur=p;render();updPager();}
+function sort(k){
+  if(sK===k)sD*=-1;else{sK=k;sD=-1;}
+  document.querySelectorAll('th[data-k]').forEach(function(th){
+    th.classList.remove('asc','desc');
+    if(th.dataset.k===k)th.classList.add(sD===1?'asc':'desc');
+  });
+  flt.sort(function(a,b){
+    var av=a[sK],bv=b[sK];
+    return(typeof av==='number'?(av-bv):String(av).localeCompare(String(bv)))*sD;
+  });
+  cur=1;render();updPager();
+}
+function onFilter(){
+  var q=(document.getElementById('_search').value||'').toLowerCase();
+  {{ filter_logic_js }}
+  flt.sort(function(a,b){
+    var av=a[sK],bv=b[sK];
+    return(typeof av==='number'?(av-bv):String(av).localeCompare(String(bv)))*sD;
+  });
+  cur=1;updPager();render();
+}
+function onPsChange(){ps=parseInt(document.getElementById('_ps').value);cur=1;updPager();render();}
+{{ enum_fill_js }}
+sort({{ sort_key_json }});
+</script>
+</body>
+</html>
