@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using Scriban;
+using Scriban.Runtime;
 using UnrealKit.Core.Diagnostics;
 
 namespace UnrealKit.Cli;
@@ -106,7 +107,12 @@ internal static class HtmlTableReport
             enum_fill_js      = BuildEnumFillJs(filters),
         };
 
-        return _template.Render(model, member => member.Name);
+        var ctx = new TemplateContext { LimitToString = 0 };
+        ctx.PushGlobal(new ScriptObject());
+        var scriptObj = new ScriptObject();
+        scriptObj.Import(model, renamer: member => member.Name);
+        ctx.PushGlobal(scriptObj);
+        return _template.Render(ctx);
     }
 
     internal static void WriteAndOpen(string html, string path)
@@ -252,8 +258,8 @@ internal static class HtmlTableReport
         var sb = new StringBuilder();
 
         var searchKeys = cols
-            .Where(c => c.Type is HtmlColumnType.Text or HtmlColumnType.Path or HtmlColumnType.Tag)
-            .Select(c => $"String(r.{JsEscape(c.Key)}).toLowerCase().indexOf(q)>=0")
+            .Where(c => c.Type is HtmlColumnType.Text or HtmlColumnType.Path)
+            .Select(c => $"String(r.{JsEscape(c.Key)}).indexOf(q)>=0")
             .ToArray();
         var searchExpr = searchKeys.Length > 0 ? string.Join("||", searchKeys) : "true";
 

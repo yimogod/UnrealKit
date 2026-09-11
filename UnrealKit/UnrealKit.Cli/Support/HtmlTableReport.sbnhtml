@@ -182,7 +182,7 @@ function sort(k){
   cur=1;render();updPager();
 }
 function onFilter(){
-  var q=(document.getElementById('_search').value||'').toLowerCase();
+  var q=(document.getElementById('_search').value||'');
   {{ filter_logic_js }}
   flt.sort(function(a,b){
     var av=a[sK],bv=b[sK];
