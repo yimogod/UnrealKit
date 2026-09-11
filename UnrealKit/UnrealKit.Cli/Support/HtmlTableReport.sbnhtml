@@ -78,9 +78,8 @@ tr:hover td{background:var(--row-hover)}
   <span class="count" id="_count"></span>
   <select id="_ps" onchange="onPsChange()">
     <option value="100">100 条/页</option>
-    <option value="250" selected>250 条/页</option>
-    <option value="500">500 条/页</option>
-    <option value="1000">1000 条/页</option>
+    <option value="200" selected>200 条/页</option>
+    <option value="400">400 条/页</option>
   </select>
 </div>
 <div class="table-wrap">
@@ -104,7 +103,7 @@ var RAW={{ data_json }};
 var COLS={{ cols_json }};
 var BK={{ bytes_key_json }};
 var CC={{ col_count }};
-var flt=RAW.slice(),sK={{ sort_key_json }},sD={{ sort_dir }},cur=1,ps=250,tp=1;
+var flt=RAW.slice(),sK={{ sort_key_json }},sD={{ sort_dir }},cur=1,ps=200,tp=1;
 var maxB=BK?RAW.reduce(function(m,r){return Math.max(m,r[BK]||0);},0)||1:1;
 
 function esc(s){
