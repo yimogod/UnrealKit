@@ -2121,10 +2121,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 (t.EstimatedSizeBytes / 1024.0 / 1024.0).ToString("F2"))).ToList();
             var smOpts = staticMeshes.Select(m => new PakScanStaticMeshOption(
                 m.Name, m.ObjectPath,
-                m.LodCount.ToString(), m.MaterialCount.ToString())).ToList();
+                m.LodCount.ToString(), m.MaterialCount.ToString(),
+                m.VertexCount.ToString(), m.TriangleCount.ToString())).ToList();
             var skmOpts = skeletalMeshes.Select(m => new PakScanSkeletalMeshOption(
                 m.Name, m.ObjectPath,
-                m.LodCount.ToString(), m.MaterialCount.ToString(), m.BoneCount.ToString())).ToList();
+                m.LodCount.ToString(), m.MaterialCount.ToString(), m.BoneCount.ToString(),
+                m.VertexCount.ToString(), m.TriangleCount.ToString())).ToList();
             var diagOpts = diagnostics.Select(d => new PakScanDiagnosticOption(
                 d.Severity.ToString(), d.Code, d.Message)).ToList();
 

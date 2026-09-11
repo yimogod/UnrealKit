@@ -381,7 +381,10 @@ public sealed class PakScanService : IPakScanService
     {
         int lodCount = sm.RenderData?.LODs?.Length ?? 0;
         int materialCount = sm.StaticMaterials?.Length ?? sm.Materials?.Length ?? 0;
-        return new PakMeshEntry(sm.Name, objectPath, PakMeshKind.StaticMesh, lodCount, materialCount, 0);
+        var lod0 = sm.RenderData?.LODs?.Length > 0 ? sm.RenderData.LODs[0] : null;
+        int vertexCount = lod0?.NumVertices ?? 0;
+        int triangleCount = (lod0?.IndexBuffer?.Buffer?.Length ?? 0) / 3;
+        return new PakMeshEntry(sm.Name, objectPath, PakMeshKind.StaticMesh, lodCount, materialCount, 0, vertexCount, triangleCount);
     }
 
     private static PakMeshEntry BuildSkeletalMeshEntry(USkeletalMesh skm, string objectPath)
@@ -389,7 +392,10 @@ public sealed class PakScanService : IPakScanService
         int lodCount = skm.LODModels?.Length ?? 0;
         int materialCount = skm.SkeletalMaterials?.Length ?? skm.Materials?.Length ?? 0;
         int boneCount = skm.ReferenceSkeleton?.FinalRefBoneInfo?.Length ?? 0;
-        return new PakMeshEntry(skm.Name, objectPath, PakMeshKind.SkeletalMesh, lodCount, materialCount, boneCount);
+        var lod0 = skm.LODModels?.Length > 0 ? skm.LODModels[0] : null;
+        int vertexCount = lod0?.NumVertices ?? 0;
+        int triangleCount = lod0?.Sections?.Sum(s => (int)s.NumTriangles) ?? 0;
+        return new PakMeshEntry(skm.Name, objectPath, PakMeshKind.SkeletalMesh, lodCount, materialCount, boneCount, vertexCount, triangleCount);
     }
 
     // 读 package header 拿第一个 export 的类名，不触发 export 内容反序列化。

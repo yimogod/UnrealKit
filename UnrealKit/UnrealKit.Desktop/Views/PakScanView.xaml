@@ -53,9 +53,11 @@
                         <DataGrid ItemsSource="{Binding PakScanStaticMeshes}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Name"          Binding="{Binding Name}"          Width="200" />
-                                <DataGridTextColumn Header="Path"          Binding="{Binding Path}"          Width="650" />
+                                <DataGridTextColumn Header="Path"          Binding="{Binding Path}"          Width="500" />
                                 <DataGridTextColumn Header="LodCount"      Binding="{Binding LodCount}"      Width="70" />
-                                <DataGridTextColumn Header="MaterialCount" Binding="{Binding MaterialCount}" Width="*" />
+                                <DataGridTextColumn Header="MaterialCount" Binding="{Binding MaterialCount}" Width="90" />
+                                <DataGridTextColumn Header="Vertices"      Binding="{Binding VertexCount}"   Width="80" />
+                                <DataGridTextColumn Header="Triangles"     Binding="{Binding TriangleCount}" Width="*" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </TabItem>
@@ -63,10 +65,12 @@
                         <DataGrid ItemsSource="{Binding PakScanSkeletalMeshes}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Name"          Binding="{Binding Name}"          Width="200" />
-                                <DataGridTextColumn Header="Path"          Binding="{Binding Path}"          Width="580" />
+                                <DataGridTextColumn Header="Path"          Binding="{Binding Path}"          Width="430" />
                                 <DataGridTextColumn Header="LodCount"      Binding="{Binding LodCount}"      Width="70" />
-                                <DataGridTextColumn Header="MaterialCount" Binding="{Binding MaterialCount}" Width="80" />
-                                <DataGridTextColumn Header="BoneCount"     Binding="{Binding BoneCount}"     Width="*" />
+                                <DataGridTextColumn Header="MaterialCount" Binding="{Binding MaterialCount}" Width="90" />
+                                <DataGridTextColumn Header="BoneCount"     Binding="{Binding BoneCount}"     Width="80" />
+                                <DataGridTextColumn Header="Vertices"      Binding="{Binding VertexCount}"   Width="80" />
+                                <DataGridTextColumn Header="Triangles"     Binding="{Binding TriangleCount}" Width="*" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </TabItem>

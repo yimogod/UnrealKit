@@ -21,7 +21,9 @@ public sealed record PakMeshEntry(
     PakMeshKind Kind,
     int LodCount,
     int MaterialCount,
-    int BoneCount);
+    int BoneCount,
+    int VertexCount,
+    int TriangleCount);
 
 public sealed record PakScanReport(
     string InputDirectory,

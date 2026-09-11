@@ -201,11 +201,13 @@ public sealed record PakScanTextureOption(
 
 public sealed record PakScanStaticMeshOption(
     string Name, string Path,
-    string LodCount, string MaterialCount);
+    string LodCount, string MaterialCount,
+    string VertexCount, string TriangleCount);
 
 public sealed record PakScanSkeletalMeshOption(
     string Name, string Path,
-    string LodCount, string MaterialCount, string BoneCount);
+    string LodCount, string MaterialCount, string BoneCount,
+    string VertexCount, string TriangleCount);
 
 public sealed record PakScanDiagnosticOption(string Severity, string Code, string Message);
 
