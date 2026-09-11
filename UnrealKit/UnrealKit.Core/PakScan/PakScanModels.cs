@@ -29,8 +29,9 @@ public sealed record PakScanReport(
     int TextureCount,
     IReadOnlyList<PakTextureEntry> Textures,
     int StaticMeshCount,
+    IReadOnlyList<PakMeshEntry> StaticMeshes,
     int SkeletalMeshCount,
-    IReadOnlyList<PakMeshEntry> Meshes);
+    IReadOnlyList<PakMeshEntry> SkeletalMeshes);
 
 public sealed record PakScanResult(
     string InputPath,

@@ -39,6 +39,7 @@ public sealed class PakScanService : IPakScanService
     {
         config ??= PakScanConfig.Default;
         var diagnostics = new List<Diagnostic>();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
 
         if (!Directory.Exists(pakDirectory))
         {
@@ -112,88 +113,77 @@ public sealed class PakScanService : IPakScanService
 
         var totalCount = allPaths.Count;
         var scannedCount = 0;
-        var textures = new ConcurrentBag<PakTextureEntry>();
-        var meshes = new ConcurrentBag<PakMeshEntry>();
-        var concurrentDiags = new ConcurrentBag<Diagnostic>();
+        var textures    = new List<PakTextureEntry>();
+        var staticMeshes    = new List<PakMeshEntry>();
+        var skeletalMeshes  = new List<PakMeshEntry>();
 
         progress?.Report(new OperationProgress("pakScan", "Scan", 0, totalCount, $"开始扫描，共 {totalCount} 个资产…"));
 
-        var parallelism = config.MaxDegreeOfParallelism > 0
-            ? config.MaxDegreeOfParallelism
-            : Math.Max(1, Environment.ProcessorCount / 2);
-
-        var parallelOptions = new ParallelOptions
+        foreach (var path in allPaths)
         {
-            MaxDegreeOfParallelism = parallelism,
-            CancellationToken = cancellationToken,
-        };
+            cancellationToken.ThrowIfCancellationRequested();
+            scannedCount++;
 
-        // 进度节流：每 200ms 上报一次，避免 UI 线程被高频回调淹没（几万资产并发上报会卡界面）
-        long lastReportTick = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (scannedCount % 500 == 0)
+                progress?.Report(new OperationProgress("pakScan", "Scan", scannedCount, totalCount,
+                    $"扫描中… {scannedCount}/{totalCount}"));
 
-        void ReportProgress(int current, string currentPath)
-        {
-            if (progress is null) return;
-            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var last = Interlocked.Read(ref lastReportTick);
-            if (now - last < 200) return;
-            if (Interlocked.CompareExchange(ref lastReportTick, now, last) != last) return;
-            progress.Report(new OperationProgress("pakScan", "Scan", current, totalCount,
-                $"[{current}/{totalCount}] {currentPath}"));
-        }
-
-        // FileProviderDictionary 内部全用 ConcurrentDictionary，LoadPackage 每次新建独立 Package，
-        // 没有共享可变状态，TryLoadPackageObject 可以安全并发调用。
-        await Parallel.ForEachAsync(allPaths, parallelOptions, (path, ct) =>
-        {
-            ct.ThrowIfCancellationRequested();
             try
             {
                 var objectPath = path[..^".uasset".Length];
 
-                if (provider.TryLoadPackageObject<UTexture2D>(objectPath, out var tex) && tex is not null)
+                // 先读 package header（只解析 ImportMap/ExportMap 元数据，不反序列化 export 内容），
+                // 从 ExportMap[0].ClassIndex 拿类名，只对目标类型做一次完整反序列化。
+                // IoPackage 或读取失败时 className 为 null，退回三次盲试。
+                var className = GetExportClassName(provider, path);
+                if (className == "Texture2D")
                 {
-                    var localDiags = new List<Diagnostic>();
-                    textures.Add(BuildTextureEntry(tex, objectPath, config, localDiags));
-                    foreach (var d in localDiags)
-                        concurrentDiags.Add(d);
+                    if (provider.TryLoadPackageObject<UTexture2D>(objectPath, out var tex) && tex is not null)
+                        textures.Add(BuildTextureEntry(tex, objectPath, config, diagnostics));
                 }
-                else if (provider.TryLoadPackageObject<UStaticMesh>(objectPath, out var sm) && sm is not null)
+                else if (className == "SkeletalMesh")
                 {
-                    meshes.Add(BuildStaticMeshEntry(sm, objectPath));
+                    // SkeletalMesh 先于 StaticMesh 判断，因为 SkeletalMesh 继承自 StaticMesh
+                    if (provider.TryLoadPackageObject<USkeletalMesh>(objectPath, out var skm) && skm is not null)
+                        skeletalMeshes.Add(BuildSkeletalMeshEntry(skm, objectPath));
                 }
-                else if (provider.TryLoadPackageObject<USkeletalMesh>(objectPath, out var skm) && skm is not null)
+                else if (className == "StaticMesh")
                 {
-                    meshes.Add(BuildSkeletalMeshEntry(skm, objectPath));
+                    if (provider.TryLoadPackageObject<UStaticMesh>(objectPath, out var sm) && sm is not null)
+                        staticMeshes.Add(BuildStaticMeshEntry(sm, objectPath));
+                }
+                else if (className is null)
+                {
+                    // IoPackage 或 header 解析失败，退回盲试；SkeletalMesh 仍先于 StaticMesh
+                    if (provider.TryLoadPackageObject<UTexture2D>(objectPath, out var tex) && tex is not null)
+                        textures.Add(BuildTextureEntry(tex, objectPath, config, diagnostics));
+                    else if (provider.TryLoadPackageObject<USkeletalMesh>(objectPath, out var skm) && skm is not null)
+                        skeletalMeshes.Add(BuildSkeletalMeshEntry(skm, objectPath));
+                    else if (provider.TryLoadPackageObject<UStaticMesh>(objectPath, out var sm) && sm is not null)
+                        staticMeshes.Add(BuildStaticMeshEntry(sm, objectPath));
                 }
             }
             catch (Exception ex)
             {
-                concurrentDiags.Add(new Diagnostic(DiagnosticSeverity.Warning, "PKS005",
+                diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "PKS005",
                     $"资产反序列化失败，已跳过：{path} — {ex.Message}", path));
             }
+        }
 
-            var current = Interlocked.Increment(ref scannedCount);
-            ReportProgress(current, path);
-            return ValueTask.CompletedTask;
-        });
-
-        foreach (var d in concurrentDiags)
-            diagnostics.Add(d);
-
-        var textureList = textures.ToList();
-        var meshList = meshes.ToList();
-        var staticMeshCount = meshList.Count(m => m.Kind == PakMeshKind.StaticMesh);
-        var skeletalMeshCount = meshList.Count(m => m.Kind == PakMeshKind.SkeletalMesh);
+        sw.Stop();
+        var elapsed = sw.Elapsed;
+        var elapsedStr = elapsed.TotalMinutes >= 1
+            ? $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds}s"
+            : $"{elapsed.TotalSeconds:F1}s";
 
         progress?.Report(new OperationProgress("pakScan", "Done", totalCount, totalCount,
-            $"扫描完成：{textureList.Count} 个纹理，{staticMeshCount} 个 StaticMesh，{skeletalMeshCount} 个 SkeletalMesh，共 {scannedCount} 个资产"));
+            $"扫描完成：{textures.Count} 个纹理，{staticMeshes.Count} 个 StaticMesh，{skeletalMeshes.Count} 个 SkeletalMesh，共 {scannedCount} 个资产，耗时 {elapsedStr}"));
 
         diagnostics.Add(new Diagnostic(DiagnosticSeverity.Information, "PKS006",
-            $"扫描完成：{textureList.Count} 个 Texture2D，{staticMeshCount} 个 StaticMesh，{skeletalMeshCount} 个 SkeletalMesh，共扫描 {scannedCount} 个资产"));
+            $"扫描完成：{textures.Count} 个 Texture2D，{staticMeshes.Count} 个 StaticMesh，{skeletalMeshes.Count} 个 SkeletalMesh，共扫描 {scannedCount} 个资产，耗时 {elapsedStr}"));
 
-        var report = new PakScanReport(pakDirectory, scannedCount, textureList.Count, textureList,
-            staticMeshCount, skeletalMeshCount, meshList);
+        var report = new PakScanReport(pakDirectory, scannedCount, textures.Count, textures,
+            staticMeshes.Count, staticMeshes, skeletalMeshes.Count, skeletalMeshes);
         return new PakScanResult(pakDirectory, report, diagnostics);
     }
 
@@ -317,6 +307,37 @@ public sealed class PakScanService : IPakScanService
         int materialCount = skm.SkeletalMaterials?.Length ?? skm.Materials?.Length ?? 0;
         int boneCount = skm.ReferenceSkeleton?.FinalRefBoneInfo?.Length ?? 0;
         return new PakMeshEntry(skm.Name, objectPath, PakMeshKind.SkeletalMesh, lodCount, materialCount, boneCount);
+    }
+
+    // 读 package header 拿第一个 export 的类名，不触发 export 内容反序列化。
+    // 对于 IoPackage（.utoc/.ucas）无法轻量读取类名，返回 null 退回全量路径。
+    private static string? GetExportClassName(DefaultFileProvider provider, string path)
+    {
+        try
+        {
+            if (!provider.TryLoadPackage(path, out var pkg) || pkg is null)
+                return null;
+
+            if (pkg is CUE4Parse.UE4.Assets.Package uassetPkg)
+            {
+                if (uassetPkg.ExportMap.Length == 0) return null;
+                var classIndex = uassetPkg.ExportMap[0].ClassIndex;
+                if (classIndex.IsImport)
+                {
+                    var importIdx = -classIndex.Index - 1;
+                    if (importIdx < uassetPkg.ImportMap.Length)
+                        return uassetPkg.ImportMap[importIdx].ClassName.Text;
+                }
+                return null;
+            }
+
+            // IoPackage：无法轻量读取类名，返回 null
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static EGame ResolveGameVersion(string version)

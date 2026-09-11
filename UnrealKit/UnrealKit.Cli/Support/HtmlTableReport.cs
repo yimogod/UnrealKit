@@ -359,46 +359,75 @@ internal static class PakScanHtmlBuilder
     }
 }
 
-// ── PakScan Mesh HTML 构造器 ──────────────────────────────────────────────────
+// ── PakScan StaticMesh HTML 构造器 ────────────────────────────────────────────
 
-internal static class PakScanMeshHtmlBuilder
+internal static class PakScanStaticMeshHtmlBuilder
 {
     internal static string Build(UnrealKit.Core.PakScan.PakScanResult result)
     {
         var report  = result.Report;
-        var meshes  = report?.Meshes ?? [];
+        var meshes  = report?.StaticMeshes ?? [];
         var scanDir = report?.InputDirectory ?? result.InputPath;
 
         HtmlColumn[] columns =
         [
-            new("n",   "名称",     HtmlColumnType.Text),
-            new("k",   "类型",     HtmlColumnType.Tag),
-            new("lod", "LOD 数",   HtmlColumnType.Number, DefaultSort: true, DefaultSortDesc: true),
-            new("mat", "材质数",   HtmlColumnType.Number),
-            new("bon", "骨骼数",   HtmlColumnType.Number),
-            new("p",   "路径",     HtmlColumnType.Path, Sortable: false),
-        ];
-
-        HtmlFilter[] filters =
-        [
-            new("_k", "全部类型", "k", EnumFromColumn: "k"),
+            new("n",   "名称",   HtmlColumnType.Text),
+            new("lod", "LOD 数", HtmlColumnType.Number, DefaultSort: true, DefaultSortDesc: true),
+            new("mat", "材质数", HtmlColumnType.Number),
+            new("p",   "路径",   HtmlColumnType.Path, Sortable: false),
         ];
 
         var rows = meshes.Select(m => new object?[]
         {
-            m.Name, m.Kind.ToString(), m.LodCount, m.MaterialCount, m.BoneCount, m.ObjectPath,
+            m.Name, m.LodCount, m.MaterialCount, m.ObjectPath,
         }).ToArray();
 
         var meta = new HtmlMetaItem[]
         {
-            new("目录",        scanDir),
-            new("StaticMesh",  (report?.StaticMeshCount  ?? 0).ToString()),
-            new("SkeletalMesh",(report?.SkeletalMeshCount ?? 0).ToString()),
-            new("生成时间",    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+            new("目录",       scanDir),
+            new("StaticMesh", (report?.StaticMeshCount ?? 0).ToString()),
+            new("生成时间",   DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
         };
 
-        var title = $"PakScan — Meshes — {Path.GetFileName(scanDir.TrimEnd('/', '\\'))}";
-        return HtmlTableReport.Build(title, columns, rows, meta, filters,
+        var title = $"PakScan — StaticMesh — {Path.GetFileName(scanDir.TrimEnd('/', '\\'))}";
+        return HtmlTableReport.Build(title, columns, rows, meta, null,
+            result.Diagnostics, searchPlaceholder: "搜索名称 / 路径…");
+    }
+}
+
+// ── PakScan SkeletalMesh HTML 构造器 ──────────────────────────────────────────
+
+internal static class PakScanSkeletalMeshHtmlBuilder
+{
+    internal static string Build(UnrealKit.Core.PakScan.PakScanResult result)
+    {
+        var report  = result.Report;
+        var meshes  = report?.SkeletalMeshes ?? [];
+        var scanDir = report?.InputDirectory ?? result.InputPath;
+
+        HtmlColumn[] columns =
+        [
+            new("n",   "名称",   HtmlColumnType.Text),
+            new("lod", "LOD 数", HtmlColumnType.Number, DefaultSort: true, DefaultSortDesc: true),
+            new("mat", "材质数", HtmlColumnType.Number),
+            new("bon", "骨骼数", HtmlColumnType.Number),
+            new("p",   "路径",   HtmlColumnType.Path, Sortable: false),
+        ];
+
+        var rows = meshes.Select(m => new object?[]
+        {
+            m.Name, m.LodCount, m.MaterialCount, m.BoneCount, m.ObjectPath,
+        }).ToArray();
+
+        var meta = new HtmlMetaItem[]
+        {
+            new("目录",         scanDir),
+            new("SkeletalMesh", (report?.SkeletalMeshCount ?? 0).ToString()),
+            new("生成时间",     DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+        };
+
+        var title = $"PakScan — SkeletalMesh — {Path.GetFileName(scanDir.TrimEnd('/', '\\'))}";
+        return HtmlTableReport.Build(title, columns, rows, meta, null,
             result.Diagnostics, searchPlaceholder: "搜索名称 / 路径…");
     }
 }
@@ -420,10 +449,17 @@ internal static class PakScanCsvBuilder
         new("ObjectPath",         "ObjectPath"),
     ];
 
-    private static readonly CsvColumn[] MeshColumns =
+    private static readonly CsvColumn[] StaticMeshColumns =
     [
         new("Name",          "Name"),
-        new("Kind",          "Kind"),
+        new("LodCount",      "LodCount"),
+        new("MaterialCount", "MaterialCount"),
+        new("ObjectPath",    "ObjectPath"),
+    ];
+
+    private static readonly CsvColumn[] SkeletalMeshColumns =
+    [
+        new("Name",          "Name"),
         new("LodCount",      "LodCount"),
         new("MaterialCount", "MaterialCount"),
         new("BoneCount",     "BoneCount"),
@@ -442,13 +478,23 @@ internal static class PakScanCsvBuilder
         return CsvTableReport.Build(TexColumns, texRows);
     }
 
-    internal static string BuildMeshCsv(UnrealKit.Core.PakScan.PakScanResult result)
+    internal static string BuildStaticMeshCsv(UnrealKit.Core.PakScan.PakScanResult result)
     {
-        var meshes = result.Report?.Meshes ?? [];
-        var meshRows = meshes.Select(m => new object?[]
+        var meshes = result.Report?.StaticMeshes ?? [];
+        var rows = meshes.Select(m => new object?[]
         {
-            m.Name, m.Kind.ToString(), m.LodCount, m.MaterialCount, m.BoneCount, m.ObjectPath,
+            m.Name, m.LodCount, m.MaterialCount, m.ObjectPath,
         }).ToArray();
-        return CsvTableReport.Build(MeshColumns, meshRows);
+        return CsvTableReport.Build(StaticMeshColumns, rows);
+    }
+
+    internal static string BuildSkeletalMeshCsv(UnrealKit.Core.PakScan.PakScanResult result)
+    {
+        var meshes = result.Report?.SkeletalMeshes ?? [];
+        var rows = meshes.Select(m => new object?[]
+        {
+            m.Name, m.LodCount, m.MaterialCount, m.BoneCount, m.ObjectPath,
+        }).ToArray();
+        return CsvTableReport.Build(SkeletalMeshColumns, rows);
     }
 }

@@ -249,7 +249,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<RenderDocDiagnosticOption> RenderDocDiagnostics { get; } = [];
     public ObservableCollection<DownloadedPackageOption> DownloadedPackages { get; } = [];
     public ObservableCollection<PakScanTextureOption> PakScanTextures { get; } = [];
-    public ObservableCollection<PakScanMeshOption> PakScanMeshes { get; } = [];
+    public ObservableCollection<PakScanStaticMeshOption>   PakScanStaticMeshes   { get; } = [];
+    public ObservableCollection<PakScanSkeletalMeshOption> PakScanSkeletalMeshes { get; } = [];
     public ObservableCollection<PakScanDiagnosticOption> PakScanDiagnostics { get; } = [];
     public ObservableCollection<LocalPakPackageOption> LocalPakPackages { get; } = [];
     public ICommand CreateProjectCommand { get; }
@@ -2099,9 +2100,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         // 先在后台线程把所有 option 对象构建好，再一次性 Reset，只触发一次 CollectionChanged，
         // 避免逐条 Add 时 DataGrid 高频重排把 UI 线程堵死。
-        List<PakScanTextureOption> textureOptions;
-        List<PakScanMeshOption> meshOptions;
-        List<PakScanDiagnosticOption> diagOptions;
+        List<PakScanTextureOption>      textureOptions;
+        List<PakScanStaticMeshOption>   staticMeshOptions;
+        List<PakScanSkeletalMeshOption> skeletalMeshOptions;
+        List<PakScanDiagnosticOption>   diagOptions;
 
         if (result.Report is not null)
         {
@@ -2115,17 +2117,23 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     t.NumMips.ToString(),
                     (t.EstimatedSizeBytes / 1024.0 / 1024.0).ToString("F2")))
                 .ToList();
-            meshOptions = result.Report.Meshes
-                .Select(m => new PakScanMeshOption(
-                    m.Name, m.ObjectPath, m.Kind.ToString(),
+            staticMeshOptions = result.Report.StaticMeshes
+                .Select(m => new PakScanStaticMeshOption(
+                    m.Name, m.ObjectPath,
+                    m.LodCount.ToString(), m.MaterialCount.ToString()))
+                .ToList();
+            skeletalMeshOptions = result.Report.SkeletalMeshes
+                .Select(m => new PakScanSkeletalMeshOption(
+                    m.Name, m.ObjectPath,
                     m.LodCount.ToString(), m.MaterialCount.ToString(), m.BoneCount.ToString()))
                 .ToList();
         }
         else
         {
             PakScanDescription = "扫描失败，请查看诊断信息。";
-            textureOptions = [];
-            meshOptions = [];
+            textureOptions      = [];
+            staticMeshOptions   = [];
+            skeletalMeshOptions = [];
         }
 
         diagOptions = result.Diagnostics
@@ -2133,7 +2141,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             .ToList();
 
         PakScanTextures.Reset(textureOptions);
-        PakScanMeshes.Reset(meshOptions);
+        PakScanStaticMeshes.Reset(staticMeshOptions);
+        PakScanSkeletalMeshes.Reset(skeletalMeshOptions);
         PakScanDiagnostics.Reset(diagOptions);
 
         StatusMessage = result.IsSuccess
@@ -2145,24 +2154,40 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private void ExportPakScanHtml()
     {
         if (_lastPakScanResult is null) return;
-        var html = PakScanHtmlBuilder.Build(_lastPakScanResult);
-        var path = Path.Combine(Path.GetTempPath(), $"PakScanTextures_{DateTime.Now:yyyyMMdd_HHmmss}.html");
-        HtmlTableReport.WriteAndOpen(html, path);
+        var stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+        var texHtml  = PakScanHtmlBuilder.Build(_lastPakScanResult);
+        var texPath  = Path.Combine(Path.GetTempPath(), $"PakScanTextures_{stamp}.html");
+        HtmlTableReport.WriteAndOpen(texHtml, texPath);
+
+        var smHtml  = PakScanStaticMeshHtmlBuilder.Build(_lastPakScanResult);
+        var smPath  = Path.Combine(Path.GetTempPath(), $"PakScanStaticMeshes_{stamp}.html");
+        HtmlTableReport.WriteAndOpen(smHtml, smPath);
+
+        var skmHtml = PakScanSkeletalMeshHtmlBuilder.Build(_lastPakScanResult);
+        var skmPath = Path.Combine(Path.GetTempPath(), $"PakScanSkeletalMeshes_{stamp}.html");
+        HtmlTableReport.WriteAndOpen(skmHtml, skmPath);
     }
 
     private void ExportPakScanCsv()
     {
         if (_lastPakScanResult is null) return;
         var stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
         var texCsv  = PakScanCsvBuilder.Build(_lastPakScanResult);
         var texPath = Path.Combine(Path.GetTempPath(), $"PakScanTextures_{stamp}.csv");
         CsvTableReport.WriteAndOpen(texCsv, texPath);
         AddOperationLog("Info", $"CSV exported: {texPath}");
 
-        var meshCsv  = PakScanCsvBuilder.BuildMeshCsv(_lastPakScanResult);
-        var meshPath = Path.Combine(Path.GetTempPath(), $"PakScanMeshes_{stamp}.csv");
-        CsvTableReport.WriteAndOpen(meshCsv, meshPath);
-        AddOperationLog("Info", $"CSV exported: {meshPath}");
+        var smCsv  = PakScanCsvBuilder.BuildStaticMeshCsv(_lastPakScanResult);
+        var smPath = Path.Combine(Path.GetTempPath(), $"PakScanStaticMeshes_{stamp}.csv");
+        CsvTableReport.WriteAndOpen(smCsv, smPath);
+        AddOperationLog("Info", $"CSV exported: {smPath}");
+
+        var skmCsv  = PakScanCsvBuilder.BuildSkeletalMeshCsv(_lastPakScanResult);
+        var skmPath = Path.Combine(Path.GetTempPath(), $"PakScanSkeletalMeshes_{stamp}.csv");
+        CsvTableReport.WriteAndOpen(skmCsv, skmPath);
+        AddOperationLog("Info", $"CSV exported: {skmPath}");
     }
 
     private bool CanDownloadLatestPak() =>

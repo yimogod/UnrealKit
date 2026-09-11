@@ -164,16 +164,15 @@ internal static class ParseResultWriters
 
     internal static void WritePakScanHtml(PakScanResult result, string? outputFile)
     {
-        var texHtml  = PakScanHtmlBuilder.Build(result);
-        var meshHtml = PakScanMeshHtmlBuilder.Build(result);
+        var stamp   = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        var texPath = outputFile ?? Path.Combine(Path.GetTempPath(), $"PakScanTextures_{stamp}.html");
+        var base_   = Path.ChangeExtension(texPath, null);
+        var smPath  = base_ + "_StaticMeshes.html";
+        var skmPath = base_ + "_SkeletalMeshes.html";
 
-        var texPath = outputFile ?? Path.Combine(
-            Path.GetTempPath(),
-            $"PakScanTextures_{DateTime.Now:yyyyMMdd_HHmmss}.html");
-        var meshPath = Path.ChangeExtension(texPath, null) + "_Meshes.html";
-
-        HtmlTableReport.WriteAndOpen(texHtml,  texPath);
-        HtmlTableReport.WriteAndOpen(meshHtml, meshPath);
+        HtmlTableReport.WriteAndOpen(PakScanHtmlBuilder.Build(result),             texPath);
+        HtmlTableReport.WriteAndOpen(PakScanStaticMeshHtmlBuilder.Build(result),   smPath);
+        HtmlTableReport.WriteAndOpen(PakScanSkeletalMeshHtmlBuilder.Build(result), skmPath);
         CliOutput.WriteDiagnostics(result.Diagnostics);
     }
 
@@ -198,18 +197,26 @@ internal static class ParseResultWriters
             var texLines  = report.Textures.Select(t =>
                 $"{t.Name}\t{t.ObjectPath}\t{t.SizeX}\t{t.SizeY}\t{t.PixelFormat}\t{t.LodBias}\t{t.LodGroup}\t{t.NumMips}\t{t.EstimatedSizeBytes}");
 
-            // Meshes section
-            var meshHeader = "Name\tPath\tKind\tLodCount\tMaterialCount\tBoneCount";
-            var meshLines  = report.Meshes.Select(m =>
-                $"{m.Name}\t{m.ObjectPath}\t{m.Kind}\t{m.LodCount}\t{m.MaterialCount}\t{m.BoneCount}");
+            // StaticMesh section
+            var smHeader = "Name\tPath\tLodCount\tMaterialCount";
+            var smLines  = report.StaticMeshes.Select(m =>
+                $"{m.Name}\t{m.ObjectPath}\t{m.LodCount}\t{m.MaterialCount}");
+
+            // SkeletalMesh section
+            var skmHeader = "Name\tPath\tLodCount\tMaterialCount\tBoneCount";
+            var skmLines  = report.SkeletalMeshes.Select(m =>
+                $"{m.Name}\t{m.ObjectPath}\t{m.LodCount}\t{m.MaterialCount}\t{m.BoneCount}");
 
             if (outputFile is not null)
             {
                 File.WriteAllLines(outputFile, texLines.Prepend(texHeader));
-                var meshFile = Path.ChangeExtension(outputFile, null) + "_Meshes.tsv";
-                File.WriteAllLines(meshFile, meshLines.Prepend(meshHeader));
+                var smFile  = Path.ChangeExtension(outputFile, null) + "_StaticMeshes.tsv";
+                var skmFile = Path.ChangeExtension(outputFile, null) + "_SkeletalMeshes.tsv";
+                File.WriteAllLines(smFile,  smLines.Prepend(smHeader));
+                File.WriteAllLines(skmFile, skmLines.Prepend(skmHeader));
                 Console.WriteLine($"Pak scan complete: {report.TextureCount} texture(s) → {outputFile}");
-                Console.WriteLine($"                   {report.StaticMeshCount} StaticMesh / {report.SkeletalMeshCount} SkeletalMesh → {meshFile}");
+                Console.WriteLine($"                   {report.StaticMeshCount} StaticMesh → {smFile}");
+                Console.WriteLine($"                   {report.SkeletalMeshCount} SkeletalMesh → {skmFile}");
             }
             else
             {
@@ -218,8 +225,13 @@ internal static class ParseResultWriters
                     Console.WriteLine(line);
 
                 Console.WriteLine();
-                Console.WriteLine(meshHeader);
-                foreach (var line in meshLines)
+                Console.WriteLine(smHeader);
+                foreach (var line in smLines)
+                    Console.WriteLine(line);
+
+                Console.WriteLine();
+                Console.WriteLine(skmHeader);
+                foreach (var line in skmLines)
                     Console.WriteLine(line);
 
                 Console.WriteLine();
