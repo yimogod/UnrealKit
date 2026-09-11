@@ -31,21 +31,18 @@ public sealed class PakScanService : IPakScanService
             ["GAME_UE4_25"] = EGame.GAME_UE4_25,
         };
 
-    public async Task<PakScanResult> ScanAsync(
+    public async IAsyncEnumerable<PakScanEntry> ScanStreamAsync(
         string pakDirectory,
         PakScanConfig? config = null,
-        IProgress<OperationProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         config ??= PakScanConfig.Default;
-        var diagnostics = new List<Diagnostic>();
-        var sw = System.Diagnostics.Stopwatch.StartNew();
 
         if (!Directory.Exists(pakDirectory))
         {
-            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, "PKS001",
+            yield return new PakScanDiagnosticEntry(new Diagnostic(DiagnosticSeverity.Error, "PKS001",
                 $"Pak 目录不存在：{pakDirectory}", pakDirectory));
-            return new PakScanResult(pakDirectory, null, diagnostics);
+            yield break;
         }
 
         var hasPakFiles = Directory.EnumerateFiles(pakDirectory, "*.pak", SearchOption.AllDirectories).Any()
@@ -54,31 +51,33 @@ public sealed class PakScanService : IPakScanService
 
         if (!hasPakFiles)
         {
-            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, "PKS002",
+            yield return new PakScanDiagnosticEntry(new Diagnostic(DiagnosticSeverity.Error, "PKS002",
                 $"目录中未找到任何 .pak / .utoc / .ucas 文件：{pakDirectory}", pakDirectory,
                 "请确认路径指向包含游戏包文件的目录"));
-            return new PakScanResult(pakDirectory, null, diagnostics);
+            yield break;
         }
 
         var game = ResolveGameVersion(config.GameVersion);
 
         if (!string.IsNullOrWhiteSpace(config.OodleDllPath))
         {
+            Diagnostic? oodleDiag = null;
             if (!File.Exists(config.OodleDllPath))
             {
-                diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "PKS007",
+                oodleDiag = new Diagnostic(DiagnosticSeverity.Warning, "PKS007",
                     $"指定的 Oodle DLL 不存在，Oodle 压缩资产将无法解压：{config.OodleDllPath}",
-                    SuggestedFix: "请确认路径指向 oo2core_9_win64.dll 或同类文件"));
+                    SuggestedFix: "请确认路径指向 oo2core_9_win64.dll 或同类文件");
             }
             else
             {
                 try { OodleHelper.Initialize(config.OodleDllPath); }
                 catch (Exception ex)
                 {
-                    diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "PKS007",
-                        $"Oodle DLL 加载失败，Oodle 压缩资产将无法解压：{ex.Message}"));
+                    oodleDiag = new Diagnostic(DiagnosticSeverity.Warning, "PKS007",
+                        $"Oodle DLL 加载失败，Oodle 压缩资产将无法解压：{ex.Message}");
                 }
             }
+            if (oodleDiag is not null) yield return new PakScanDiagnosticEntry(oodleDiag);
         }
 
         var provider = new DefaultFileProvider(
@@ -91,6 +90,7 @@ public sealed class PakScanService : IPakScanService
 
         if (!string.IsNullOrWhiteSpace(config.AesKey))
         {
+            Diagnostic? aesDiag = null;
             try
             {
                 var key = new FAesKey(config.AesKey);
@@ -98,10 +98,11 @@ public sealed class PakScanService : IPakScanService
             }
             catch (Exception ex)
             {
-                diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "PKS004",
+                aesDiag = new Diagnostic(DiagnosticSeverity.Warning, "PKS004",
                     $"AES 密钥提交失败，加密资产将无法读取：{ex.Message}",
-                    SuggestedFix: "请确认密钥格式为十六进制字符串，例如 0x1A2B3C4D..."));
+                    SuggestedFix: "请确认密钥格式为十六进制字符串，例如 0x1A2B3C4D...");
             }
+            if (aesDiag is not null) yield return new PakScanDiagnosticEntry(aesDiag);
         }
 
         await provider.MountAsync();
@@ -113,85 +114,168 @@ public sealed class PakScanService : IPakScanService
 
         var totalCount = allPaths.Count;
         var scannedCount = 0;
-        var textures    = new List<PakTextureEntry>();
-        var staticMeshes    = new List<PakMeshEntry>();
-        var skeletalMeshes  = new List<PakMeshEntry>();
+        var textureCount = 0;
+        var staticMeshCount = 0;
+        var skeletalMeshCount = 0;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
 
-        progress?.Report(new OperationProgress("pakScan", "Scan", 0, totalCount, $"开始扫描，共 {totalCount} 个资产…"));
+        yield return new PakScanStartEntry(totalCount);
 
         foreach (var path in allPaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
             scannedCount++;
 
-            if (scannedCount % 500 == 0)
-                progress?.Report(new OperationProgress("pakScan", "Scan", scannedCount, totalCount,
-                    $"扫描中… {scannedCount}/{totalCount}"));
+            // yield 不能出现在 try/catch 内，用局部列表暂存本次迭代产生的条目，在外部 yield
+            var pendingEntries = new List<PakScanEntry>();
 
             try
             {
                 var objectPath = path[..^".uasset".Length];
 
-                // 先读 package header（只解析 ImportMap/ExportMap 元数据，不反序列化 export 内容），
-                // 从 ExportMap[0].ClassIndex 拿类名，只对目标类型做一次完整反序列化。
-                // IoPackage 或读取失败时 className 为 null，退回三次盲试。
+                // 先读 package header 拿类名，只对目标类型做完整反序列化；
+                // IoPackage 或失败时 className 为 null，退回盲试。
                 var className = GetExportClassName(provider, path);
                 if (className == "Texture2D")
                 {
                     if (provider.TryLoadPackageObject<UTexture2D>(objectPath, out var tex) && tex is not null)
-                        textures.Add(BuildTextureEntry(tex, objectPath, config, diagnostics));
+                    {
+                        var texEntry = BuildTextureEntry(tex, objectPath, config, out var diag);
+                        if (diag is not null) pendingEntries.Add(new PakScanDiagnosticEntry(diag));
+                        pendingEntries.Add(new PakScanTextureFound(texEntry));
+                        textureCount++;
+                    }
                 }
                 else if (className == "SkeletalMesh")
                 {
-                    // SkeletalMesh 先于 StaticMesh 判断，因为 SkeletalMesh 继承自 StaticMesh
+                    // SkeletalMesh 先于 StaticMesh，因为 SkeletalMesh 继承自 StaticMesh
                     if (provider.TryLoadPackageObject<USkeletalMesh>(objectPath, out var skm) && skm is not null)
-                        skeletalMeshes.Add(BuildSkeletalMeshEntry(skm, objectPath));
+                    {
+                        pendingEntries.Add(new PakScanSkeletalMeshFound(BuildSkeletalMeshEntry(skm, objectPath)));
+                        skeletalMeshCount++;
+                    }
                 }
                 else if (className == "StaticMesh")
                 {
                     if (provider.TryLoadPackageObject<UStaticMesh>(objectPath, out var sm) && sm is not null)
-                        staticMeshes.Add(BuildStaticMeshEntry(sm, objectPath));
+                    {
+                        pendingEntries.Add(new PakScanStaticMeshFound(BuildStaticMeshEntry(sm, objectPath)));
+                        staticMeshCount++;
+                    }
                 }
                 else if (className is null)
                 {
                     // IoPackage 或 header 解析失败，退回盲试；SkeletalMesh 仍先于 StaticMesh
                     if (provider.TryLoadPackageObject<UTexture2D>(objectPath, out var tex) && tex is not null)
-                        textures.Add(BuildTextureEntry(tex, objectPath, config, diagnostics));
+                    {
+                        var texEntry = BuildTextureEntry(tex, objectPath, config, out var diag);
+                        if (diag is not null) pendingEntries.Add(new PakScanDiagnosticEntry(diag));
+                        pendingEntries.Add(new PakScanTextureFound(texEntry));
+                        textureCount++;
+                    }
                     else if (provider.TryLoadPackageObject<USkeletalMesh>(objectPath, out var skm) && skm is not null)
-                        skeletalMeshes.Add(BuildSkeletalMeshEntry(skm, objectPath));
+                    {
+                        pendingEntries.Add(new PakScanSkeletalMeshFound(BuildSkeletalMeshEntry(skm, objectPath)));
+                        skeletalMeshCount++;
+                    }
                     else if (provider.TryLoadPackageObject<UStaticMesh>(objectPath, out var sm) && sm is not null)
-                        staticMeshes.Add(BuildStaticMeshEntry(sm, objectPath));
+                    {
+                        pendingEntries.Add(new PakScanStaticMeshFound(BuildStaticMeshEntry(sm, objectPath)));
+                        staticMeshCount++;
+                    }
                 }
             }
             catch (Exception ex)
             {
-                diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "PKS005",
-                    $"资产反序列化失败，已跳过：{path} — {ex.Message}", path));
+                pendingEntries.Add(new PakScanDiagnosticEntry(new Diagnostic(DiagnosticSeverity.Warning, "PKS005",
+                    $"资产反序列化失败，已跳过：{path} — {ex.Message}", path)));
             }
+
+            foreach (var e in pendingEntries)
+                yield return e;
+
+            // 每个资产处理完后让出一次，保证取消令牌和进度回调能及时响应
+            await Task.Yield();
+
+            if (scannedCount % 100 == 0)
+                yield return new PakScanProgressEntry(scannedCount, totalCount);
         }
 
         sw.Stop();
-        var elapsed = sw.Elapsed;
-        var elapsedStr = elapsed.TotalMinutes >= 1
-            ? $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds}s"
-            : $"{elapsed.TotalSeconds:F1}s";
+        yield return new PakScanDiagnosticEntry(new Diagnostic(DiagnosticSeverity.Information, "PKS006",
+            $"扫描完成：{textureCount} 个 Texture2D，{staticMeshCount} 个 StaticMesh，{skeletalMeshCount} 个 SkeletalMesh，共扫描 {scannedCount} 个资产，耗时 {FormatElapsed(sw.Elapsed)}"));
 
-        progress?.Report(new OperationProgress("pakScan", "Done", totalCount, totalCount,
-            $"扫描完成：{textures.Count} 个纹理，{staticMeshes.Count} 个 StaticMesh，{skeletalMeshes.Count} 个 SkeletalMesh，共 {scannedCount} 个资产，耗时 {elapsedStr}"));
+        yield return new PakScanCompleteEntry(scannedCount, textureCount, staticMeshCount, skeletalMeshCount, sw.Elapsed);
+    }
 
-        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Information, "PKS006",
-            $"扫描完成：{textures.Count} 个 Texture2D，{staticMeshes.Count} 个 StaticMesh，{skeletalMeshes.Count} 个 SkeletalMesh，共扫描 {scannedCount} 个资产，耗时 {elapsedStr}"));
+    public async Task<PakScanResult> ScanAsync(
+        string pakDirectory,
+        PakScanConfig? config = null,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var diagnostics = new List<Diagnostic>();
+        var textures       = new List<PakTextureEntry>();
+        var staticMeshes   = new List<PakMeshEntry>();
+        var skeletalMeshes = new List<PakMeshEntry>();
+        int totalCount = 0;
 
-        var report = new PakScanReport(pakDirectory, scannedCount, textures.Count, textures,
-            staticMeshes.Count, staticMeshes, skeletalMeshes.Count, skeletalMeshes);
+        await foreach (var entry in ScanStreamAsync(pakDirectory, config, cancellationToken))
+        {
+            switch (entry)
+            {
+                case PakScanStartEntry s:
+                    totalCount = s.TotalAssets;
+                    progress?.Report(new OperationProgress("pakScan", "Scan", 0, totalCount,
+                        $"开始扫描，共 {totalCount} 个资产…"));
+                    break;
+
+                case PakScanProgressEntry p:
+                    progress?.Report(new OperationProgress("pakScan", "Scan", p.Scanned, p.Total,
+                        $"扫描中… {p.Scanned}/{p.Total}"));
+                    break;
+
+                case PakScanTextureFound t:
+                    textures.Add(t.Texture);
+                    break;
+
+                case PakScanStaticMeshFound sm:
+                    staticMeshes.Add(sm.Mesh);
+                    break;
+
+                case PakScanSkeletalMeshFound skm:
+                    skeletalMeshes.Add(skm.Mesh);
+                    break;
+
+                case PakScanDiagnosticEntry d:
+                    diagnostics.Add(d.Diagnostic);
+                    break;
+
+                case PakScanCompleteEntry c:
+                    progress?.Report(new OperationProgress("pakScan", "Done", c.TotalScanned, c.TotalScanned,
+                        $"扫描完成：{c.TextureCount} 个纹理，{c.StaticMeshCount} 个 StaticMesh，{c.SkeletalMeshCount} 个 SkeletalMesh，共 {c.TotalScanned} 个资产，耗时 {FormatElapsed(c.Elapsed)}"));
+                    break;
+            }
+        }
+
+        if (diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error))
+            return new PakScanResult(pakDirectory, null, diagnostics);
+
+        var report = new PakScanReport(pakDirectory, textures.Count + staticMeshes.Count + skeletalMeshes.Count,
+            textures.Count, textures, staticMeshes.Count, staticMeshes, skeletalMeshes.Count, skeletalMeshes);
         return new PakScanResult(pakDirectory, report, diagnostics);
     }
+
+    private static string FormatElapsed(TimeSpan elapsed) =>
+        elapsed.TotalMinutes >= 1
+            ? $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds}s"
+            : $"{elapsed.TotalSeconds:F1}s";
 
     private static PakTextureEntry BuildTextureEntry(
         UTexture2D tex,
         string objectPath,
         PakScanConfig config,
-        List<Diagnostic> diagnostics)
+        out Diagnostic? largeSizeWarning)
     {
         var platData = tex.PlatformData;
         int sizeX = platData?.SizeX ?? (int)tex.ImportedSize.X;
@@ -204,12 +288,11 @@ public sealed class PakScanService : IPakScanService
 
         long estimatedBytes = EstimateSize(sizeX, sizeY, pixelFormat);
 
-        if (estimatedBytes > config.LargeSizeWarningBytes)
-        {
-            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "PKS007",
+        largeSizeWarning = estimatedBytes > config.LargeSizeWarningBytes
+            ? new Diagnostic(DiagnosticSeverity.Warning, "PKS007",
                 $"大尺寸纹理：{tex.Name} ({sizeX}x{sizeY} {pixelFormat}, 估算 {estimatedBytes / 1024 / 1024} MB)",
-                objectPath));
-        }
+                objectPath)
+            : null;
 
         return new PakTextureEntry(
             tex.Name,
