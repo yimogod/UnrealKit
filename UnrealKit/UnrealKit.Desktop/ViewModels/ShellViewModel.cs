@@ -2194,49 +2194,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             GameVersion = string.IsNullOrWhiteSpace(PakGameVersion) ? "GAME_UE5_6" : PakGameVersion.Trim(),
         };
 
-        // 流式消费：每发现一个资产立即追加到列表，避免等到扫描结束才刷新 UI。
-        // UI 侧积攒到 200 条时批量 Reset 一次，平衡实时性与 DataGrid 重排开销。
         var textures        = new List<UnrealKit.Core.PakScan.PakTextureEntry>();
         var staticMeshes    = new List<UnrealKit.Core.PakScan.PakMeshEntry>();
         var skeletalMeshes  = new List<UnrealKit.Core.PakScan.PakMeshEntry>();
         var diagnostics     = new List<UnrealKit.Core.Diagnostics.Diagnostic>();
-        const int flushBatch = 200;
-        int lastFlushedTex = 0, lastFlushedSm = 0, lastFlushedSkm = 0;
-
-        void FlushIfNeeded(bool force = false)
-        {
-            bool needFlush = force
-                || (textures.Count       - lastFlushedTex  >= flushBatch)
-                || (staticMeshes.Count   - lastFlushedSm   >= flushBatch)
-                || (skeletalMeshes.Count - lastFlushedSkm  >= flushBatch);
-
-            if (!needFlush) return;
-
-            PakTextures.Reset(textures.Select(t => new PakScanTextureOption(
-                t.Name, t.ObjectPath,
-                t.SizeX.ToString(), t.SizeY.ToString(),
-                t.PixelFormat,
-                t.LodBias.ToString(), t.LodGroup,
-                t.NumMips.ToString(),
-                (t.EstimatedSizeBytes / 1024.0 / 1024.0).ToString("F2"),
-                t.PakChunkId)));
-            PakStaticMeshes.Reset(staticMeshes.Select(m => new PakScanStaticMeshOption(
-                m.Name, m.ObjectPath,
-                m.LodCount.ToString(), m.MaterialCount.ToString(),
-                m.VertexCount.ToString(), m.TriangleCount.ToString(), m.PakChunkId)));
-            PakSkeletalMeshes.Reset(skeletalMeshes.Select(m => new PakScanSkeletalMeshOption(
-                m.Name, m.ObjectPath,
-                m.LodCount.ToString(), m.MaterialCount.ToString(), m.BoneCount.ToString(),
-                m.VertexCount.ToString(), m.TriangleCount.ToString(), m.PakChunkId)));
-            var diagOpts = diagnostics.Select(d => new PakScanDiagnosticOption(
-                d.Severity.ToString(), d.Code, d.Message)).ToList();
-
-            PakScanDiagnostics.Reset(diagOpts);
-
-            lastFlushedTex  = textures.Count;
-            lastFlushedSm   = staticMeshes.Count;
-            lastFlushedSkm  = skeletalMeshes.Count;
-        }
 
         var service = _pakScanService;
         await foreach (var entry in service.ScanStreamAsync(inputPath, config, OperationCancellationToken))
@@ -2252,7 +2213,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     progress?.Report(new OperationProgress("pakScan", "Scan", p.Scanned, p.Total,
                         $"扫描中… {p.Scanned}/{p.Total}  {p.CurrentAsset}"));
                     PakScanDescription = $"扫描中… {p.Scanned}/{p.Total}  ·  已发现 {textures.Count} 纹理 / {staticMeshes.Count} StaticMesh / {skeletalMeshes.Count} SkeletalMesh";
-                    FlushIfNeeded();
                     break;
 
                 case UnrealKit.Core.PakScan.PakScanTextureFound t:
@@ -2278,8 +2238,25 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             }
         }
 
-        // 扫描结束，最终刷新一次
-        FlushIfNeeded(force: true);
+        // 扫描结束后一次性填充 DataGrid
+        PakTextures.Reset(textures.Select(t => new PakScanTextureOption(
+            t.Name, t.ObjectPath,
+            t.SizeX.ToString(), t.SizeY.ToString(),
+            t.PixelFormat,
+            t.LodBias.ToString(), t.LodGroup,
+            t.NumMips.ToString(),
+            (t.EstimatedSizeBytes / 1024.0 / 1024.0).ToString("F2"),
+            t.PakChunkId)));
+        PakStaticMeshes.Reset(staticMeshes.Select(m => new PakScanStaticMeshOption(
+            m.Name, m.ObjectPath,
+            m.LodCount.ToString(), m.MaterialCount.ToString(),
+            m.VertexCount.ToString(), m.TriangleCount.ToString(), m.PakChunkId)));
+        PakSkeletalMeshes.Reset(skeletalMeshes.Select(m => new PakScanSkeletalMeshOption(
+            m.Name, m.ObjectPath,
+            m.LodCount.ToString(), m.MaterialCount.ToString(), m.BoneCount.ToString(),
+            m.VertexCount.ToString(), m.TriangleCount.ToString(), m.PakChunkId)));
+        PakScanDiagnostics.Reset(diagnostics.Select(d => new PakScanDiagnosticOption(
+            d.Severity.ToString(), d.Code, d.Message)));
 
         bool hasError = diagnostics.Any(d => d.Severity == UnrealKit.Core.Diagnostics.DiagnosticSeverity.Error);
         UnrealKit.Core.PakScan.PakScanReport? report = hasError ? null
