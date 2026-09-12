@@ -2249,7 +2249,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
                 case UnrealKit.Core.PakScan.PakScanProgressEntry p:
                     progress?.Report(new OperationProgress("pakScan", "Scan", p.Scanned, p.Total,
-                        $"扫描中… {p.Scanned}/{p.Total}"));
+                        $"扫描中… {p.Scanned}/{p.Total}  {p.CurrentAsset}"));
                     PakScanDescription = $"扫描中… {p.Scanned}/{p.Total}  ·  已发现 {textures.Count} 纹理 / {staticMeshes.Count} StaticMesh / {skeletalMeshes.Count} SkeletalMesh";
                     FlushIfNeeded();
                     break;

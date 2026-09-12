@@ -52,8 +52,8 @@ public abstract record PakScanEntry;
 /// <summary>扫描开始，携带待扫描资产总数。</summary>
 public sealed record PakScanStartEntry(int TotalAssets) : PakScanEntry;
 
-/// <summary>扫描进度，每扫描一批资产推送一次。</summary>
-public sealed record PakScanProgressEntry(int Scanned, int Total) : PakScanEntry;
+/// <summary>扫描进度，每扫描一个资产推送一次。</summary>
+public sealed record PakScanProgressEntry(int Scanned, int Total, string CurrentAsset) : PakScanEntry;
 
 /// <summary>发现一个 Texture2D。</summary>
 public sealed record PakScanTextureFound(PakTextureEntry Texture) : PakScanEntry;

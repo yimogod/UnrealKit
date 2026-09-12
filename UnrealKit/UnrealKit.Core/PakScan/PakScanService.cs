@@ -202,11 +202,10 @@ public sealed class PakScanService : IPakScanService
             foreach (var e in pendingEntries)
                 yield return e;
 
+            yield return new PakScanProgressEntry(scannedCount, totalCount, path);
+
             // 每个资产处理完后让出一次，保证取消令牌和进度回调能及时响应
             await Task.Yield();
-
-            if (scannedCount % 100 == 0)
-                yield return new PakScanProgressEntry(scannedCount, totalCount);
         }
 
         sw.Stop();
@@ -240,7 +239,7 @@ public sealed class PakScanService : IPakScanService
 
                 case PakScanProgressEntry p:
                     progress?.Report(new OperationProgress("pakScan", "Scan", p.Scanned, p.Total,
-                        $"扫描中… {p.Scanned}/{p.Total}"));
+                        $"扫描中… {p.Scanned}/{p.Total}  {p.CurrentAsset}"));
                     break;
 
                 case PakScanTextureFound t:
