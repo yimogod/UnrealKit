@@ -197,17 +197,17 @@ public sealed record TrendChartAxisLabel(double X, double Y, string Label);
 public sealed record PakScanTextureOption(
     string Name, string Path, string SizeX, string SizeY,
     string Format, string LodBias, string LodGroup,
-    string NumMips, string EstimatedSizeMB);
+    string NumMips, string EstimatedSizeMB, string PakChunkId);
 
 public sealed record PakScanStaticMeshOption(
     string Name, string Path,
     string LodCount, string MaterialCount,
-    string VertexCount, string TriangleCount);
+    string VertexCount, string TriangleCount, string PakChunkId);
 
 public sealed record PakScanSkeletalMeshOption(
     string Name, string Path,
     string LodCount, string MaterialCount, string BoneCount,
-    string VertexCount, string TriangleCount);
+    string VertexCount, string TriangleCount, string PakChunkId);
 
 public sealed record PakScanDiagnosticOption(string Severity, string Code, string Message);
 

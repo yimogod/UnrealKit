@@ -140,6 +140,7 @@ public sealed class PakScanService : IPakScanService
             try
             {
                 var objectPath = path[..^".uasset".Length];
+                var chunkId = ExtractPakChunkId(provider, path);
 
                 // 先读 package header 拿类名，只对目标类型做完整反序列化；
                 // IoPackage 或失败时 className 为 null，退回盲试。
@@ -148,7 +149,7 @@ public sealed class PakScanService : IPakScanService
                 {
                     if (provider.TryLoadPackageObject<UTexture2D>(objectPath, out var tex) && tex is not null)
                     {
-                        var texEntry = BuildTextureEntry(tex, objectPath, config, out var diag);
+                        var texEntry = BuildTextureEntry(tex, objectPath, config, chunkId, out var diag);
                         if (diag is not null) pendingEntries.Add(new PakScanDiagnosticEntry(diag));
                         pendingEntries.Add(new PakScanTextureFound(texEntry));
                         textureCount++;
@@ -159,7 +160,7 @@ public sealed class PakScanService : IPakScanService
                     // SkeletalMesh 先于 StaticMesh，因为 SkeletalMesh 继承自 StaticMesh
                     if (provider.TryLoadPackageObject<USkeletalMesh>(objectPath, out var skm) && skm is not null)
                     {
-                        pendingEntries.Add(new PakScanSkeletalMeshFound(BuildSkeletalMeshEntry(skm, objectPath)));
+                        pendingEntries.Add(new PakScanSkeletalMeshFound(BuildSkeletalMeshEntry(skm, objectPath, chunkId)));
                         skeletalMeshCount++;
                     }
                 }
@@ -167,7 +168,7 @@ public sealed class PakScanService : IPakScanService
                 {
                     if (provider.TryLoadPackageObject<UStaticMesh>(objectPath, out var sm) && sm is not null)
                     {
-                        pendingEntries.Add(new PakScanStaticMeshFound(BuildStaticMeshEntry(sm, objectPath)));
+                        pendingEntries.Add(new PakScanStaticMeshFound(BuildStaticMeshEntry(sm, objectPath, chunkId)));
                         staticMeshCount++;
                     }
                 }
@@ -176,19 +177,19 @@ public sealed class PakScanService : IPakScanService
                     // IoPackage 或 header 解析失败，退回盲试；SkeletalMesh 仍先于 StaticMesh
                     if (provider.TryLoadPackageObject<UTexture2D>(objectPath, out var tex) && tex is not null)
                     {
-                        var texEntry = BuildTextureEntry(tex, objectPath, config, out var diag);
+                        var texEntry = BuildTextureEntry(tex, objectPath, config, chunkId, out var diag);
                         if (diag is not null) pendingEntries.Add(new PakScanDiagnosticEntry(diag));
                         pendingEntries.Add(new PakScanTextureFound(texEntry));
                         textureCount++;
                     }
                     else if (provider.TryLoadPackageObject<USkeletalMesh>(objectPath, out var skm) && skm is not null)
                     {
-                        pendingEntries.Add(new PakScanSkeletalMeshFound(BuildSkeletalMeshEntry(skm, objectPath)));
+                        pendingEntries.Add(new PakScanSkeletalMeshFound(BuildSkeletalMeshEntry(skm, objectPath, chunkId)));
                         skeletalMeshCount++;
                     }
                     else if (provider.TryLoadPackageObject<UStaticMesh>(objectPath, out var sm) && sm is not null)
                     {
-                        pendingEntries.Add(new PakScanStaticMeshFound(BuildStaticMeshEntry(sm, objectPath)));
+                        pendingEntries.Add(new PakScanStaticMeshFound(BuildStaticMeshEntry(sm, objectPath, chunkId)));
                         staticMeshCount++;
                     }
                 }
@@ -327,10 +328,28 @@ public sealed class PakScanService : IPakScanService
             ? $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds}s"
             : $"{elapsed.TotalSeconds:F1}s";
 
+    // "pakchunk5-Android_ASTCClient.pak" → "5"；无法识别时返回空字符串。
+    private static string ExtractPakChunkId(DefaultFileProvider provider, string assetPath)
+    {
+        if (!provider.Files.TryGetValue(assetPath, out var gameFile))
+            return string.Empty;
+        if (gameFile is not CUE4Parse.UE4.VirtualFileSystem.VfsEntry vfsEntry)
+            return string.Empty;
+
+        var vfsName = vfsEntry.Vfs.Name; // e.g. "pakchunk5-Android_ASTCClient.pak"
+        var fileName = System.IO.Path.GetFileNameWithoutExtension(vfsName); // "pakchunk5-Android_ASTCClient"
+        var firstSegment = fileName.Split('-')[0]; // "pakchunk5"
+        const string prefix = "pakchunk";
+        if (firstSegment.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return firstSegment[prefix.Length..]; // "5"
+        return string.Empty;
+    }
+
     private static PakTextureEntry BuildTextureEntry(
         UTexture2D tex,
         string objectPath,
         PakScanConfig config,
+        string pakChunkId,
         out Diagnostic? largeSizeWarning)
     {
         var platData = tex.PlatformData;
@@ -359,7 +378,8 @@ public sealed class PakScanService : IPakScanService
             lodBias,
             lodGroup,
             numMips,
-            estimatedBytes);
+            estimatedBytes,
+            pakChunkId);
     }
 
     private static int ReadIntProperty(List<FPropertyTag> properties, string name)
@@ -433,17 +453,17 @@ public sealed class PakScanService : IPakScanService
         };
     }
 
-    private static PakMeshEntry BuildStaticMeshEntry(UStaticMesh sm, string objectPath)
+    private static PakMeshEntry BuildStaticMeshEntry(UStaticMesh sm, string objectPath, string pakChunkId)
     {
         int lodCount = sm.RenderData?.LODs?.Length ?? 0;
         int materialCount = sm.StaticMaterials?.Length ?? sm.Materials?.Length ?? 0;
         var lod0 = sm.RenderData?.LODs?.Length > 0 ? sm.RenderData.LODs[0] : null;
         int vertexCount = lod0?.NumVertices ?? 0;
         int triangleCount = (lod0?.IndexBuffer?.Buffer?.Length ?? 0) / 3;
-        return new PakMeshEntry(sm.Name, objectPath, PakMeshKind.StaticMesh, lodCount, materialCount, 0, vertexCount, triangleCount);
+        return new PakMeshEntry(sm.Name, objectPath, PakMeshKind.StaticMesh, lodCount, materialCount, 0, vertexCount, triangleCount, pakChunkId);
     }
 
-    private static PakMeshEntry BuildSkeletalMeshEntry(USkeletalMesh skm, string objectPath)
+    private static PakMeshEntry BuildSkeletalMeshEntry(USkeletalMesh skm, string objectPath, string pakChunkId)
     {
         int lodCount = skm.LODModels?.Length ?? 0;
         int materialCount = skm.SkeletalMaterials?.Length ?? skm.Materials?.Length ?? 0;
@@ -451,7 +471,7 @@ public sealed class PakScanService : IPakScanService
         var lod0 = skm.LODModels?.Length > 0 ? skm.LODModels[0] : null;
         int vertexCount = lod0?.NumVertices ?? 0;
         int triangleCount = lod0?.Sections?.Sum(s => (int)s.NumTriangles) ?? 0;
-        return new PakMeshEntry(skm.Name, objectPath, PakMeshKind.SkeletalMesh, lodCount, materialCount, boneCount, vertexCount, triangleCount);
+        return new PakMeshEntry(skm.Name, objectPath, PakMeshKind.SkeletalMesh, lodCount, materialCount, boneCount, vertexCount, triangleCount, pakChunkId);
     }
 
     // 读 package header 拿第一个 export 的类名，不触发 export 内容反序列化。

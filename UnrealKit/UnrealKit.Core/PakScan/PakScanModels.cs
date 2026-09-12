@@ -11,7 +11,8 @@ public sealed record PakTextureEntry(
     int LodBias,
     string LodGroup,
     int NumMips,
-    long EstimatedSizeBytes);
+    long EstimatedSizeBytes,
+    string PakChunkId);
 
 public enum PakMeshKind { StaticMesh, SkeletalMesh }
 
@@ -23,7 +24,8 @@ public sealed record PakMeshEntry(
     int MaterialCount,
     int BoneCount,
     int VertexCount,
-    int TriangleCount);
+    int TriangleCount,
+    string PakChunkId);
 
 public sealed record PakScanReport(
     string InputDirectory,

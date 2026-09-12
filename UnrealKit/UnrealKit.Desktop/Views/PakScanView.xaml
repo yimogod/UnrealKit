@@ -63,6 +63,7 @@
                                           SelectionMode="Single">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name"     Binding="{Binding Name}"            Width="200" />
+                                        <DataGridTextColumn Header="Chunk"    Binding="{Binding PakChunkId}"      Width="50" />
                                         <DataGridTextColumn Header="Path"     Binding="{Binding Path}"            Width="650" />
                                         <DataGridTextColumn Header="SizeX"    Binding="{Binding SizeX}"           Width="60" />
                                         <DataGridTextColumn Header="SizeY"    Binding="{Binding SizeY}"           Width="60" />
@@ -195,6 +196,7 @@
                                           SelectionMode="Single">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name"          Binding="{Binding Name}"          Width="200" />
+                                        <DataGridTextColumn Header="Chunk"         Binding="{Binding PakChunkId}"    Width="50" />
                                         <DataGridTextColumn Header="Path"          Binding="{Binding Path}"          Width="500" />
                                         <DataGridTextColumn Header="LodCount"      Binding="{Binding LodCount}"      Width="70" />
                                         <DataGridTextColumn Header="MaterialCount" Binding="{Binding MaterialCount}" Width="90" />
@@ -252,6 +254,7 @@
                                           SelectionMode="Single">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name"          Binding="{Binding Name}"          Width="200" />
+                                        <DataGridTextColumn Header="Chunk"         Binding="{Binding PakChunkId}"    Width="50" />
                                         <DataGridTextColumn Header="Path"          Binding="{Binding Path}"          Width="430" />
                                         <DataGridTextColumn Header="LodCount"      Binding="{Binding LodCount}"      Width="70" />
                                         <DataGridTextColumn Header="MaterialCount" Binding="{Binding MaterialCount}" Width="90" />
