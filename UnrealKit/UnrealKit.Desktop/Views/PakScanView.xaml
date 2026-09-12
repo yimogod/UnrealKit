@@ -78,12 +78,7 @@
                     </TabItem>
                     <TabItem Header="StaticMesh">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="4" />
-                                <ColumnDefinition Width="360" MinWidth="200" MaxWidth="600" />
-                            </Grid.ColumnDefinitions>
-                            <DockPanel Grid.Column="0">
+                            <DockPanel>
                                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
                                     <TextBlock Text="搜索：" VerticalAlignment="Center" Margin="0,0,4,0" />
                                     <TextBox Text="{Binding PakStaticMeshes.Search, UpdateSourceTrigger=PropertyChanged}"
@@ -100,7 +95,8 @@
                                 <DataGrid ItemsSource="{Binding PakScanStaticMeshes}"
                                           SelectedItem="{Binding SelectedPakStaticMesh, Mode=TwoWay}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
-                                          SelectionMode="Single">
+                                          SelectionMode="Single"
+                                          MouseDoubleClick="StaticMeshDataGrid_MouseDoubleClick">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name"          Binding="{Binding Name}"          Width="200" />
                                         <DataGridTextColumn Header="Chunk"         Binding="{Binding PakChunkId}"    Width="50" />
@@ -112,36 +108,11 @@
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </DockPanel>
-                            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" />
-                            <DockPanel Grid.Column="2" Margin="4,0,0,0">
-                                <Button Content="预览" x:Name="OpenStaticMeshPreviewButton"
-                                        Click="OpenStaticMeshPreviewButton_Click"
-                                        DockPanel.Dock="Top" HorizontalAlignment="Left"
-                                        Padding="14,6" Margin="0,0,0,4">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding SelectedPakStaticMesh}" Value="{x:Null}">
-                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                                <views:MeshPreviewControl GlbPath="{Binding MeshPreviewGlbPath}"
-                                                          StatusMessage="{Binding MeshPreviewStatus}" />
-                            </DockPanel>
                         </Grid>
                     </TabItem>
                     <TabItem Header="SkeletalMesh">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="4" />
-                                <ColumnDefinition Width="360" MinWidth="200" MaxWidth="600" />
-                            </Grid.ColumnDefinitions>
-                            <DockPanel Grid.Column="0">
+                            <DockPanel>
                                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
                                     <TextBlock Text="搜索：" VerticalAlignment="Center" Margin="0,0,4,0" />
                                     <TextBox Text="{Binding PakSkeletalMeshes.Search, UpdateSourceTrigger=PropertyChanged}"
@@ -158,7 +129,8 @@
                                 <DataGrid ItemsSource="{Binding PakScanSkeletalMeshes}"
                                           SelectedItem="{Binding SelectedPakSkeletalMesh, Mode=TwoWay}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
-                                          SelectionMode="Single">
+                                          SelectionMode="Single"
+                                          MouseDoubleClick="SkeletalMeshDataGrid_MouseDoubleClick">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name"          Binding="{Binding Name}"          Width="200" />
                                         <DataGridTextColumn Header="Chunk"         Binding="{Binding PakChunkId}"    Width="50" />
@@ -170,26 +142,6 @@
                                         <DataGridTextColumn Header="Triangles"     Binding="{Binding TriangleCount}" Width="*" />
                                     </DataGrid.Columns>
                                 </DataGrid>
-                            </DockPanel>
-                            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" />
-                            <DockPanel Grid.Column="2" Margin="4,0,0,0">
-                                <Button Content="预览" x:Name="OpenSkeletalMeshPreviewButton"
-                                        Click="OpenSkeletalMeshPreviewButton_Click"
-                                        DockPanel.Dock="Top" HorizontalAlignment="Left"
-                                        Padding="14,6" Margin="0,0,0,4">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding SelectedPakSkeletalMesh}" Value="{x:Null}">
-                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                                <views:MeshPreviewControl GlbPath="{Binding MeshPreviewGlbPath}"
-                                                          StatusMessage="{Binding MeshPreviewStatus}" />
                             </DockPanel>
                         </Grid>
                     </TabItem>

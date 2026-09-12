@@ -52,7 +52,14 @@ public partial class PakScanView : UserControl
     {
         if (DataContext is not ShellViewModel vm) return;
         if (vm.SelectedPakStaticMesh is null) return;
+        var owner = Window.GetWindow(this) ?? Application.Current.MainWindow;
+        MeshPreviewWindow.Show(owner, vm.SelectedPakStaticMesh.Name, vm.MeshPreviewGlbPath, vm.MeshPreviewStatus);
+    }
 
+    private void StaticMeshDataGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (DataContext is not ShellViewModel vm) return;
+        if (vm.SelectedPakStaticMesh is null) return;
         var owner = Window.GetWindow(this) ?? Application.Current.MainWindow;
         MeshPreviewWindow.Show(owner, vm.SelectedPakStaticMesh.Name, vm.MeshPreviewGlbPath, vm.MeshPreviewStatus);
     }
@@ -61,7 +68,14 @@ public partial class PakScanView : UserControl
     {
         if (DataContext is not ShellViewModel vm) return;
         if (vm.SelectedPakSkeletalMesh is null) return;
+        var owner = Window.GetWindow(this) ?? Application.Current.MainWindow;
+        MeshPreviewWindow.Show(owner, vm.SelectedPakSkeletalMesh.Name, vm.MeshPreviewGlbPath, vm.MeshPreviewStatus);
+    }
 
+    private void SkeletalMeshDataGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (DataContext is not ShellViewModel vm) return;
+        if (vm.SelectedPakSkeletalMesh is null) return;
         var owner = Window.GetWindow(this) ?? Application.Current.MainWindow;
         MeshPreviewWindow.Show(owner, vm.SelectedPakSkeletalMesh.Name, vm.MeshPreviewGlbPath, vm.MeshPreviewStatus);
     }
