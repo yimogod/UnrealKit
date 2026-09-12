@@ -371,15 +371,17 @@ internal static class PakScanStaticMeshHtmlBuilder
 
         HtmlColumn[] columns =
         [
-            new("n",   "名称",   HtmlColumnType.Text),
-            new("lod", "LOD 数", HtmlColumnType.Number, DefaultSort: true, DefaultSortDesc: true),
-            new("mat", "材质数", HtmlColumnType.Number),
-            new("p",   "路径",   HtmlColumnType.Path, Sortable: false),
+            new("n",   "名称",    HtmlColumnType.Text),
+            new("lod", "LOD 数",  HtmlColumnType.Number, DefaultSort: true, DefaultSortDesc: true),
+            new("mat", "材质数",  HtmlColumnType.Number),
+            new("vtx", "顶点数",  HtmlColumnType.Number),
+            new("tri", "三角形数", HtmlColumnType.Number),
+            new("p",   "路径",    HtmlColumnType.Path, Sortable: false),
         ];
 
         var rows = meshes.Select(m => new object?[]
         {
-            m.Name, m.LodCount, m.MaterialCount, m.ObjectPath,
+            m.Name, m.LodCount, m.MaterialCount, m.VertexCount, m.TriangleCount, m.ObjectPath,
         }).ToArray();
 
         var meta = new HtmlMetaItem[]
@@ -407,16 +409,18 @@ internal static class PakScanSkeletalMeshHtmlBuilder
 
         HtmlColumn[] columns =
         [
-            new("n",   "名称",   HtmlColumnType.Text),
-            new("lod", "LOD 数", HtmlColumnType.Number, DefaultSort: true, DefaultSortDesc: true),
-            new("mat", "材质数", HtmlColumnType.Number),
-            new("bon", "骨骼数", HtmlColumnType.Number),
-            new("p",   "路径",   HtmlColumnType.Path, Sortable: false),
+            new("n",   "名称",    HtmlColumnType.Text),
+            new("lod", "LOD 数",  HtmlColumnType.Number, DefaultSort: true, DefaultSortDesc: true),
+            new("mat", "材质数",  HtmlColumnType.Number),
+            new("bon", "骨骼数",  HtmlColumnType.Number),
+            new("vtx", "顶点数",  HtmlColumnType.Number),
+            new("tri", "三角形数", HtmlColumnType.Number),
+            new("p",   "路径",    HtmlColumnType.Path, Sortable: false),
         ];
 
         var rows = meshes.Select(m => new object?[]
         {
-            m.Name, m.LodCount, m.MaterialCount, m.BoneCount, m.ObjectPath,
+            m.Name, m.LodCount, m.MaterialCount, m.BoneCount, m.VertexCount, m.TriangleCount, m.ObjectPath,
         }).ToArray();
 
         var meta = new HtmlMetaItem[]
@@ -454,6 +458,8 @@ internal static class PakScanCsvBuilder
         new("Name",          "Name"),
         new("LodCount",      "LodCount"),
         new("MaterialCount", "MaterialCount"),
+        new("VertexCount",   "VertexCount"),
+        new("TriangleCount", "TriangleCount"),
         new("ObjectPath",    "ObjectPath"),
     ];
 
@@ -463,6 +469,8 @@ internal static class PakScanCsvBuilder
         new("LodCount",      "LodCount"),
         new("MaterialCount", "MaterialCount"),
         new("BoneCount",     "BoneCount"),
+        new("VertexCount",   "VertexCount"),
+        new("TriangleCount", "TriangleCount"),
         new("ObjectPath",    "ObjectPath"),
     ];
 
@@ -483,7 +491,7 @@ internal static class PakScanCsvBuilder
         var meshes = result.Report?.StaticMeshes ?? [];
         var rows = meshes.Select(m => new object?[]
         {
-            m.Name, m.LodCount, m.MaterialCount, m.ObjectPath,
+            m.Name, m.LodCount, m.MaterialCount, m.VertexCount, m.TriangleCount, m.ObjectPath,
         }).ToArray();
         return CsvTableReport.Build(StaticMeshColumns, rows);
     }
@@ -493,7 +501,7 @@ internal static class PakScanCsvBuilder
         var meshes = result.Report?.SkeletalMeshes ?? [];
         var rows = meshes.Select(m => new object?[]
         {
-            m.Name, m.LodCount, m.MaterialCount, m.BoneCount, m.ObjectPath,
+            m.Name, m.LodCount, m.MaterialCount, m.BoneCount, m.VertexCount, m.TriangleCount, m.ObjectPath,
         }).ToArray();
         return CsvTableReport.Build(SkeletalMeshColumns, rows);
     }
