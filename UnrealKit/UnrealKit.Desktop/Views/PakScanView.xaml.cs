@@ -24,4 +24,22 @@ public partial class PakScanView : UserControl
             vm.LastDecodedTexturePng,
             vm.TexturePreviewStatus);
     }
+
+    private void OpenStaticMeshPreviewButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ShellViewModel vm) return;
+        if (vm.SelectedPakStaticMesh is null) return;
+
+        var owner = Window.GetWindow(this) ?? Application.Current.MainWindow;
+        MeshPreviewWindow.Show(owner, vm.SelectedPakStaticMesh.Name, vm.MeshPreviewGlbPath, vm.MeshPreviewStatus);
+    }
+
+    private void OpenSkeletalMeshPreviewButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ShellViewModel vm) return;
+        if (vm.SelectedPakSkeletalMesh is null) return;
+
+        var owner = Window.GetWindow(this) ?? Application.Current.MainWindow;
+        MeshPreviewWindow.Show(owner, vm.SelectedPakSkeletalMesh.Name, vm.MeshPreviewGlbPath, vm.MeshPreviewStatus);
+    }
 }

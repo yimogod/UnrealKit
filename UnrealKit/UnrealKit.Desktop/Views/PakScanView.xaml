@@ -204,10 +204,25 @@
                                 </DataGrid>
                             </DockPanel>
                             <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" />
-                            <views:MeshPreviewControl Grid.Column="2"
-                                                      GlbPath="{Binding MeshPreviewGlbPath}"
-                                                      StatusMessage="{Binding MeshPreviewStatus}"
-                                                      Margin="4,0,0,0" />
+                            <DockPanel Grid.Column="2" Margin="4,0,0,0">
+                                <Button Content="预览" x:Name="OpenStaticMeshPreviewButton"
+                                        Click="OpenStaticMeshPreviewButton_Click"
+                                        DockPanel.Dock="Top" HorizontalAlignment="Left"
+                                        Padding="14,6" Margin="0,0,0,4">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedPakStaticMesh}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <views:MeshPreviewControl GlbPath="{Binding MeshPreviewGlbPath}"
+                                                          StatusMessage="{Binding MeshPreviewStatus}" />
+                            </DockPanel>
                         </Grid>
                     </TabItem>
                     <TabItem Header="SkeletalMesh">
@@ -247,10 +262,25 @@
                                 </DataGrid>
                             </DockPanel>
                             <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" />
-                            <views:MeshPreviewControl Grid.Column="2"
-                                                      GlbPath="{Binding MeshPreviewGlbPath}"
-                                                      StatusMessage="{Binding MeshPreviewStatus}"
-                                                      Margin="4,0,0,0" />
+                            <DockPanel Grid.Column="2" Margin="4,0,0,0">
+                                <Button Content="预览" x:Name="OpenSkeletalMeshPreviewButton"
+                                        Click="OpenSkeletalMeshPreviewButton_Click"
+                                        DockPanel.Dock="Top" HorizontalAlignment="Left"
+                                        Padding="14,6" Margin="0,0,0,4">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedPakSkeletalMesh}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <views:MeshPreviewControl GlbPath="{Binding MeshPreviewGlbPath}"
+                                                          StatusMessage="{Binding MeshPreviewStatus}" />
+                            </DockPanel>
                         </Grid>
                     </TabItem>
                     <TabItem Header="Diagnostics">
