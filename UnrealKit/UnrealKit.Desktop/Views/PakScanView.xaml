@@ -30,6 +30,9 @@
                 <Button Content="扫描" Command="{Binding ScanPakCommand}" Padding="18,8" />
                 <Button Content="导出 HTML" Command="{Binding ExportPakScanHtmlCommand}" Padding="14,8" Margin="8,0,0,0" />
                 <Button Content="导出 CSV"  Command="{Binding ExportPakScanCsvCommand}"  Padding="14,8" Margin="8,0,0,0" />
+                <Button Content="预览贴图" x:Name="OpenTexturePreviewButton"
+                        Click="OpenTexturePreviewButton_Click"
+                        Padding="14,8" Margin="8,0,0,0" />
             </StackPanel>
         </StackPanel>
         <ScrollViewer Grid.Row="1" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
@@ -37,11 +40,6 @@
                 <TabControl MinHeight="350" Margin="0,12,0,0">
                     <TabItem Header="Textures">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="4" />
-                                <ColumnDefinition Width="260" MinWidth="160" MaxWidth="480" />
-                            </Grid.ColumnDefinitions>
                             <!-- 左：DataGrid + 分页 -->
                             <DockPanel Grid.Column="0">
                                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
@@ -60,7 +58,8 @@
                                 <DataGrid ItemsSource="{Binding PakScanTextures}"
                                           SelectedItem="{Binding SelectedPakTexture, Mode=TwoWay}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
-                                          SelectionMode="Single">
+                                          SelectionMode="Single"
+                                          MouseDoubleClick="TextureDataGrid_MouseDoubleClick">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name"     Binding="{Binding Name}"            Width="200" />
                                         <DataGridTextColumn Header="Chunk"    Binding="{Binding PakChunkId}"      Width="50" />
@@ -75,98 +74,6 @@
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </DockPanel>
-                            <!-- 分隔条 -->
-                            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" />
-                            <!-- 右：预览面板 -->
-                            <Border Grid.Column="2"
-                                    BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
-                                    BorderThickness="1" Margin="4,0,0,0" Padding="8">
-                                <StackPanel>
-                                    <TextBlock Text="预览" FontWeight="SemiBold" Margin="0,0,0,8" />
-                                    <!-- 未选中时的提示 -->
-                                    <TextBlock Text="选择一行查看预览。">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock" BasedOn="{StaticResource HintTextStyle}">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding SelectedPakTexture}" Value="{x:Null}">
-                                                        <Setter Property="Visibility" Value="Visible" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <!-- 解码后的图片 -->
-                                    <Image MaxWidth="240" MaxHeight="240" Stretch="Uniform"
-                                           Source="{Binding SelectedTextureBitmap}">
-                                        <Image.Style>
-                                            <Style TargetType="Image">
-                                                <Setter Property="Visibility" Value="Visible" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding SelectedTextureBitmap}" Value="{x:Null}">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Image.Style>
-                                    </Image>
-                                    <!-- 状态/尺寸信息：选中行后显示 -->
-                                    <TextBlock Text="{Binding TexturePreviewStatus}"
-                                               TextWrapping="Wrap" Margin="0,6,0,0">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Visible" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding SelectedPakTexture}" Value="{x:Null}">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <!-- 选中行的元数据 -->
-                                    <StackPanel Margin="0,8,0,0">
-                                        <StackPanel.Style>
-                                            <Style TargetType="StackPanel">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding SelectedPakTexture}" Value="{x:Null}">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </StackPanel.Style>
-                                        <TextBlock Text="{Binding SelectedPakTexture.Name}"    FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding SelectedPakTexture.Format}"  FontFamily="Consolas" FontSize="11" Margin="0,2,0,0" />
-                                        <TextBlock Text="{Binding SelectedPakTexture.LodGroup}" FontFamily="Consolas" FontSize="11" Margin="0,2,0,0" />
-                                        <TextBlock FontFamily="Consolas" FontSize="11" Margin="0,2,0,0">
-                                            <TextBlock.Text>
-                                                <MultiBinding StringFormat="{}{0} × {1}">
-                                                    <Binding Path="SelectedPakTexture.SizeX" />
-                                                    <Binding Path="SelectedPakTexture.SizeY" />
-                                                </MultiBinding>
-                                            </TextBlock.Text>
-                                        </TextBlock>
-                                        <TextBlock Text="{Binding SelectedPakTexture.NumMips,       StringFormat='Mips: {0}'}"   FontFamily="Consolas" FontSize="11" Margin="0,2,0,0" />
-                                        <TextBlock Text="{Binding SelectedPakTexture.EstimatedSizeMB, StringFormat='Est. {0} MB'}" FontFamily="Consolas" FontSize="11" Margin="0,2,0,0" />
-                                    </StackPanel>
-                                    <!-- 预览按钮：有 bitmap 后才显示 -->
-                                    <Button Content="预览" x:Name="OpenTexturePreviewButton"
-                                            Click="OpenTexturePreviewButton_Click"
-                                            Padding="14,6" Margin="0,10,0,0" HorizontalAlignment="Left">
-                                        <Button.Style>
-                                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                                <Setter Property="Visibility" Value="Visible" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding SelectedTextureBitmap}" Value="{x:Null}">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Button.Style>
-                                    </Button>
-                                </StackPanel>
-                            </Border>
                         </Grid>
                     </TabItem>
                     <TabItem Header="StaticMesh">

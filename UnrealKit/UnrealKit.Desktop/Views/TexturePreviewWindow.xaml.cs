@@ -11,6 +11,8 @@ public partial class TexturePreviewWindow : Window
     private static TexturePreviewWindow? _instance;
     private byte[]? _pngBytes;
 
+    public static bool IsOpen => _instance is not null;
+
     private TexturePreviewWindow(Window owner)
     {
         InitializeComponent();
