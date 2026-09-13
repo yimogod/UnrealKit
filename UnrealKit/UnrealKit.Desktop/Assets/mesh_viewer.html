@@ -18,11 +18,30 @@
     color: #666; font-family: monospace; font-size: 11px;
     pointer-events: none;
   }
+  #mode-toggle {
+    position: absolute; top: 10px; right: 10px;
+    display: flex; border: 1px solid #444; border-radius: 4px; overflow: hidden;
+    font-family: sans-serif; font-size: 12px;
+  }
+  #mode-toggle button {
+    padding: 4px 12px; background: #2a2a2a; color: #888;
+    border: none; cursor: pointer; outline: none;
+  }
+  #mode-toggle button.active {
+    background: #444; color: #fff;
+  }
+  #mode-toggle button:hover:not(.active) {
+    background: #333; color: #bbb;
+  }
 </style>
 </head>
 <body>
 <div id="status">正在加载…</div>
 <div id="info"></div>
+<div id="mode-toggle">
+  <button id="btn-solid" class="active" onclick="setMode('solid')">实体</button>
+  <button id="btn-wireframe" onclick="setMode('wireframe')">线框</button>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -3725,6 +3744,36 @@ resize();
 
 // ── Load GLB ─────────────────────────────────────────────────────────────────
 let currentMesh = null;
+let currentMode = 'solid';
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('btn-solid').className = mode === 'solid' ? 'active' : '';
+  document.getElementById('btn-wireframe').className = mode === 'wireframe' ? 'active' : '';
+  if (currentMesh) applyMode(currentMesh);
+}
+
+function applyMode(obj) {
+  obj.traverse(o => {
+    if (!o.isMesh) return;
+    if (currentMode === 'wireframe') {
+      o.material = Array.isArray(o.material)
+        ? o.material.map(m => { const wf = new THREE.MeshBasicMaterial({ color: 0x888888, wireframe: true }); return wf; })
+        : new THREE.MeshBasicMaterial({ color: 0x888888, wireframe: true });
+    } else {
+      // restore original materials stored on userData
+      if (o.userData._origMaterial) {
+        o.material = o.userData._origMaterial;
+      }
+    }
+  });
+}
+
+function storeOrigMaterials(obj) {
+  obj.traverse(o => {
+    if (o.isMesh) o.userData._origMaterial = o.material;
+  });
+}
 
 function showModel(arrayBuffer) {
   const loader = new THREE.GLTFLoader();
@@ -3745,6 +3794,8 @@ function showModel(arrayBuffer) {
       updateCamera();
       scene.add(model);
       currentMesh = model;
+      storeOrigMaterials(model);
+      applyMode(model);
       let tris = 0;
       model.traverse(o => { if (o.isMesh && o.geometry.index) tris += o.geometry.index.count / 3; });
       infoEl.textContent = Math.round(tris).toLocaleString() + ' triangles  |  LMB drag: rotate  |  scroll: zoom';
