@@ -6,6 +6,8 @@ public partial class MeshPreviewWindow : Window
 {
     private static MeshPreviewWindow? _instance;
 
+    public static bool IsOpen => _instance is not null;
+
     private MeshPreviewWindow(Window owner)
     {
         InitializeComponent();

@@ -23,13 +23,22 @@ public partial class PakScanView : UserControl
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(ShellViewModel.SelectedTextureBitmap)) return;
         if (sender is not ShellViewModel vm) return;
-        if (vm.SelectedPakTexture is null) return;
-        if (!TexturePreviewWindow.IsOpen) return;
 
-        var owner = Window.GetWindow(this) ?? Application.Current.MainWindow;
-        TexturePreviewWindow.Show(owner, vm.SelectedPakTexture, vm.SelectedTextureBitmap, vm.LastDecodedTexturePng, vm.TexturePreviewStatus);
+        if (e.PropertyName == nameof(ShellViewModel.SelectedTextureBitmap))
+        {
+            if (vm.SelectedPakTexture is null) return;
+            if (!TexturePreviewWindow.IsOpen) return;
+            var owner = Window.GetWindow(this) ?? Application.Current.MainWindow;
+            TexturePreviewWindow.Show(owner, vm.SelectedPakTexture, vm.SelectedTextureBitmap, vm.LastDecodedTexturePng, vm.TexturePreviewStatus);
+        }
+        else if (e.PropertyName is nameof(ShellViewModel.MeshPreviewGlbPath) or nameof(ShellViewModel.MeshPreviewStatus))
+        {
+            if (!MeshPreviewWindow.IsOpen) return;
+            var meshName = vm.SelectedPakStaticMesh?.Name ?? vm.SelectedPakSkeletalMesh?.Name ?? string.Empty;
+            var owner = Window.GetWindow(this) ?? Application.Current.MainWindow;
+            MeshPreviewWindow.Show(owner, meshName, vm.MeshPreviewGlbPath, vm.MeshPreviewStatus);
+        }
     }
 
     private void OpenTexturePreviewButton_Click(object sender, RoutedEventArgs e)
