@@ -267,7 +267,8 @@ public sealed record ProjectSettings(
     string RemoteControlObjectPath = "/Script/Engine.Default__KismetSystemLibrary",
     string RemoteControlFunctionName = "ExecuteConsoleCommand",
     string RemoteControlCommandParameter = "Command",
-    int RemoteControlLocalForwardPort = 0)
+    int RemoteControlLocalForwardPort = 0,
+    IReadOnlyList<CameraPreset>? CameraPresets = null)
 {
     /// <summary>
     /// 新建工程时两个平台都给出默认 profile：多平台工程是默认假设，
@@ -286,6 +287,9 @@ public sealed record ProjectSettings(
         PostCaptureSequence: null,
         Android: AndroidPlatformProfile.CreateDefaults(),
         Win64: Win64PlatformProfile.CreateDefaults());
+
+    /// <summary>相机预设列表。未配置时是空列表，调用方不必每处判空。</summary>
+    public IReadOnlyList<CameraPreset> Cameras => CameraPresets ?? [];
 
     /// <summary>
     /// 设备别名表。未配置时是空表而不是 null，调用方不必每处判空。
@@ -428,6 +432,37 @@ public static class ConsoleCommandPresetDefaults
         Action(Stats, "stat none", "关闭所有 stat 显示."),
         Action(Memory, "memreport -full", "输出完整 memreport 到设备 Saved 目录.")
     ];
+}
+
+/// <summary>
+/// 相机预设：记录一个命名的相机位置和旋转，供跳转指令使用。
+/// <see cref="MapName"/> 用于在界面上按地图分组过滤，不参与指令构造。
+/// 位置和旋转字段使用 UE 坐标系（cm，度）。
+/// </summary>
+public sealed record CameraPreset(
+    string Name,
+    string MapName,
+    double X,
+    double Y,
+    double Z,
+    double Pitch,
+    double Yaw,
+    double Roll)
+{
+    public static CameraPreset Create(
+        string name, string mapName,
+        double x, double y, double z,
+        double pitch, double yaw, double roll) =>
+        new(name.Trim(), mapName.Trim(), x, y, z, pitch, yaw, roll);
+
+    /// <summary>
+    /// 构建要发送的 UE 控制台跳转指令。
+    /// 使用 <c>teleport</c> 指令格式：X Y Z P Y R（位置和旋转各三分量）。
+    /// </summary>
+    public string BuildTeleportCommand() =>
+        string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"teleport {X:F2} {Y:F2} {Z:F2} {Pitch:F2} {Yaw:F2} {Roll:F2}");
 }
 
 /// <summary>

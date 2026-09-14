@@ -120,6 +120,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _consoleSequenceInlineCmds = string.Empty;
     private string _consoleSequenceOutput = "Run a sequence to see results here.";
     private bool _isConsoleSequenceRunning;
+    private string _selectedCameraMap = string.Empty;
+    private CameraPresetOption? _selectedCameraPreset;
+    private string _cameraOutput = string.Empty;
+    private bool _isCameraJumping;
     private string _ftpHost = string.Empty;
     private string _ftpPort = FtpSettings.DefaultPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private string _ftpUsername = string.Empty;
@@ -160,6 +164,34 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         PakTextures       = new PagedSearchList<PakScanTextureOption>     (t => t.Name, t => t.Path, () => _pakPageSize);
         PakStaticMeshes   = new PagedSearchList<PakScanStaticMeshOption>  (m => m.Name, m => m.Path, () => _pakPageSize);
         PakSkeletalMeshes = new PagedSearchList<PakScanSkeletalMeshOption>(m => m.Name, m => m.Path, () => _pakPageSize);
+
+        PakTextures.RegisterSortKey("Name",     t => t.Name);
+        PakTextures.RegisterSortKey("Chunk",    t => int.TryParse(t.PakChunkId, out var c) ? c : 0);
+        PakTextures.RegisterSortKey("Path",     t => t.Path);
+        PakTextures.RegisterSortKey("SizeX",    t => int.TryParse(t.SizeX, out var v) ? v : 0);
+        PakTextures.RegisterSortKey("SizeY",    t => int.TryParse(t.SizeY, out var v) ? v : 0);
+        PakTextures.RegisterSortKey("Format",   t => t.Format);
+        PakTextures.RegisterSortKey("LodBias",  t => int.TryParse(t.LodBias, out var v) ? v : 0);
+        PakTextures.RegisterSortKey("LodGroup", t => t.LodGroup);
+        PakTextures.RegisterSortKey("Mips",     t => int.TryParse(t.NumMips, out var v) ? v : 0);
+        PakTextures.RegisterSortKey("Est. MB",  t => double.TryParse(t.EstimatedSizeMB, out var v) ? v : 0.0);
+
+        PakStaticMeshes.RegisterSortKey("Name",          m => m.Name);
+        PakStaticMeshes.RegisterSortKey("Chunk",         m => int.TryParse(m.PakChunkId, out var c) ? c : 0);
+        PakStaticMeshes.RegisterSortKey("Path",          m => m.Path);
+        PakStaticMeshes.RegisterSortKey("LodCount",      m => int.TryParse(m.LodCount, out var v) ? v : 0);
+        PakStaticMeshes.RegisterSortKey("MaterialCount", m => int.TryParse(m.MaterialCount, out var v) ? v : 0);
+        PakStaticMeshes.RegisterSortKey("Vertices",      m => int.TryParse(m.VertexCount, out var v) ? v : 0);
+        PakStaticMeshes.RegisterSortKey("Triangles",     m => int.TryParse(m.TriangleCount, out var v) ? v : 0);
+
+        PakSkeletalMeshes.RegisterSortKey("Name",          m => m.Name);
+        PakSkeletalMeshes.RegisterSortKey("Chunk",         m => int.TryParse(m.PakChunkId, out var c) ? c : 0);
+        PakSkeletalMeshes.RegisterSortKey("Path",          m => m.Path);
+        PakSkeletalMeshes.RegisterSortKey("LodCount",      m => int.TryParse(m.LodCount, out var v) ? v : 0);
+        PakSkeletalMeshes.RegisterSortKey("MaterialCount", m => int.TryParse(m.MaterialCount, out var v) ? v : 0);
+        PakSkeletalMeshes.RegisterSortKey("BoneCount",     m => int.TryParse(m.BoneCount, out var v) ? v : 0);
+        PakSkeletalMeshes.RegisterSortKey("Vertices",      m => int.TryParse(m.VertexCount, out var v) ? v : 0);
+        PakSkeletalMeshes.RegisterSortKey("Triangles",     m => int.TryParse(m.TriangleCount, out var v) ? v : 0);
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
@@ -208,6 +240,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _refreshConsoleCommandPresetValuesCommand = new AsyncDelegateCommand(
             RefreshConsoleCommandPresetValuesAsync, () => !IsBusy && _selectedDevice is not null);
         _clearOperationLogsCommand = new DelegateCommand(ClearOperationLogs, () => OperationLogs.Count > 0);
+        _jumpToCameraCommand = new AsyncDelegateCommand(
+            JumpToCameraAsync,
+            () => !IsBusy && _selectedDevice is not null && _selectedCameraPreset is not null);
         DownloadCommand = new AsyncDelegateCommand(DownloadLatestAsync, CanDownloadLatest);
         InstallDownloadedApkCommand = new AsyncDelegateCommand(InstallDownloadedApkAsync, CanInstallDownloadedApk);
         OpenDownloadedDirectoryCommand = new AsyncDelegateCommand(
@@ -230,6 +265,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     /// <summary>当前平台作用域内的设备，供设备列表绑定。</summary>
     public ObservableCollection<DeviceDisplayInfo> ScopedDevices { get; } = [];
     public ObservableCollection<ConsoleSequencePreset> ConsoleSequencePresets { get; } = [];
+
+    /// <summary>相机预设列表，按当前所选地图过滤后供 CameraView 的 ListBox 绑定。</summary>
+    public ObservableCollection<CameraPresetOption> CameraPresets { get; } = [];
+
+    /// <summary>工程中所有相机预设涉及的地图名列表，供地图选择下拉使用。</summary>
+    public ObservableCollection<string> CameraMapNames { get; } = [];
 
     /// <summary>
     /// 控制台预设指令。界面用 <c>CollectionViewSource</c> 按 <c>Group</c> 分组显示，
@@ -326,6 +367,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "启动参数" => "选择预设并预览 uecommandline.txt，然后推送到已明确选择的设备。",
         "控制台" => "向运行中的 UE 应用发送控制台指令。预设指令按分组列出，开关与数值型可读回游戏中的当前值。",
         "指令序列" => "按顺序执行指令序列（指令 → 等待 → 标记），支持工程预设和内联输入。",
+        "相机指令" => "选择地图，从预设列表中选定相机位置，点击跳转将相机移动到指定坐标和旋转。",
         "采集归档" => "将采集数据归档到新的 Content Capture，避免覆盖历史数据。",
         "RenderDoc" => "调用独立的 RenderDoc Python 脚本，查看退出码与输出目录。",
         "Pak解析" => "离线扫描游戏包目录（.pak / .utoc / .ucas），批量提取 Texture2D/Mesh 资产信息，无需连接设备。",
@@ -1253,6 +1295,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         LocalPakPackages.Clear();
         SelectedLocalPakPackage = null;
         PakFolderSummary = "点击「刷新本地包」列出本工程已下载的 Pak 包。";
+
+        // 相机预设：按地图分组，默认选首个地图
+        CameraMapNames.Clear();
+        CameraPresets.Clear();
+        foreach (var map in project.Settings.Cameras.Select(c => c.MapName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(m => m, StringComparer.OrdinalIgnoreCase))
+        {
+            CameraMapNames.Add(map);
+        }
+        SelectedCameraMap = CameraMapNames.Count > 0 ? CameraMapNames[0] : string.Empty;
 
         OnPropertyChanged(nameof(ProjectTitle));
         UpdateLaunchParameterPreview();
@@ -2837,6 +2888,47 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         set => SetField(ref _isConsoleSequenceRunning, value);
     }
 
+    /// <summary>当前选中的地图名，切换时刷新 <see cref="CameraPresets"/> 过滤列表。</summary>
+    public string SelectedCameraMap
+    {
+        get => _selectedCameraMap;
+        set
+        {
+            if (!SetField(ref _selectedCameraMap, value ?? string.Empty)) return;
+            RefreshFilteredCameraPresets();
+            SelectedCameraPreset = CameraPresets.Count > 0 ? CameraPresets[0] : null;
+            _jumpToCameraCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    /// <summary>当前在列表中选中的相机预设。</summary>
+    public CameraPresetOption? SelectedCameraPreset
+    {
+        get => _selectedCameraPreset;
+        set
+        {
+            if (!SetField(ref _selectedCameraPreset, value)) return;
+            _jumpToCameraCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    public string CameraOutput
+    {
+        get => _cameraOutput;
+        private set => SetField(ref _cameraOutput, value ?? string.Empty);
+    }
+
+    public bool IsCameraJumping
+    {
+        get => _isCameraJumping;
+        private set => SetField(ref _isCameraJumping, value);
+    }
+
+    public bool HasCameraOutput => !string.IsNullOrEmpty(_cameraOutput);
+
+    public ICommand JumpToCameraCommand => _jumpToCameraCommand;
+    private AsyncDelegateCommand _jumpToCameraCommand;
+
     public ICommand RunConsoleSequenceCommand => _runConsoleSequenceCommand;
     private AsyncDelegateCommand _runConsoleSequenceCommand;
 
@@ -3088,9 +3180,57 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
     }
 
+    private void RefreshFilteredCameraPresets()
+    {
+        CameraPresets.Clear();
+        if (_project is null) return;
+        foreach (var cam in _project.Settings.Cameras)
+        {
+            if (string.Equals(cam.MapName, _selectedCameraMap, StringComparison.OrdinalIgnoreCase))
+                CameraPresets.Add(new CameraPresetOption(cam));
+        }
+    }
+
+    private async Task JumpToCameraAsync()
+    {
+        if (_selectedDevice is null || _selectedCameraPreset is null) return;
+
+        var command = _selectedCameraPreset.Preset.BuildTeleportCommand();
+        IsCameraJumping = true;
+        CameraOutput = $"Sending: {command}...";
+        try
+        {
+            var consoleService = new ConsoleCommandService(ResolveDeviceServiceForDevice(_selectedDevice.Device));
+            if (!consoleService.IsSupported)
+            {
+                CameraOutput = $"[SKIP] {_selectedDevice.Platform} 平台暂不支持发送 UE 控制台指令。";
+                return;
+            }
+
+            var result = await consoleService.SendAsync(
+                _selectedDevice.Id,
+                ConsoleCommand.Create(command),
+                TryResolveSelectedTarget(out _)?.ProcessIdentity,
+                cancellationToken: OperationCancellationToken);
+
+            CameraOutput = result.Succeeded
+                ? $"[OK] 已跳转到「{_selectedCameraPreset.Name}」{Environment.NewLine}{command}"
+                : $"[FAIL] {command}{Environment.NewLine}Exit: {result.ExitCode}{Environment.NewLine}{result.StandardError}";
+        }
+        catch (Exception ex)
+        {
+            CameraOutput = $"[ERROR] {ex.Message}";
+        }
+        finally
+        {
+            IsCameraJumping = false;
+            OnPropertyChanged(nameof(HasCameraOutput));
+        }
+    }
+
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, ScanPakCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, ScanPakCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand, _jumpToCameraCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }

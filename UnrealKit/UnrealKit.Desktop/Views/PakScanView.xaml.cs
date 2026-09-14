@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using UnrealKit.Desktop.ViewModels;
 
 namespace UnrealKit.Desktop.Views;
@@ -87,5 +88,36 @@ public partial class PakScanView : UserControl
         if (vm.SelectedPakSkeletalMesh is null) return;
         var owner = Window.GetWindow(this) ?? Application.Current.MainWindow;
         MeshPreviewWindow.Show(owner, vm.SelectedPakSkeletalMesh.Name, vm.MeshPreviewGlbPath, vm.MeshPreviewStatus);
+    }
+
+    private void TextureDataGrid_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        if (DataContext is not ShellViewModel vm) return;
+        e.Handled = true;
+        ApplyDataGridSort(e, vm.PakTextures);
+    }
+
+    private void StaticMeshDataGrid_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        if (DataContext is not ShellViewModel vm) return;
+        e.Handled = true;
+        ApplyDataGridSort(e, vm.PakStaticMeshes);
+    }
+
+    private void SkeletalMeshDataGrid_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        if (DataContext is not ShellViewModel vm) return;
+        e.Handled = true;
+        ApplyDataGridSort(e, vm.PakSkeletalMeshes);
+    }
+
+    // Cycles: none → ascending → descending → ascending …
+    private static void ApplyDataGridSort<T>(DataGridSortingEventArgs e, PagedSearchList<T> list)
+        where T : class
+    {
+        var header = e.Column.Header?.ToString() ?? string.Empty;
+        bool descending = e.Column.SortDirection != ListSortDirection.Ascending;
+        e.Column.SortDirection = descending ? ListSortDirection.Descending : ListSortDirection.Ascending;
+        list.ApplySort(header, descending);
     }
 }

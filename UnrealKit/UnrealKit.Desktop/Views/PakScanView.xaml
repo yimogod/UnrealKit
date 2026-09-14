@@ -55,10 +55,12 @@
                                     <TextBlock Text="每页：" VerticalAlignment="Center" Margin="16,0,4,0" />
                                     <ComboBox ItemsSource="{Binding PakPageSizeOptions}" SelectedItem="{Binding PakPageSize}" Width="60" />
                                 </StackPanel>
-                                <DataGrid ItemsSource="{Binding PakScanTextures}"
+                                <DataGrid x:Name="TextureDataGrid"
+                                          ItemsSource="{Binding PakScanTextures}"
                                           SelectedItem="{Binding SelectedPakTexture, Mode=TwoWay}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                                           SelectionMode="Single"
+                                          Sorting="TextureDataGrid_Sorting"
                                           MouseDoubleClick="TextureDataGrid_MouseDoubleClick">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name"     Binding="{Binding Name}"            Width="200" />
@@ -92,10 +94,12 @@
                                     <TextBlock Text="每页：" VerticalAlignment="Center" Margin="16,0,4,0" />
                                     <ComboBox ItemsSource="{Binding PakPageSizeOptions}" SelectedItem="{Binding PakPageSize}" Width="60" />
                                 </StackPanel>
-                                <DataGrid ItemsSource="{Binding PakScanStaticMeshes}"
+                                <DataGrid x:Name="StaticMeshDataGrid"
+                                          ItemsSource="{Binding PakScanStaticMeshes}"
                                           SelectedItem="{Binding SelectedPakStaticMesh, Mode=TwoWay}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                                           SelectionMode="Single"
+                                          Sorting="StaticMeshDataGrid_Sorting"
                                           MouseDoubleClick="StaticMeshDataGrid_MouseDoubleClick">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name"          Binding="{Binding Name}"          Width="200" />
@@ -126,10 +130,12 @@
                                     <TextBlock Text="每页：" VerticalAlignment="Center" Margin="16,0,4,0" />
                                     <ComboBox ItemsSource="{Binding PakPageSizeOptions}" SelectedItem="{Binding PakPageSize}" Width="60" />
                                 </StackPanel>
-                                <DataGrid ItemsSource="{Binding PakScanSkeletalMeshes}"
+                                <DataGrid x:Name="SkeletalMeshDataGrid"
+                                          ItemsSource="{Binding PakScanSkeletalMeshes}"
                                           SelectedItem="{Binding SelectedPakSkeletalMesh, Mode=TwoWay}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                                           SelectionMode="Single"
+                                          Sorting="SkeletalMeshDataGrid_Sorting"
                                           MouseDoubleClick="SkeletalMeshDataGrid_MouseDoubleClick">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name"          Binding="{Binding Name}"          Width="200" />

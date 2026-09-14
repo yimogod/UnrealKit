@@ -6,8 +6,8 @@ using System.Windows.Input;
 namespace UnrealKit.Desktop.ViewModels;
 
 /// <summary>
-/// 带搜索过滤和分页功能的列表封装。
-/// 通过 Name/Path 两个字段做区分大小写的子串匹配。
+/// 带搜索过滤、全量排序和分页功能的列表封装。
+/// 排序作用于全部过滤数据，再分页展示，而不是仅排当前页。
 /// XAML 绑定路径示例：Search、PageInfo、Items、PrevPageCommand、NextPageCommand。
 /// </summary>
 public sealed class PagedSearchList<T> : INotifyPropertyChanged
@@ -17,9 +17,14 @@ public sealed class PagedSearchList<T> : INotifyPropertyChanged
     private readonly Func<T, string> _pathSelector;
     private readonly Func<int> _getPageSize;
 
+    // column header → key selector（由外部在构造后注册）
+    private readonly Dictionary<string, Func<T, IComparable>> _sortKeys = new(StringComparer.OrdinalIgnoreCase);
+
     private List<T> _allItems = [];
     private string _search = string.Empty;
     private int _page = 1;
+    private string? _sortColumn;
+    private bool _sortDescending;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -40,6 +45,10 @@ public sealed class PagedSearchList<T> : INotifyPropertyChanged
         PrevPageCommand = new DelegateCommand(() => GoToPage(_page - 1), () => _page > 1);
         NextPageCommand = new DelegateCommand(() => GoToPage(_page + 1), () => _page < PageCount);
     }
+
+    /// <summary>注册列头对应的排序键，供 DataGrid Sorting 事件使用。</summary>
+    public void RegisterSortKey(string columnHeader, Func<T, IComparable> keySelector) =>
+        _sortKeys[columnHeader] = keySelector;
 
     public string Search
     {
@@ -65,6 +74,17 @@ public sealed class PagedSearchList<T> : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// 对全量过滤数据按指定列排序并回到第一页。
+    /// descending == null 表示清除排序。
+    /// </summary>
+    public void ApplySort(string columnHeader, bool descending)
+    {
+        _sortColumn    = columnHeader;
+        _sortDescending = descending;
+        GoToPage(1);
+    }
+
     /// <summary>替换全部原始数据并回到第一页。</summary>
     public void Reset(IEnumerable<T> source)
     {
@@ -72,21 +92,36 @@ public sealed class PagedSearchList<T> : INotifyPropertyChanged
         GoToPage(1);
     }
 
-    /// <summary>清空数据、搜索词，回到第一页。</summary>
+    /// <summary>清空数据、搜索词、排序，回到第一页。</summary>
     public void Clear()
     {
         _search = string.Empty;
+        _sortColumn = null;
         _allItems = [];
         GoToPage(1);
         OnPropertyChanged(nameof(Search));
     }
 
-    private IReadOnlyList<T> Filtered =>
-        string.IsNullOrEmpty(_search)
-            ? _allItems
-            : _allItems.Where(t =>
-                _nameSelector(t).Contains(_search, StringComparison.Ordinal) ||
-                _pathSelector(t).Contains(_search, StringComparison.Ordinal)).ToList();
+    private IReadOnlyList<T> Filtered
+    {
+        get
+        {
+            IEnumerable<T> source = string.IsNullOrEmpty(_search)
+                ? _allItems
+                : _allItems.Where(t =>
+                    _nameSelector(t).Contains(_search, StringComparison.Ordinal) ||
+                    _pathSelector(t).Contains(_search, StringComparison.Ordinal));
+
+            if (_sortColumn is not null && _sortKeys.TryGetValue(_sortColumn, out var keySelector))
+            {
+                source = _sortDescending
+                    ? source.OrderByDescending(keySelector)
+                    : source.OrderBy(keySelector);
+            }
+
+            return source.ToList();
+        }
+    }
 
     public void GoToPage(int page)
     {

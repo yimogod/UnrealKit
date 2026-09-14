@@ -18,6 +18,8 @@ public sealed class ProjectService : IProjectService
     private const string DeviceAliasesSection = "UnrealKit.DeviceAliases";
     private const string FtpSection = "UnrealKit.Ftp";
     private const string BaseGameIniFileName = "BaseGame.ini";
+    private const string CameraPresetsSection = "UnrealKit.CameraPresets";
+    private const string CameraPerfIniFileName = "CameraPerf.ini";
     private readonly IOperationLogger _logger;
 
     public ProjectService(IOperationLogger? logger = null)
@@ -56,7 +58,9 @@ public sealed class ProjectService : IProjectService
         Report(progress, operationId, "Creating", "正在写入工程描述与默认配置。", 1, 2);
         await WriteAgentTemplatesAsync(rootDirectory, request.ProjectName, cancellationToken);
         await WriteDescriptorAsync(descriptorPath, descriptor, cancellationToken);
-        await WriteSettingsAsync(Path.Combine(rootDirectory, UkitProjectDescriptor.ConfigRoot, "DefaultGame.ini"), settings, cancellationToken);
+        var configDir = Path.Combine(rootDirectory, UkitProjectDescriptor.ConfigRoot);
+        await WriteSettingsAsync(Path.Combine(configDir, "DefaultGame.ini"), settings, cancellationToken);
+        await WriteCameraPresetsAsync(Path.Combine(configDir, CameraPerfIniFileName), settings.Cameras, cancellationToken);
         var validation = await ValidateProjectAsync(descriptorPath, progress, cancellationToken);
         Report(progress, operationId, "Completed", "工程创建完成。", 2, 2);
         _logger.Log(new LogEvent(DateTimeOffset.UtcNow, LogLevel.Information, operationId, "Project created", new Dictionary<string, string> { ["path"] = descriptorPath }));
@@ -73,7 +77,10 @@ public sealed class ProjectService : IProjectService
         Report(progress, operationId, "Loading", "正在读取工程描述文件。", 1, 2);
         var descriptor = await ReadDescriptorAsync(fullPath, cancellationToken);
         var rootDirectory = Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("无法确定工程根目录。");
-        var settings = await ReadSettingsAsync(Path.Combine(rootDirectory, UkitProjectDescriptor.ConfigRoot, "DefaultGame.ini"), descriptor.ProjectName, cancellationToken);
+        var configDir = Path.Combine(rootDirectory, UkitProjectDescriptor.ConfigRoot);
+        var settings = await ReadSettingsAsync(Path.Combine(configDir, "DefaultGame.ini"), descriptor.ProjectName, cancellationToken);
+        var cameras = await ReadCameraPresetsFromFileAsync(Path.Combine(configDir, CameraPerfIniFileName), cancellationToken);
+        settings = settings with { CameraPresets = cameras };
         Report(progress, operationId, "Completed", "工程已加载。", 2, 2);
         return new UkitProject(fullPath, rootDirectory, descriptor, settings);
     }
@@ -90,6 +97,7 @@ public sealed class ProjectService : IProjectService
         var fullPath = GetProjectFilePath(project.ProjectFilePath);
         Report(progress, operationId, "Writing", "正在保存项目默认配置。", 1, 2);
         await WriteSettingsAsync(project.ConfigFilePath, settings, cancellationToken);
+        await WriteCameraPresetsAsync(Path.Combine(project.ConfigDir, CameraPerfIniFileName), settings.Cameras, cancellationToken);
         Report(progress, operationId, "Completed", "项目默认配置已保存。", 2, 2);
         _logger.Log(new LogEvent(DateTimeOffset.UtcNow, LogLevel.Information, operationId, "Project settings updated", new Dictionary<string, string> { ["path"] = fullPath }));
         return project with { Settings = settings };
@@ -298,6 +306,30 @@ public sealed class ProjectService : IProjectService
             ParseOptionalPort(layered.GetValue(SettingsSection, "RemoteControlLocalForwardPort"), "RemoteControlLocalForwardPort"));
     }
 
+    /// <summary>
+    /// 从 CameraPerf.ini 读取相机预设列表。文件不存在时返回空列表，不视为错误。
+    /// </summary>
+    private static async Task<IReadOnlyList<CameraPreset>> ReadCameraPresetsFromFileAsync(
+        string path, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(path))
+            return [];
+        var doc = IniDocument.Parse(await File.ReadAllTextAsync(path, cancellationToken));
+        return ReadCameraPresets(doc.GetSection(CameraPresetsSection));
+    }
+
+    /// <summary>
+    /// 将相机预设列表写入 CameraPerf.ini。列表为空时写出空文件（保留文件，不删除）。
+    /// </summary>
+    private static async Task WriteCameraPresetsAsync(
+        string path, IReadOnlyList<CameraPreset> cameras, CancellationToken cancellationToken)
+    {
+        var document = new IniDocument();
+        foreach (var camera in cameras)
+            document.SetValue(CameraPresetsSection, camera.Name, FormatCameraPreset(camera));
+        await document.SaveAsync(path, cancellationToken);
+    }
+
     private static string RequireValue(IniDocument document, string key)
     {
         return document.GetValue(DescriptorSection, key) is { Length: > 0 } value ? value : throw new InvalidDataException($".ukit 缺少必需字段 {DescriptorSection}/{key}。");
@@ -465,6 +497,57 @@ public sealed class ProjectService : IProjectService
             preset.Command ?? string.Empty);
 
     private const char ConsoleCommandPresetSeparator = '|';
+
+    /// <summary>
+    /// 相机预设的 INI 值格式: <c>MapName|X|Y|Z|Pitch|Yaw|Roll</c>。
+    /// 七段定长，坐标和旋转用 InvariantCulture 格式化，读写对称。
+    /// </summary>
+    private static string FormatCameraPreset(CameraPreset camera) =>
+        string.Join(CameraPresetSeparator,
+            camera.MapName,
+            camera.X.ToString("F6", System.Globalization.CultureInfo.InvariantCulture),
+            camera.Y.ToString("F6", System.Globalization.CultureInfo.InvariantCulture),
+            camera.Z.ToString("F6", System.Globalization.CultureInfo.InvariantCulture),
+            camera.Pitch.ToString("F6", System.Globalization.CultureInfo.InvariantCulture),
+            camera.Yaw.ToString("F6", System.Globalization.CultureInfo.InvariantCulture),
+            camera.Roll.ToString("F6", System.Globalization.CultureInfo.InvariantCulture));
+
+    private const char CameraPresetSeparator = '|';
+
+    private static IReadOnlyList<CameraPreset> ReadCameraPresets(IReadOnlyDictionary<string, string> section)
+    {
+        var cameras = new List<CameraPreset>();
+        foreach (var (name, value) in section)
+        {
+            cameras.Add(ParseCameraPreset(name, value));
+        }
+        return cameras;
+    }
+
+    private static CameraPreset ParseCameraPreset(string name, string value)
+    {
+        var fields = value.Split(CameraPresetSeparator);
+        if (fields.Length != 7)
+        {
+            throw new InvalidDataException(
+                $"相机预设 {name} 格式无效: 需要 \"MapName|X|Y|Z|Pitch|Yaw|Roll\"，收到 \"{value}\"。");
+        }
+
+        double ParseDouble(int index, string fieldName)
+        {
+            if (!double.TryParse(fields[index].Trim(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var v))
+                throw new InvalidDataException(
+                    $"相机预设 {name} 的 {fieldName} 字段无效: \"{fields[index].Trim()}\"。");
+            return v;
+        }
+
+        return CameraPreset.Create(
+            name.Trim(),
+            fields[0].Trim(),
+            ParseDouble(1, "X"), ParseDouble(2, "Y"), ParseDouble(3, "Z"),
+            ParseDouble(4, "Pitch"), ParseDouble(5, "Yaw"), ParseDouble(6, "Roll"));
+    }
 
     /// <summary>
     /// 合并内置默认预设与配置文件里的预设，语义与启动参数预设一致：

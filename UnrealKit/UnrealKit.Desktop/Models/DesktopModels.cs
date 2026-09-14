@@ -219,3 +219,25 @@ public sealed record LocalPakPackageOption(string FolderName, string LocalDirect
 {
     public string Display => FolderName;
 }
+
+/// <summary>
+/// 一条相机预设的界面投影。封装底层 <see cref="CameraPreset"/>，
+/// 供 CameraView 的 ListBox 绑定。
+/// </summary>
+public sealed record CameraPresetOption(CameraPreset Preset)
+{
+    public string Name => Preset.Name;
+    public string MapName => Preset.MapName;
+
+    /// <summary>坐标摘要（只读展示）。</summary>
+    public string PositionSummary =>
+        string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"X={Preset.X:F0}  Y={Preset.Y:F0}  Z={Preset.Z:F0}");
+
+    /// <summary>旋转摘要（只读展示）。</summary>
+    public string RotationSummary =>
+        string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"P={Preset.Pitch:F1}  Y={Preset.Yaw:F1}  R={Preset.Roll:F1}");
+}
