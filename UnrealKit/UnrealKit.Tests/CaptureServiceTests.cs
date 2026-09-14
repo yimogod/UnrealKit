@@ -170,5 +170,6 @@ public sealed class CaptureServiceTests : IDisposable
         public Task<ProcessExecutionResult> DeleteRemoteFileAsync(IDevice device, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
         public Task<ProcessExecutionResult> ReadFileAsync(IDevice device, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
         public Task<ProcessExecutionResult> InstallApplicationAsync(IDevice device, string localApplicationPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
+        public Task<ProcessExecutionResult> TakeScreenshotAsync(IDevice device, string localPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Result());
     }
 }

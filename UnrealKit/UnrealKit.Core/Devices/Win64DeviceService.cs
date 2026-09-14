@@ -2,6 +2,7 @@ using UnrealKit.Core.CommandChannel;
 using UnrealKit.Core.Operations;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
+using System.Runtime.Versioning;
 
 namespace UnrealKit.Core.Devices;
 
@@ -529,6 +530,38 @@ public sealed class Win64DeviceService : IDeviceService
             PlatformNames.Win64,
             "Win64 构建解包后直接运行可执行文件，无需安装。");
 
+    /// <summary>
+    /// 截取本机主屏幕并保存为 PNG 文件。
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    public Task<ProcessExecutionResult> TakeScreenshotAsync(
+        IDevice device,
+        string localPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        progress?.Report(new OperationProgress("screenshot", "Capturing", null, null, "截取本机屏幕…"));
+
+        try
+        {
+            var dest = Path.GetFullPath(localPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            CaptureScreenToPng(dest);
+            return Task.FromResult(new ProcessExecutionResult(0, dest, string.Empty,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new DeviceCommandException($"截图失败：{ex.Message}",
+                new ProcessExecutionResult(1, string.Empty, ex.Message,
+                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), ex);
+        }
+    }
+
     private static string BuildMemInfoOutput(string processName, int processId,
         long workingSet, long privateMem, long virtualMem,
         long pagedMem, long nonPagedMem,
@@ -562,6 +595,20 @@ public sealed class Win64DeviceService : IDeviceService
             var destSubDir = Path.Combine(destDir, Path.GetFileName(dir));
             CopyDirectoryRecursive(dir, destSubDir);
         }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
+    [SupportedOSPlatform("windows")]
+    private static void CaptureScreenToPng(string outputPath)
+    {
+        var width = GetSystemMetrics(0);   // SM_CXSCREEN
+        var height = GetSystemMetrics(1);  // SM_CYSCREEN
+        using var bmp = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using var gfx = System.Drawing.Graphics.FromImage(bmp);
+        gfx.CopyFromScreen(0, 0, 0, 0, new System.Drawing.Size(width, height), System.Drawing.CopyPixelOperation.SourceCopy);
+        bmp.Save(outputPath, System.Drawing.Imaging.ImageFormat.Png);
     }
 }
 

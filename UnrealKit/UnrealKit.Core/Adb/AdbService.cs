@@ -208,6 +208,27 @@ public sealed class AdbService
     }
 
     /// <summary>
+    /// 在设备上执行 screencap，将屏幕截图保存到指定的远端路径（PNG 格式）。
+    /// </summary>
+    public Task<ProcessExecutionResult> ScreencapAsync(string serialNumber, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ValidateSerialNumber(serialNumber);
+        ValidateRemotePath(remotePath);
+        return RunDeviceCommandAsync(serialNumber, ["shell", "screencap", "-p", remotePath], progress, cancellationToken);
+    }
+
+    /// <summary>
+    /// 从设备拉取单个文件到本地路径。与 <see cref="PullDirectoryAsync"/> 不同，目标是文件而非目录。
+    /// </summary>
+    public Task<ProcessExecutionResult> PullFileAsync(string serialNumber, string remotePath, string localPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ValidateSerialNumber(serialNumber);
+        ValidateRemotePath(remotePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
+        return RunDeviceCommandAsync(serialNumber, ["pull", remotePath, Path.GetFullPath(localPath)], progress, cancellationToken);
+    }
+
+    /// <summary>
     /// 运行 dumpsys 命令
     /// </summary>
     public Task<ProcessExecutionResult> RunDumpsysAsync(string serialNumber, string packageName, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)

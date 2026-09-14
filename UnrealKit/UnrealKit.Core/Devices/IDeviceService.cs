@@ -154,4 +154,14 @@ public interface IDeviceService : IDeviceProvider
         string localApplicationPath,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 截取设备屏幕，将 PNG 保存到 <paramref name="localPath"/>。
+    /// Android：通过 adb screencap + pull 实现；Win64：截取本机主屏幕。
+    /// </summary>
+    Task<ProcessExecutionResult> TakeScreenshotAsync(
+        IDevice device,
+        string localPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
 }

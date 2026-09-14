@@ -90,6 +90,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _renderDocStandardOutput = string.Empty;
     private string _renderDocStandardError = string.Empty;
     private string _renderDocSummary = "Configure Python and RenderDoc script paths, then execute.";
+    private string _lastScreenshotPath = string.Empty;
     private string _pakScanDescription = "选择游戏包目录（含 .pak / .utoc / .ucas），点击扫描。";
     private string _pakDownloadSummary = "请先打开工程并配置 FTP 下载，然后选择平台下载最新 Pak 包。";
     private string _pakFolderSummary = "打开工程后显示本地已下载的 Pak 包。";
@@ -248,6 +249,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             OpenDownloadedDirectoryAsync,
             () => DownloadRootDirectory is { Length: > 0 } root && Directory.Exists(root));
         RefreshDownloadedPackagesCommand = new AsyncDelegateCommand(RefreshDownloadedPackagesAsync, () => !IsBusy && _project is not null);
+        TakeScreenshotCommand = new AsyncDelegateCommand(TakeScreenshotAsync, CanOperateOnSelectedDevice);
+        OpenScreenshotFolderCommand = new DelegateCommand(OpenScreenshotFolder, () => !string.IsNullOrWhiteSpace(_lastScreenshotPath) && Directory.Exists(Path.GetDirectoryName(_lastScreenshotPath)));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -348,6 +351,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand InstallDownloadedApkCommand { get; }
     public ICommand OpenDownloadedDirectoryCommand { get; }
     public ICommand RefreshDownloadedPackagesCommand { get; }
+    public ICommand TakeScreenshotCommand { get; }
+    public ICommand OpenScreenshotFolderCommand { get; }
 
     public string SelectedNavigationItem
     {
@@ -374,6 +379,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "静态相机" => "解析静态相机性能日志，查看逐相机指标并生成 HTML 报告。",
         "基线差分" => "明确选择基线与当前两份输入，比较指标回退与改善。",
         "历史趋势" => "按标签和时间范围汇总工程内的历史 Capture，查看指标走势。",
+        "工具" => "截取当前设备的屏幕，保存到工程 Saved/Screenshots/<平台>/<时间戳>.png。",
         
         _ => string.Empty
     };
@@ -1535,6 +1541,25 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var savedDir = _project.SavedDir;
         Directory.CreateDirectory(savedDir);
         OpenLocalDirectory(savedDir);
+    }
+
+    private Task TakeScreenshotAsync() => RunAsync("正在截取屏幕…", async progress =>
+    {
+        var device = SelectedDevice!.Device;
+        var timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+        var outputPath = Path.Combine(_project!.SavedDir, "Screenshots", device.Platform, $"{timestamp}.png");
+
+        await ResolveDeviceServiceForDevice(device).TakeScreenshotAsync(device, outputPath, progress, OperationCancellationToken);
+
+        _lastScreenshotPath = outputPath;
+        (OpenScreenshotFolderCommand as DelegateCommand)?.RaiseCanExecuteChanged();
+        StatusMessage = $"截图已保存：{outputPath}";
+    });
+
+    private void OpenScreenshotFolder()
+    {
+        var dir = Path.GetDirectoryName(_lastScreenshotPath);
+        if (dir is not null) OpenLocalDirectory(dir);
     }
 
     /// <summary>
@@ -3242,7 +3267,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, ScanPakCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand, _jumpToCameraCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, ScanPakCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand, _jumpToCameraCommand, TakeScreenshotCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
@@ -3252,6 +3277,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         (OpenSavedDirectoryCommand as DelegateCommand)?.RaiseCanExecuteChanged();
         (ExportPakScanHtmlCommand as DelegateCommand)?.RaiseCanExecuteChanged();
         (ExportPakScanCsvCommand  as DelegateCommand)?.RaiseCanExecuteChanged();
+        (OpenScreenshotFolderCommand as DelegateCommand)?.RaiseCanExecuteChanged();
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

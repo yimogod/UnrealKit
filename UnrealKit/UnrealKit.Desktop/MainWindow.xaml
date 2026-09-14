@@ -122,6 +122,7 @@
             <models:NavigationPage Title="Pak解析"   Group="----分析----"><views:PakScanView /></models:NavigationPage>
             <models:NavigationPage Title="基线差分"   Group="----分析----"><views:BaselineDiffView /></models:NavigationPage>
             <models:NavigationPage Title="历史趋势"   Group="----分析----"><views:HistoryTrendView /></models:NavigationPage>
+            <models:NavigationPage Title="工具"       Group="----工具----"><views:ToolsView /></models:NavigationPage>
         </x:Array>
 
         <CollectionViewSource x:Key="NavigationPagesView" Source="{StaticResource NavigationPages}">

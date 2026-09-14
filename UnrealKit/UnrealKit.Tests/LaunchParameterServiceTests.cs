@@ -254,5 +254,6 @@ public sealed class LaunchParameterServiceTests
         }
 
         public Task<ProcessExecutionResult> InstallApplicationAsync(IDevice device, string localApplicationPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> TakeScreenshotAsync(IDevice device, string localPath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
     }
 }

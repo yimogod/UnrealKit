@@ -34,7 +34,10 @@ public enum DeviceCapability
     ReadFile,
 
     /// <summary>安装应用包到设备（Android 为安装 APK）。</summary>
-    InstallApplication
+    InstallApplication,
+
+    /// <summary>截取设备屏幕并保存为本地 PNG 文件。</summary>
+    TakeScreenshot
 }
 
 /// <summary>

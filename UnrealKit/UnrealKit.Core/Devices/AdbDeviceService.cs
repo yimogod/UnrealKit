@@ -265,6 +265,29 @@ public sealed class AdbDeviceService : IDeviceService
         return RunRequiredAsync(_adb.InstallApkAsync(device.Id, localApplicationPath, progress, cancellationToken));
     }
 
+    public async Task<ProcessExecutionResult> TakeScreenshotAsync(
+        IDevice device,
+        string localPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
+
+        const string RemoteTmp = "/sdcard/.ukit_tmp_screenshot.png";
+
+        progress?.Report(new OperationProgress("screenshot", "Capturing", null, null, $"截取设备 {device.Id} 屏幕…"));
+        await RunRequiredAsync(_adb.ScreencapAsync(device.Id, RemoteTmp, progress, cancellationToken));
+
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(localPath))!);
+        progress?.Report(new OperationProgress("screenshot", "Pulling", null, null, $"拉取截图到 {localPath}…"));
+        var pullResult = await RunRequiredAsync(_adb.PullFileAsync(device.Id, RemoteTmp, localPath, progress, cancellationToken));
+
+        try { await _adb.DeleteRemoteFileAsync(device.Id, RemoteTmp, null, cancellationToken); } catch { }
+
+        return pullResult;
+    }
+
     /// <summary>
     /// 为设备建立指令通道的端口转发，同一设备只执行一次。
     /// 端口取自通道自身（<see cref="ICommandTransport.Port"/>）：转发的端口与实际连接的

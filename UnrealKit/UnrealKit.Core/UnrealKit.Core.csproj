@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.104.2" />
+    <PackageReference Include="System.Drawing.Common" Version="9.0.7" />
     <PackageReference Include="CUE4Parse" Version="1.2.2.202609" />
     <PackageReference Include="CUE4Parse-Conversion" Version="1.2.2.202609" />
     <PackageReference Include="FluentFTP" Version="54.2.0" />
