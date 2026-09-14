@@ -71,6 +71,32 @@
                     </StackPanel>
                 </GroupBox>
 
+                <!-- RenderDoc 集成配置 -->
+                <TextBlock Text="RenderDoc" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                <TextBlock Text="脚本路径、工作目录、输出目录保存到 Config/DefaultGame.ini，供 RenderDoc 页面直接使用。"
+                           Style="{StaticResource HintTextStyle}" Margin="0,2,0,8" TextWrapping="Wrap" />
+                <GroupBox Margin="0,4,0,0" Padding="10,6,10,10">
+                    <StackPanel>
+                        <TextBlock Text="脚本路径" Style="{StaticResource FieldLabelTextStyle}" />
+                        <DockPanel LastChildFill="True">
+                            <Button Content="浏览…" Click="BrowseRenderDocScript_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                            <TextBox Text="{Binding RenderDocScriptPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock Text="工作目录（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <DockPanel LastChildFill="True">
+                            <Button Content="浏览…" Click="BrowseRenderDocWorkingDir_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                            <TextBox Text="{Binding RenderDocWorkingDir, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock Text="输出目录（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <DockPanel LastChildFill="True">
+                            <Button Content="浏览…" Click="BrowseRenderDocOutputDir_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                            <TextBox Text="{Binding RenderDocOutputDir, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock Text="超时（秒，可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
+                        <TextBox Text="{Binding RenderDocTimeout, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                    </StackPanel>
+                </GroupBox>
+
                 <!-- FTP 下载：主机 / 端口 / 凭据跨平台共享，父目录在各平台分组里配置。 -->
                 <TextBlock Text="FTP 下载" Style="{StaticResource StackedFieldLabelTextStyle}" />
                 <TextBlock Text="主机与凭据供 Android / Win64 共用；各平台的父目录在上方对应分组中填写。密码为敏感信息，仅在此掩码显示，不写入日志。"

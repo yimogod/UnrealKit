@@ -9,37 +9,9 @@
         </Grid.RowDefinitions>
         <StackPanel>
             <TextBlock Text="RenderDoc 集成" Style="{StaticResource SectionTitleTextStyle}" />
-            <TextBlock Text="运行 RenderDoc Python 脚本，捕获 GPU 帧分析数据。输出结果保存到指定目录。" Style="{StaticResource SectionDescriptionTextStyle}" />
-            <TextBlock Text="脚本路径" Style="{StaticResource FieldLabelTextStyle}" />
-            <DockPanel LastChildFill="True">
-                <Button Content="浏览…" Click="BrowseRenderDocScript_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
-                <TextBox Text="{Binding RenderDocScriptPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
-            </DockPanel>
-            <Grid Margin="0,12,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="16" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <StackPanel>
-                    <TextBlock Text="工作目录 (可选)" Style="{StaticResource FieldLabelTextStyle}" />
-                    <DockPanel LastChildFill="True">
-                        <Button Content="浏览…" Click="BrowseRenderDocWorkingDir_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
-                        <TextBox Text="{Binding RenderDocWorkingDir, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
-                    </DockPanel>
-                </StackPanel>
-                <StackPanel Grid.Column="2">
-                    <TextBlock Text="超时 (秒，可选)" Style="{StaticResource FieldLabelTextStyle}" />
-                    <TextBox Text="{Binding RenderDocTimeout, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-                </StackPanel>
-            </Grid>
-            <TextBlock Text="脚本参数 (可选，空格分隔)" Style="{StaticResource StackedFieldLabelTextStyle}" />
+            <TextBlock Text="运行 RenderDoc Python 脚本，捕获 GPU 帧分析数据。脚本路径、工作目录与输出目录在「Project → Setting」中配置。" Style="{StaticResource SectionDescriptionTextStyle}" />
+            <TextBlock Text="脚本参数 (可选，空格分隔)" Style="{StaticResource FieldLabelTextStyle}" />
             <TextBox Text="{Binding RenderDocArguments, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-            <TextBlock Text="输出目录 (可选)" Style="{StaticResource StackedFieldLabelTextStyle}" />
-            <DockPanel LastChildFill="True">
-                <Button Content="浏览…" Click="BrowseRenderDocOutputDir_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
-                <TextBox Text="{Binding RenderDocOutputDir, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
-            </DockPanel>
             <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                 <Button Content="执行" Command="{Binding RunRenderDocCommand}" Padding="18,8" />
                 <Button Content="打开输出目录" Command="{Binding OpenRenderDocOutputDirCommand}" Padding="18,8" Margin="12,0,0,0" />

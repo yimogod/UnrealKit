@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Win32;
 using UnrealKit.Desktop.ViewModels;
 
 namespace UnrealKit.Desktop.Views;
@@ -10,6 +11,41 @@ public partial class SettingsView : UserControl
     public SettingsView()
     {
         InitializeComponent();
+    }
+
+    private void BrowseRenderDocScript_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择 RenderDoc Python 脚本",
+            Filter = "Python scripts (*.py)|*.py|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+        if (dialog.ShowDialog(Window.GetWindow(this)) == true && DataContext is ShellViewModel vm)
+            vm.RenderDocScriptPath = dialog.FileName;
+    }
+
+    private void BrowseRenderDocWorkingDir_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "选择工作目录",
+            Multiselect = false
+        };
+        if (dialog.ShowDialog(Window.GetWindow(this)) == true && DataContext is ShellViewModel vm)
+            vm.RenderDocWorkingDir = dialog.FolderName;
+    }
+
+    private void BrowseRenderDocOutputDir_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "选择输出目录",
+            Multiselect = false
+        };
+        if (dialog.ShowDialog(Window.GetWindow(this)) == true && DataContext is ShellViewModel vm)
+            vm.RenderDocOutputDir = dialog.FolderName;
     }
 
     /// <summary>
