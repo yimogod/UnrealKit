@@ -167,6 +167,20 @@ public sealed record FtpSettings(string Host, int Port, string Username, string 
 }
 
 /// <summary>
+/// RenderDoc 集成配置：脚本路径、工作目录、超时、输出目录。
+/// 脚本参数是临时调试输入，不写进版本化配置。
+/// </summary>
+public sealed record RenderDocSettings(
+    string ScriptPath,
+    string WorkingDirectory,
+    string OutputDirectory,
+    int? TimeoutSeconds)
+{
+    public static RenderDocSettings CreateDefaults() =>
+        new(string.Empty, string.Empty, string.Empty, null);
+}
+
+/// <summary>
 /// 控制台预设指令的类型，决定界面用什么控件、以及能否读回当前值。
 /// </summary>
 public enum ConsoleCommandKind
@@ -268,7 +282,8 @@ public sealed record ProjectSettings(
     string RemoteControlFunctionName = "ExecuteConsoleCommand",
     string RemoteControlCommandParameter = "Command",
     int RemoteControlLocalForwardPort = 0,
-    IReadOnlyList<CameraPreset>? CameraPresets = null)
+    IReadOnlyList<CameraPreset>? CameraPresets = null,
+    RenderDocSettings? RenderDoc = null)
 {
     /// <summary>
     /// 新建工程时两个平台都给出默认 profile：多平台工程是默认假设，
@@ -290,6 +305,9 @@ public sealed record ProjectSettings(
 
     /// <summary>相机预设列表。未配置时是空列表，调用方不必每处判空。</summary>
     public IReadOnlyList<CameraPreset> Cameras => CameraPresets ?? [];
+
+    /// <summary>RenderDoc 集成配置。未配置时返回默认空配置，调用方不必判空。</summary>
+    public RenderDocSettings RenderDocSettings => RenderDoc ?? RenderDocSettings.CreateDefaults();
 
     /// <summary>
     /// 设备别名表。未配置时是空表而不是 null，调用方不必每处判空。

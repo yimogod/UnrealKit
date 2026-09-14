@@ -20,6 +20,7 @@ public sealed class ProjectService : IProjectService
     private const string BaseGameIniFileName = "BaseGame.ini";
     private const string CameraPresetsSection = "UnrealKit.CameraPresets";
     private const string CameraPerfIniFileName = "CameraPerf.ini";
+    private const string RenderDocSection = "UnrealKit.RenderDoc";
     private readonly IOperationLogger _logger;
 
     public ProjectService(IOperationLogger? logger = null)
@@ -250,6 +251,16 @@ public sealed class ProjectService : IProjectService
         if (!string.IsNullOrWhiteSpace(settings.PostCaptureSequence))
             document.SetValue(SettingsSection, "PostCaptureSequence", settings.PostCaptureSequence);
 
+        var rd = settings.RenderDocSettings;
+        if (!string.IsNullOrWhiteSpace(rd.ScriptPath))
+            document.SetValue(RenderDocSection, "ScriptPath", rd.ScriptPath);
+        if (!string.IsNullOrWhiteSpace(rd.WorkingDirectory))
+            document.SetValue(RenderDocSection, "WorkingDirectory", rd.WorkingDirectory);
+        if (!string.IsNullOrWhiteSpace(rd.OutputDirectory))
+            document.SetValue(RenderDocSection, "OutputDirectory", rd.OutputDirectory);
+        if (rd.TimeoutSeconds.HasValue)
+            document.SetValue(RenderDocSection, "TimeoutSeconds", rd.TimeoutSeconds.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
         await document.SaveAsync(path, cancellationToken);
     }
 
@@ -283,6 +294,15 @@ public sealed class ProjectService : IProjectService
 
         var consoleCommandPresets = MergeConsoleCommandPresets(layered.GetSection(ConsoleCommandPresetsSection));
 
+        var renderDocScriptPath = layered.GetValue(RenderDocSection, "ScriptPath") ?? string.Empty;
+        var renderDocWorkingDir = layered.GetValue(RenderDocSection, "WorkingDirectory") ?? string.Empty;
+        var renderDocOutputDir = layered.GetValue(RenderDocSection, "OutputDirectory") ?? string.Empty;
+        var renderDocTimeoutRaw = layered.GetValue(RenderDocSection, "TimeoutSeconds");
+        int? renderDocTimeout = int.TryParse(renderDocTimeoutRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var t) && t > 0 ? t : null;
+        var renderDoc = renderDocScriptPath.Length > 0 || renderDocWorkingDir.Length > 0 || renderDocOutputDir.Length > 0 || renderDocTimeout.HasValue
+            ? new RenderDocSettings(renderDocScriptPath, renderDocWorkingDir, renderDocOutputDir, renderDocTimeout)
+            : null;
+
         return new ProjectSettings(
             layered.GetValue(SettingsSection, "UnrealProjectName") ?? defaults.UnrealProjectName,
             layered.GetValue(SettingsSection, "LocalWorkingDirectory") ?? defaults.LocalWorkingDirectory,
@@ -303,7 +323,8 @@ public sealed class ProjectService : IProjectService
             RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlObjectPath"), defaults.RemoteControlObjectPath),
             RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlFunctionName"), defaults.RemoteControlFunctionName),
             RequireRemoteControlValue(layered.GetValue(SettingsSection, "RemoteControlCommandParameter"), defaults.RemoteControlCommandParameter),
-            ParseOptionalPort(layered.GetValue(SettingsSection, "RemoteControlLocalForwardPort"), "RemoteControlLocalForwardPort"));
+            ParseOptionalPort(layered.GetValue(SettingsSection, "RemoteControlLocalForwardPort"), "RemoteControlLocalForwardPort"),
+            RenderDoc: renderDoc);
     }
 
     /// <summary>

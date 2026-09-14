@@ -525,11 +525,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string TrendMetricFilter { get => _trendMetricFilter; set { if (SetField(ref _trendMetricFilter, value)) RaiseCommandStates(); } }
     public string TrendSummary { get => _trendSummary; private set => SetField(ref _trendSummary, value); }
 
-    public string RenderDocScriptPath { get => _renderDocScriptPath; set { if (SetField(ref _renderDocScriptPath, value)) RaiseCommandStates(); } }
+    public string RenderDocScriptPath { get => _renderDocScriptPath; set { if (SetField(ref _renderDocScriptPath, value)) { RaiseCommandStates(); SaveRenderDocSettingsAsync(); } } }
     public string RenderDocArguments { get => _renderDocArguments; set { if (SetField(ref _renderDocArguments, value)) RaiseCommandStates(); } }
-    public string RenderDocOutputDir { get => _renderDocOutputDir; set { if (SetField(ref _renderDocOutputDir, value)) { RaiseCommandStates(); (OpenRenderDocOutputDirCommand as DelegateCommand)?.RaiseCanExecuteChanged(); } } }
-    public string RenderDocTimeout { get => _renderDocTimeout; set => SetField(ref _renderDocTimeout, value); }
-    public string RenderDocWorkingDir { get => _renderDocWorkingDir; set => SetField(ref _renderDocWorkingDir, value); }
+    public string RenderDocOutputDir { get => _renderDocOutputDir; set { if (SetField(ref _renderDocOutputDir, value)) { RaiseCommandStates(); (OpenRenderDocOutputDirCommand as DelegateCommand)?.RaiseCanExecuteChanged(); SaveRenderDocSettingsAsync(); } } }
+    public string RenderDocTimeout { get => _renderDocTimeout; set { if (SetField(ref _renderDocTimeout, value)) SaveRenderDocSettingsAsync(); } }
+    public string RenderDocWorkingDir { get => _renderDocWorkingDir; set { if (SetField(ref _renderDocWorkingDir, value)) SaveRenderDocSettingsAsync(); } }
     public string RenderDocStandardOutput { get => _renderDocStandardOutput; private set => SetField(ref _renderDocStandardOutput, value); }
     public string RenderDocStandardError { get => _renderDocStandardError; private set => SetField(ref _renderDocStandardError, value); }
     public string RenderDocSummary { get => _renderDocSummary; private set => SetField(ref _renderDocSummary, value); }
@@ -1282,6 +1282,16 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         FtpUsername = ftp.Username;
         FtpPassword = ftp.Password;
 
+        var rd = project.Settings.RenderDocSettings;
+        _renderDocScriptPath = rd.ScriptPath;
+        _renderDocWorkingDir = rd.WorkingDirectory;
+        _renderDocOutputDir = rd.OutputDirectory;
+        _renderDocTimeout = rd.TimeoutSeconds.HasValue ? rd.TimeoutSeconds.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
+        OnPropertyChanged(nameof(RenderDocScriptPath));
+        OnPropertyChanged(nameof(RenderDocWorkingDir));
+        OnPropertyChanged(nameof(RenderDocOutputDir));
+        OnPropertyChanged(nameof(RenderDocTimeout));
+
         // 切换工程后，上一个工程的下载结果与 APK 路径不再成立。
         DownloadSummary = "请选择平台并点击「下载最新」。";
         DownloadedApkPath = string.Empty;
@@ -1345,6 +1355,20 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         SetCurrentProject(await _projectService.UpdateSettingsAsync(_project, settings, progress, OperationCancellationToken));
         StatusMessage = "项目默认配置已保存。";
     });
+
+    private void SaveRenderDocSettingsAsync()
+    {
+        if (_project is null) return;
+        var timeout = int.TryParse(_renderDocTimeout, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var t) && t > 0 ? t : (int?)null;
+        var rd = new RenderDocSettings(_renderDocScriptPath.Trim(), _renderDocWorkingDir.Trim(), _renderDocOutputDir.Trim(), timeout);
+        var updated = _project.Settings with { RenderDoc = rd };
+        _ = _projectService.UpdateSettingsAsync(_project, updated, cancellationToken: CancellationToken.None)
+            .ContinueWith(task =>
+            {
+                if (task.IsCompletedSuccessfully)
+                    _project = task.Result;
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
 
     /// <summary>
     /// 把界面上的 FTP 端口文本解析为整数。空文本回退默认端口 21；
