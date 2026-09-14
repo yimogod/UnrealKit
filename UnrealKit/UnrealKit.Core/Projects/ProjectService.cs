@@ -520,18 +520,21 @@ public sealed class ProjectService : IProjectService
     private const char ConsoleCommandPresetSeparator = '|';
 
     /// <summary>
-    /// 相机预设的 INI 值格式: <c>MapName|X|Y|Z|Pitch|Yaw|Roll</c>。
-    /// 七段定长，坐标和旋转用 InvariantCulture 格式化，读写对称。
+    /// 相机预设的 INI 值格式: <c>MapName|(X=...,Y=...,Z=...)(Pitch=...,Yaw=...,Roll=...)</c>。
+    /// 与 UE 编辑器拷贝出的相机姿态格式一致，粘贴后只需在行首加 "名称=地图名|"。
     /// </summary>
-    private static string FormatCameraPreset(CameraPreset camera) =>
-        string.Join(CameraPresetSeparator,
-            camera.MapName,
-            camera.X.ToString("F6", System.Globalization.CultureInfo.InvariantCulture),
-            camera.Y.ToString("F6", System.Globalization.CultureInfo.InvariantCulture),
-            camera.Z.ToString("F6", System.Globalization.CultureInfo.InvariantCulture),
-            camera.Pitch.ToString("F6", System.Globalization.CultureInfo.InvariantCulture),
-            camera.Yaw.ToString("F6", System.Globalization.CultureInfo.InvariantCulture),
-            camera.Roll.ToString("F6", System.Globalization.CultureInfo.InvariantCulture));
+    private static string FormatCameraPreset(CameraPreset camera)
+    {
+        var ic = System.Globalization.CultureInfo.InvariantCulture;
+        return string.Concat(
+            camera.MapName, CameraPresetSeparator,
+            "(X=", camera.X.ToString("F6", ic),
+            ",Y=", camera.Y.ToString("F6", ic),
+            ",Z=", camera.Z.ToString("F6", ic), ")",
+            "(Pitch=", camera.Pitch.ToString("F6", ic),
+            ",Yaw=", camera.Yaw.ToString("F6", ic),
+            ",Roll=", camera.Roll.ToString("F6", ic), ")");
+    }
 
     private const char CameraPresetSeparator = '|';
 
@@ -547,27 +550,45 @@ public sealed class ProjectService : IProjectService
 
     private static CameraPreset ParseCameraPreset(string name, string value)
     {
-        var fields = value.Split(CameraPresetSeparator);
-        if (fields.Length != 7)
-        {
+        var sep = value.IndexOf(CameraPresetSeparator);
+        if (sep < 0)
             throw new InvalidDataException(
-                $"相机预设 {name} 格式无效: 需要 \"MapName|X|Y|Z|Pitch|Yaw|Roll\"，收到 \"{value}\"。");
-        }
+                $"相机预设 {name} 格式无效: 需要 \"MapName|(X=...)(Pitch=...)\"，收到 \"{value}\"。");
 
-        double ParseDouble(int index, string fieldName)
-        {
-            if (!double.TryParse(fields[index].Trim(), System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var v))
-                throw new InvalidDataException(
-                    $"相机预设 {name} 的 {fieldName} 字段无效: \"{fields[index].Trim()}\"。");
-            return v;
-        }
+        var mapName = value[..sep].Trim();
+        var pose = value[(sep + 1)..].Trim();
 
         return CameraPreset.Create(
-            name.Trim(),
-            fields[0].Trim(),
-            ParseDouble(1, "X"), ParseDouble(2, "Y"), ParseDouble(3, "Z"),
-            ParseDouble(4, "Pitch"), ParseDouble(5, "Yaw"), ParseDouble(6, "Roll"));
+            name.Trim(), mapName,
+            ParseUeField(pose, "X", name),
+            ParseUeField(pose, "Y", name),
+            ParseUeField(pose, "Z", name),
+            ParseUeField(pose, "Pitch", name),
+            ParseUeField(pose, "Yaw", name),
+            ParseUeField(pose, "Roll", name));
+    }
+
+    /// <summary>
+    /// 从 UE 姿态字符串中提取具名字段值，例如从
+    /// "(X=82086.810014,Y=...)(Pitch=-45.800001,...)" 中取 "X" 得到 82086.810014。
+    /// </summary>
+    private static double ParseUeField(string pose, string field, string presetName)
+    {
+        var ic = System.Globalization.CultureInfo.InvariantCulture;
+        var tag = field + "=";
+        var idx = pose.IndexOf(tag, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0)
+            throw new InvalidDataException($"相机预设 {presetName} 缺少字段 {field}。");
+
+        var start = idx + tag.Length;
+        var end = start;
+        while (end < pose.Length && pose[end] is not ',' and not ')')
+            end++;
+
+        var raw = pose[start..end].Trim();
+        if (!double.TryParse(raw, System.Globalization.NumberStyles.Float, ic, out var v))
+            throw new InvalidDataException($"相机预设 {presetName} 的 {field} 字段无效: \"{raw}\"。");
+        return v;
     }
 
     /// <summary>
