@@ -16,7 +16,6 @@ public sealed record RenderDocScriptInfo(
 /// Input for executing a RenderDoc Python script.
 /// </summary>
 public sealed record RenderDocExecutionRequest(
-    string PythonExecutable,
     string ScriptPath,
     IReadOnlyList<string> ScriptArguments,
     string? OutputDirectory = null,
@@ -47,7 +46,6 @@ public sealed record RenderDocExecutionResult(
 
 public static class RenderDocDiagnosticCodes
 {
-    public const string PythonNotFound = "RDC001";
     public const string ScriptNotFound = "RDC002";
     public const string ExecutionFailed = "RDC003";
     public const string OutputDirectoryCreated = "RDC004";

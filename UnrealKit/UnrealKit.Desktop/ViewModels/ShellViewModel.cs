@@ -81,7 +81,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _trendMetricFilter = string.Empty;
     private string _trendSummary = "Open a project, then click Build Trend.";
     private TrendResult? _lastTrendResult;
-    private string _renderDocPythonPath = string.Empty;
+
     private string _renderDocScriptPath = string.Empty;
     private string _renderDocArguments = string.Empty;
     private string _renderDocOutputDir = string.Empty;
@@ -222,7 +222,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         RunDiffCommand = new AsyncDelegateCommand(RunDiffAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(DiffBaselinePath) && !string.IsNullOrWhiteSpace(DiffCurrentPath));
         RunTrendCommand = new AsyncDelegateCommand(RunTrendAsync, () => !IsBusy && _project is not null);
         RunRenderDocCommand = new AsyncDelegateCommand(RunRenderDocAsync, () => !IsBusy
-            && !string.IsNullOrWhiteSpace(_renderDocPythonPath)
             && !string.IsNullOrWhiteSpace(_renderDocScriptPath));
         OpenRenderDocOutputDirCommand = new DelegateCommand(OpenRenderDocOutputDir, () => !string.IsNullOrWhiteSpace(_renderDocOutputDir) && Directory.Exists(_renderDocOutputDir));
         ScanPakCommand = new AsyncDelegateCommand(ScanPakAsync, () => !IsBusy && SelectedLocalPakPackage is not null);
@@ -526,7 +525,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string TrendMetricFilter { get => _trendMetricFilter; set { if (SetField(ref _trendMetricFilter, value)) RaiseCommandStates(); } }
     public string TrendSummary { get => _trendSummary; private set => SetField(ref _trendSummary, value); }
 
-    public string RenderDocPythonPath { get => _renderDocPythonPath; set { if (SetField(ref _renderDocPythonPath, value)) RaiseCommandStates(); } }
     public string RenderDocScriptPath { get => _renderDocScriptPath; set { if (SetField(ref _renderDocScriptPath, value)) RaiseCommandStates(); } }
     public string RenderDocArguments { get => _renderDocArguments; set { if (SetField(ref _renderDocArguments, value)) RaiseCommandStates(); } }
     public string RenderDocOutputDir { get => _renderDocOutputDir; set { if (SetField(ref _renderDocOutputDir, value)) { RaiseCommandStates(); (OpenRenderDocOutputDirCommand as DelegateCommand)?.RaiseCanExecuteChanged(); } } }
@@ -2181,7 +2179,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private async Task RunRenderDocAsync() => await RunAsync("Running RenderDoc script...", async _ =>
     {
         var request = new RenderDocExecutionRequest(
-            PythonExecutable: RenderDocPythonPath,
             ScriptPath: RenderDocScriptPath,
             ScriptArguments: string.IsNullOrWhiteSpace(RenderDocArguments)
                 ? []

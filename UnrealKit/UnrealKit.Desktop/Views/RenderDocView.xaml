@@ -10,27 +10,11 @@
         <StackPanel>
             <TextBlock Text="RenderDoc 集成" Style="{StaticResource SectionTitleTextStyle}" />
             <TextBlock Text="运行 RenderDoc Python 脚本，捕获 GPU 帧分析数据。输出结果保存到指定目录。" Style="{StaticResource SectionDescriptionTextStyle}" />
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="16" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <StackPanel>
-                    <TextBlock Text="Python 路径" Style="{StaticResource FieldLabelTextStyle}" />
-                    <DockPanel LastChildFill="True">
-                        <Button Content="浏览…" Click="BrowseRenderDocPython_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
-                        <TextBox Text="{Binding RenderDocPythonPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
-                    </DockPanel>
-                </StackPanel>
-                <StackPanel Grid.Column="2">
-                    <TextBlock Text="脚本路径" Style="{StaticResource FieldLabelTextStyle}" />
-                    <DockPanel LastChildFill="True">
-                        <Button Content="浏览…" Click="BrowseRenderDocScript_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
-                        <TextBox Text="{Binding RenderDocScriptPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
-                    </DockPanel>
-                </StackPanel>
-            </Grid>
+            <TextBlock Text="脚本路径" Style="{StaticResource FieldLabelTextStyle}" />
+            <DockPanel LastChildFill="True">
+                <Button Content="浏览…" Click="BrowseRenderDocScript_Click" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+                <TextBox Text="{Binding RenderDocScriptPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center" />
+            </DockPanel>
             <Grid Margin="0,12,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />

@@ -59,7 +59,7 @@
         <!-- 回显区 -->
         <ScrollViewer Grid.Row="3" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" MaxHeight="90"
                       Visibility="{Binding HasCameraOutput, Converter={StaticResource BoolToVisibilityConverter}}">
-            <TextBox Text="{Binding CameraOutput}" Style="{StaticResource ConsoleEchoTextBoxStyle}" />
+            <TextBox Text="{Binding CameraOutput, Mode=OneWay}" Style="{StaticResource ConsoleEchoTextBoxStyle}" />
         </ScrollViewer>
     </Grid>
 </UserControl>

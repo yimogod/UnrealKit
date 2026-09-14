@@ -18,27 +18,11 @@ public sealed class RenderDocService : IRenderDocService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.PythonExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ScriptPath);
 
+        const string pythonExecutable = "python";
         var diagnostics = new List<Diagnostic>();
         var startedAt = DateTimeOffset.UtcNow;
-
-        // Validate Python executable
-        if (!File.Exists(request.PythonExecutable))
-        {
-            return new RenderDocExecutionResult(
-                ExitCode: -1,
-                StandardOutput: string.Empty,
-                StandardError: $"Python executable not found: {request.PythonExecutable}",
-                OutputDirectory: null,
-                StartedAt: startedAt,
-                CompletedAt: DateTimeOffset.UtcNow,
-                Diagnostics: [new Diagnostic(DiagnosticSeverity.Error, RenderDocDiagnosticCodes.PythonNotFound,
-                    $"Python executable not found: {request.PythonExecutable}",
-                    Path: request.PythonExecutable,
-                    SuggestedFix: "Verify the Python installation path and ensure Python with RenderDoc API is installed.")]);
-        }
 
         // Validate script
         if (!File.Exists(request.ScriptPath))
@@ -102,7 +86,7 @@ public sealed class RenderDocService : IRenderDocService
         try
         {
             var processRequest = new ProcessExecutionRequest(
-                FileName: request.PythonExecutable,
+                FileName: pythonExecutable,
                 Arguments: allArguments,
                 WorkingDirectory: workingDirectory,
                 Timeout: timeout,
