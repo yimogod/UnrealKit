@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace UnrealKit.Desktop.ViewModels;
 
@@ -25,6 +26,12 @@ public sealed class PagedSearchList<T> : INotifyPropertyChanged
     private int _page = 1;
     private string? _sortColumn;
     private bool _sortDescending;
+
+    // Cached count from the last ComputeFiltered() call; PageCount/PageInfo read this
+    // instead of re-running the filter+sort pipeline on every property-changed notification.
+    private int _filteredCount;
+
+    private DispatcherTimer? _searchDebounce;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -57,26 +64,41 @@ public sealed class PagedSearchList<T> : INotifyPropertyChanged
         {
             if (_search == value) return;
             _search = value;
-            GoToPage(1);
             OnPropertyChanged();
+
+            // Debounce: wait 300 ms of inactivity before running filter+sort over
+            // potentially 60 k items. Without this every keystroke blocks the UI thread.
+            if (_searchDebounce is null)
+            {
+                _searchDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+                _searchDebounce.Tick += OnSearchDebounced;
+            }
+            _searchDebounce.Stop();
+            _searchDebounce.Start();
         }
     }
 
-    public int Page      => _page;
-    public int PageCount => (int)Math.Ceiling(Filtered.Count / (double)Math.Max(1, _getPageSize()));
+    private void OnSearchDebounced(object? sender, EventArgs e)
+    {
+        _searchDebounce!.Stop();
+        GoToPage(1);
+    }
+
+    public int Page => _page;
+
+    public int PageCount => (int)Math.Ceiling(_filteredCount / (double)Math.Max(1, _getPageSize()));
+
     public string PageInfo
     {
         get
         {
-            var f = Filtered;
-            int pages = (int)Math.Ceiling(f.Count / (double)Math.Max(1, _getPageSize()));
-            return $"{_page} / {Math.Max(1, pages)}  （共 {f.Count} 条）";
+            int pages = (int)Math.Ceiling(_filteredCount / (double)Math.Max(1, _getPageSize()));
+            return $"{_page} / {Math.Max(1, pages)}  （共 {_filteredCount} 条）";
         }
     }
 
     /// <summary>
     /// 对全量过滤数据按指定列排序并回到第一页。
-    /// descending == null 表示清除排序。
     /// </summary>
     public void ApplySort(string columnHeader, bool descending)
     {
@@ -102,35 +124,35 @@ public sealed class PagedSearchList<T> : INotifyPropertyChanged
         OnPropertyChanged(nameof(Search));
     }
 
-    private IReadOnlyList<T> Filtered
+    private List<T> ComputeFiltered()
     {
-        get
+        IEnumerable<T> source = string.IsNullOrEmpty(_search)
+            ? _allItems
+            : _allItems.Where(t =>
+                _nameSelector(t).Contains(_search, StringComparison.Ordinal) ||
+                _pathSelector(t).Contains(_search, StringComparison.Ordinal));
+
+        if (_sortColumn is not null && _sortKeys.TryGetValue(_sortColumn, out var keySelector))
         {
-            IEnumerable<T> source = string.IsNullOrEmpty(_search)
-                ? _allItems
-                : _allItems.Where(t =>
-                    _nameSelector(t).Contains(_search, StringComparison.Ordinal) ||
-                    _pathSelector(t).Contains(_search, StringComparison.Ordinal));
-
-            if (_sortColumn is not null && _sortKeys.TryGetValue(_sortColumn, out var keySelector))
-            {
-                source = _sortDescending
-                    ? source.OrderByDescending(keySelector)
-                    : source.OrderBy(keySelector);
-            }
-
-            return source.ToList();
+            source = _sortDescending
+                ? source.OrderByDescending(keySelector)
+                : source.OrderBy(keySelector);
         }
+
+        return source.ToList();
     }
 
     public void GoToPage(int page)
     {
-        var filtered = Filtered;
-        int total = (int)Math.Ceiling(filtered.Count / (double)Math.Max(1, _getPageSize()));
-        _page = Math.Clamp(page, 1, Math.Max(1, total));
+        // Single filter+sort pass for the entire call; PageCount/PageInfo use _filteredCount.
+        var filtered = ComputeFiltered();
+        _filteredCount = filtered.Count;
 
-        var slice = filtered.Skip((_page - 1) * _getPageSize()).Take(_getPageSize());
-        Items.Reset(slice);
+        int pageSize = Math.Max(1, _getPageSize());
+        int total    = (int)Math.Ceiling(_filteredCount / (double)pageSize);
+        _page        = Math.Clamp(page, 1, Math.Max(1, total));
+
+        Items.Reset(filtered.Skip((_page - 1) * pageSize).Take(pageSize));
 
         OnPropertyChanged(nameof(Page));
         OnPropertyChanged(nameof(PageCount));

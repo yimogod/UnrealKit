@@ -35,9 +35,7 @@
                         Padding="14,8" Margin="8,0,0,0" />
             </StackPanel>
         </StackPanel>
-        <ScrollViewer Grid.Row="1" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <TabControl MinHeight="350" Margin="0,12,0,0">
+        <TabControl Grid.Row="1" MinHeight="350" Margin="0,18,0,0">
                     <TabItem Header="Textures">
                         <Grid>
                             <!-- 左：DataGrid + 分页 -->
@@ -60,6 +58,8 @@
                                           SelectedItem="{Binding SelectedPakTexture, Mode=TwoWay}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                                           SelectionMode="Single"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
                                           Sorting="TextureDataGrid_Sorting"
                                           MouseDoubleClick="TextureDataGrid_MouseDoubleClick">
                                     <DataGrid.Columns>
@@ -99,6 +99,8 @@
                                           SelectedItem="{Binding SelectedPakStaticMesh, Mode=TwoWay}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                                           SelectionMode="Single"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
                                           Sorting="StaticMeshDataGrid_Sorting"
                                           MouseDoubleClick="StaticMeshDataGrid_MouseDoubleClick">
                                     <DataGrid.Columns>
@@ -135,6 +137,8 @@
                                           SelectedItem="{Binding SelectedPakSkeletalMesh, Mode=TwoWay}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                                           SelectionMode="Single"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
                                           Sorting="SkeletalMeshDataGrid_Sorting"
                                           MouseDoubleClick="SkeletalMeshDataGrid_MouseDoubleClick">
                                     <DataGrid.Columns>
@@ -160,8 +164,6 @@
                             </DataGrid.Columns>
                         </DataGrid>
                     </TabItem>
-                </TabControl>
-            </StackPanel>
-        </ScrollViewer>
+        </TabControl>
     </Grid>
 </UserControl>
