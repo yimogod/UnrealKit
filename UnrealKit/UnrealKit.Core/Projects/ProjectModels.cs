@@ -1,4 +1,5 @@
-using UnrealKit.Core.Diagnostics;
+﻿using UnrealKit.Core.Diagnostics;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace UnrealKit.Core.Projects;
 
@@ -388,6 +389,7 @@ public static class LaunchParameterPresetDefaults
         new("Mem.LLM_CSV", "-llmcsv", "启动llm csv."),
         new("Render.OpenGL", "-OpenGLES", "使用OpenGL渲染."),
         new("Render.Vulkan", "-vulkan", "使用Vulkan渲染."),
+        new("Profile.RemoteControl", "-RCWebControlEnable -RCWebInterfaceEnable", "开启RemoteControl. 可通过 WebControl.StartServer 启动"),
         new("Trace.Client_All", traceClient_All, "trace default, 网络, 内存."),
         new("Trace.Client_Default", traceClient_Default, "默认trace(cpu,gpu,load)."),
         new("Trace.Client_Network", traceClient_Network, "网络trace."),

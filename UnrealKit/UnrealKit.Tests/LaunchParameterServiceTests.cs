@@ -123,7 +123,7 @@ public sealed class LaunchParameterServiceTests
         var result = await service.PushAsync(project, new LaunchParameterRequest("R58M123ABC", ["Mem.LLM"]));
 
         Assert.Equal("-llm", result.Content);
-        Assert.Equal("/sdcard/Android/data/com.example.game/files/UnrealGame/Sample/Sample/uecommandline.txt", result.RemotePath);
+        Assert.Equal("/sdcard/Android/data/com.example.game/files/UnrealGame/Sample/uecommandline.txt", result.RemotePath);
         Assert.Equal("R58M123ABC", deviceService.PushSerialNumber);
         Assert.Equal(result.RemotePath, deviceService.PushRemotePath);
         Assert.Equal("-llm", deviceService.PushedContent);
@@ -141,7 +141,7 @@ public sealed class LaunchParameterServiceTests
         await service.StartApplicationAsync(project, "R58M123ABC");
         await service.StopApplicationAsync(project, "R58M123ABC");
 
-        Assert.Equal("/sdcard/Android/data/com.example.game/files/UnrealGame/Sample/Sample/uecommandline.txt", deviceService.DeletedRemotePath);
+        Assert.Equal("/sdcard/Android/data/com.example.game/files/UnrealGame/Sample/uecommandline.txt", deviceService.DeletedRemotePath);
         Assert.Equal(("R58M123ABC", "com.example.game", "com.example.game.MainActivity"), deviceService.StartRequest);
         Assert.Equal(("R58M123ABC", "com.example.game"), deviceService.ForceStopRequest);
     }
@@ -157,7 +157,7 @@ public sealed class LaunchParameterServiceTests
 
         Assert.True(result.ReadResult.Succeeded);
         Assert.Equal("-RCWebControlEnable\n-RCWebInterfaceEnable", result.ReadResult.StandardOutput);
-        Assert.Equal("/sdcard/Android/data/com.example.game/files/UnrealGame/Sample/Sample/uecommandline.txt", result.RemotePath);
+        Assert.Equal("/sdcard/Android/data/com.example.game/files/UnrealGame/Sample/uecommandline.txt", result.RemotePath);
         Assert.Equal("R58M123ABC", deviceService.ReadSerialNumber);
         Assert.Equal(result.RemotePath, deviceService.ReadRemotePath);
     }
