@@ -30,4 +30,13 @@ public interface IRemoteControlService
         RemoteControlVariableQueryRequest request,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 调用指定 Actor 的 K2_TeleportTo，将其移动到目标位置和旋转。
+    /// HTTP 非成功状态或网络失败以 <see cref="RemoteControlException"/> 表达。
+    /// </summary>
+    Task<ProcessExecutionResult> TeleportActorAsync(
+        RemoteControlTeleportRequest request,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
 }

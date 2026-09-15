@@ -284,7 +284,8 @@ public sealed record ProjectSettings(
     string RemoteControlCommandParameter = "Command",
     int RemoteControlLocalForwardPort = 0,
     IReadOnlyList<CameraPreset>? CameraPresets = null,
-    RenderDocSettings? RenderDoc = null)
+    RenderDocSettings? RenderDoc = null,
+    IReadOnlyDictionary<string, string>? DefaultPawnPaths = null)
 {
     /// <summary>
     /// 新建工程时两个平台都给出默认 profile：多平台工程是默认假设，
@@ -420,6 +421,16 @@ public static class ConsoleCommandPresetDefaults
     private const string Memory = "Memory";
     private const string Gc = "GC";
     private const string Stats = "Stats";
+    private const string Obj = "Obj";
+    private const string RenderDoc = "RenderDoc";
+
+    private const string Grass = "Grass";
+
+    private const string Game = "Game";
+
+    private const string Scalability = "Scalability";
+
+
 
     private static ConsoleCommandPreset Toggle(string group, string cvar, string description) =>
         new(cvar, ConsoleCommandKind.Bool, group, cvar, null, null, description);
@@ -435,21 +446,56 @@ public static class ConsoleCommandPresetDefaults
         Toggle(Rendering, "showflag.Fog", "雾效开关."),
         Toggle(Rendering, "showflag.Lighting", "光照开关."),
         Toggle(Rendering, "showflag.PostProcessing", "后处理开关."),
+        Toggle(Rendering, "r.Vulkan.AllowComputeIndirectPrimitives", "是否统计IndirectDraw的三角形"),
         Toggle(Rendering, "r.Shadow.Virtual.Enable", "虚拟阴影图开关."),
         Value(Rendering, "r.ScreenPercentage", "100", "渲染分辨率百分比."),
         Value(Rendering, "r.MobileContentScaleFactor", "1", "移动端内容缩放系数."),
+        Action(Rendering, "FreezeRendering", "冻结渲染界面"),
+
+        Value(Scalability, "scalability", "auto", "性能适配. 可填写0,1,2,3"),
+        Value(Scalability, "sg.ShadowQuality", "0", "阴影性能适配"),
+        Value(Scalability, "sg.TextureQuality", "0", "纹理性能适配"),
+
+        Action(Game, "Dumpticks", "打印所有Tick的Actor"),
+        Action(Game, "ToggleDebugCamera", "进入调试相机模式"),
+
+
         Value(Lod, "r.ForceLOD", "0", "强制所有静态网格使用指定 LOD, -1 关闭强制."),
         Value(Lod, "r.SkeletalMeshLODBias", "0", "骨骼网格 LOD 偏移."),
         Value(Lod, "r.StaticMeshLODDistanceScale", "1", "静态网格 LOD 切换距离缩放."),
+
         Value(Memory, "r.Streaming.PoolSize", "1024", "纹理流送池上限 (MB)."),
         Toggle(Memory, "r.Streaming.LimitPoolSizeToVRAM", "限制流送池不超过显存."),
+        Value(Memory, "LLM.LLMWriteInterval","120", "llmcsv记录数据时间间隔"),
+
         Value(Gc, "gc.TimeBetweenPurgingPendingKillObjects", "60", "两次 GC 之间的间隔 (秒)."),
         Toggle(Gc, "gc.AllowParallelGC", "并行 GC 开关."),
-        Action(Stats, "stat unit", "显示帧耗时分解 (game/draw/gpu)."),
+
+        Action(Stats, "stat unit", "显示帧耗时(三角面不包括drawindirect API)"),
         Action(Stats, "stat fps", "显示帧率."),
         Action(Stats, "stat memory", "显示内存统计."),
+        Action(Stats, "stat scenerendering", "显示渲染线程各个函数耗时."),
         Action(Stats, "stat rhi", "显示 RHI 统计."),
-        Action(Stats, "stat none", "关闭所有 stat 显示."),
+        Action(Stats, "stat initviews", "initviews的函数耗时."),
+        Action(Stats, "stat drawcount", "各个pass的制次数"),
+        Action(Stats, "stat none", "关闭stat 显示."),
+        Action(Stats, "stat DumpHitches", "显示卡顿"),
+        Action(Stats, "stat Hitches", "显示卡顿"),
+        Action(Stats, "stat LightRendering", "灯光渲染"),
+        Action(Stats, "stat ShadowRendering", "阴影渲染"),
+
+
+        Action(Obj, "obj list Class=Character", "打印所有的Character"),
+        Action(Obj, "obj list Class=Actor", "打印所有的Actor"),
+        Action(Obj, "obj gc", "强制gc"),
+
+        Action(RenderDoc, "renderdoc.CaptureFrame", "抓帧"),
+
+        Toggle(Grass, "grass.Enable", "渲染草"),
+        Toggle(Grass, "foliage.CullAll", "渲染所有植被"),
+        Value(Grass, "grass.DensityScale", "1.0", "渲染所有植被"),
+        Value(Grass, "foliage.LODDistanceScale", "1.0", "渲染所有植被"),
+
         Action(Memory, "memreport -full", "输出完整 memreport 到设备 Saved 目录.")
     ];
 }

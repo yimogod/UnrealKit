@@ -19,6 +19,8 @@ public sealed class ProjectService : IProjectService
     private const string FtpSection = "UnrealKit.Ftp";
     private const string BaseGameIniFileName = "BaseGame.ini";
     private const string CameraPresetsSection = "UnrealKit.CameraPresets";
+    private const string CameraSettingsSection = "UnrealKit.CameraSettings";
+    private const string DefaultPawnPathKey = "DefaultPawnPath";
     private const string CameraPerfIniFileName = "CameraPerf.ini";
     private const string RenderDocSection = "UnrealKit.RenderDoc";
     private readonly IOperationLogger _logger;
@@ -61,7 +63,7 @@ public sealed class ProjectService : IProjectService
         await WriteDescriptorAsync(descriptorPath, descriptor, cancellationToken);
         var configDir = Path.Combine(rootDirectory, UkitProjectDescriptor.ConfigRoot);
         await WriteSettingsAsync(Path.Combine(configDir, "DefaultGame.ini"), settings, cancellationToken);
-        await WriteCameraPresetsAsync(Path.Combine(configDir, CameraPerfIniFileName), settings.Cameras, cancellationToken);
+        await WriteCameraPresetsAsync(Path.Combine(configDir, CameraPerfIniFileName), settings.Cameras, settings.DefaultPawnPaths, cancellationToken);
         var validation = await ValidateProjectAsync(descriptorPath, progress, cancellationToken);
         Report(progress, operationId, "Completed", "工程创建完成。", 2, 2);
         _logger.Log(new LogEvent(DateTimeOffset.UtcNow, LogLevel.Information, operationId, "Project created", new Dictionary<string, string> { ["path"] = descriptorPath }));
@@ -80,8 +82,8 @@ public sealed class ProjectService : IProjectService
         var rootDirectory = Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("无法确定工程根目录。");
         var configDir = Path.Combine(rootDirectory, UkitProjectDescriptor.ConfigRoot);
         var settings = await ReadSettingsAsync(Path.Combine(configDir, "DefaultGame.ini"), descriptor.ProjectName, cancellationToken);
-        var cameras = await ReadCameraPresetsFromFileAsync(Path.Combine(configDir, CameraPerfIniFileName), cancellationToken);
-        settings = settings with { CameraPresets = cameras };
+        var (cameras, defaultPawnPaths) = await ReadCameraPresetsFromFileAsync(Path.Combine(configDir, CameraPerfIniFileName), cancellationToken);
+        settings = settings with { CameraPresets = cameras, DefaultPawnPaths = defaultPawnPaths };
         Report(progress, operationId, "Completed", "工程已加载。", 2, 2);
         return new UkitProject(fullPath, rootDirectory, descriptor, settings);
     }
@@ -98,7 +100,7 @@ public sealed class ProjectService : IProjectService
         var fullPath = GetProjectFilePath(project.ProjectFilePath);
         Report(progress, operationId, "Writing", "正在保存项目默认配置。", 1, 2);
         await WriteSettingsAsync(project.ConfigFilePath, settings, cancellationToken);
-        await WriteCameraPresetsAsync(Path.Combine(project.ConfigDir, CameraPerfIniFileName), settings.Cameras, cancellationToken);
+        await WriteCameraPresetsAsync(Path.Combine(project.ConfigDir, CameraPerfIniFileName), settings.Cameras, settings.DefaultPawnPaths, cancellationToken);
         Report(progress, operationId, "Completed", "项目默认配置已保存。", 2, 2);
         _logger.Log(new LogEvent(DateTimeOffset.UtcNow, LogLevel.Information, operationId, "Project settings updated", new Dictionary<string, string> { ["path"] = fullPath }));
         return project with { Settings = settings };
@@ -330,22 +332,32 @@ public sealed class ProjectService : IProjectService
     /// <summary>
     /// 从 CameraPerf.ini 读取相机预设列表。文件不存在时返回空列表，不视为错误。
     /// </summary>
-    private static async Task<IReadOnlyList<CameraPreset>> ReadCameraPresetsFromFileAsync(
+    private static async Task<(IReadOnlyList<CameraPreset> Cameras, IReadOnlyDictionary<string, string>? DefaultPawnPaths)> ReadCameraPresetsFromFileAsync(
         string path, CancellationToken cancellationToken)
     {
         if (!File.Exists(path))
-            return [];
+            return ([], null);
         var doc = IniDocument.Parse(await File.ReadAllTextAsync(path, cancellationToken));
-        return ReadCameraPresets(doc.GetSection(CameraPresetsSection));
+        var cameras = ReadCameraPresets(doc.GetSection(CameraPresetsSection));
+        var settingsSection = doc.GetSection(CameraSettingsSection);
+        var pawnPaths = settingsSection.Count > 0
+            ? (IReadOnlyDictionary<string, string>)settingsSection
+            : null;
+        return (cameras, pawnPaths);
     }
 
     /// <summary>
-    /// 将相机预设列表写入 CameraPerf.ini。列表为空时写出空文件（保留文件，不删除）。
+    /// 将相机预设列表和相机设置写入 CameraPerf.ini。列表为空时写出空文件（保留文件，不删除）。
     /// </summary>
     private static async Task WriteCameraPresetsAsync(
-        string path, IReadOnlyList<CameraPreset> cameras, CancellationToken cancellationToken)
+        string path, IReadOnlyList<CameraPreset> cameras, IReadOnlyDictionary<string, string>? defaultPawnPaths, CancellationToken cancellationToken)
     {
         var document = new IniDocument();
+        if (defaultPawnPaths is { Count: > 0 })
+        {
+            foreach (var (mapName, pawnPath) in defaultPawnPaths)
+                document.SetValue(CameraSettingsSection, mapName, pawnPath);
+        }
         foreach (var camera in cameras)
             document.SetValue(CameraPresetsSection, camera.Name, FormatCameraPreset(camera));
         await document.SaveAsync(path, cancellationToken);

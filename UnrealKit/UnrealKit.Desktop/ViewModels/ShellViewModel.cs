@@ -17,6 +17,7 @@ using UnrealKit.Core.Operations;
 using UnrealKit.Core.Parsing;
 using UnrealKit.Core.Processes;
 using UnrealKit.Core.Projects;
+using UnrealKit.Core.RemoteControl;
 using UnrealKit.Core.RenderDoc;
 using UnrealKit.Core.Runtime;
 using UnrealKit.Core.Unreal;
@@ -125,6 +126,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private CameraPresetOption? _selectedCameraPreset;
     private string _cameraOutput = string.Empty;
     private bool _isCameraJumping;
+    private string _defaultPawnPath = string.Empty;
     private string _ftpHost = string.Empty;
     private string _ftpPort = FtpSettings.DefaultPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private string _ftpUsername = string.Empty;
@@ -1318,6 +1320,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             CameraMapNames.Add(map);
         }
         SelectedCameraMap = CameraMapNames.Count > 0 ? CameraMapNames[0] : string.Empty;
+        _defaultPawnPath = GetPawnPathForMap(_selectedCameraMap);
+        OnPropertyChanged(nameof(DefaultPawnPath));
 
         OnPropertyChanged(nameof(ProjectTitle));
         UpdateLaunchParameterPreview();
@@ -2935,6 +2939,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             RefreshFilteredCameraPresets();
             SelectedCameraPreset = CameraPresets.Count > 0 ? CameraPresets[0] : null;
             _jumpToCameraCommand.RaiseCanExecuteChanged();
+            _defaultPawnPath = GetPawnPathForMap(_selectedCameraMap);
+            OnPropertyChanged(nameof(DefaultPawnPath));
         }
     }
 
@@ -2962,6 +2968,16 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     }
 
     public bool HasCameraOutput => !string.IsNullOrEmpty(_cameraOutput);
+
+    public string DefaultPawnPath
+    {
+        get => _defaultPawnPath;
+        set
+        {
+            if (!SetField(ref _defaultPawnPath, value ?? string.Empty)) return;
+            _ = SaveDefaultPawnPathAsync();
+        }
+    }
 
     public ICommand JumpToCameraCommand => _jumpToCameraCommand;
     private AsyncDelegateCommand _jumpToCameraCommand;
@@ -3232,27 +3248,35 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         if (_selectedDevice is null || _selectedCameraPreset is null) return;
 
-        var command = _selectedCameraPreset.Preset.BuildTeleportCommand();
+        var pawnPath = _defaultPawnPath.Trim();
+        if (string.IsNullOrWhiteSpace(pawnPath))
+        {
+            CameraOutput = "[SKIP] 未配置当前地图的 DefaultPawnPath，请在上方输入框填写后重试。";
+            OnPropertyChanged(nameof(HasCameraOutput));
+            return;
+        }
+
+        var preset = _selectedCameraPreset.Preset;
         IsCameraJumping = true;
-        CameraOutput = $"Sending: {command}...";
+        CameraOutput = $"Sending K2_TeleportTo to {pawnPath}...";
         try
         {
-            var consoleService = new ConsoleCommandService(ResolveDeviceServiceForDevice(_selectedDevice.Device));
-            if (!consoleService.IsSupported)
-            {
-                CameraOutput = $"[SKIP] {_selectedDevice.Platform} 平台暂不支持发送 UE 控制台指令。";
-                return;
-            }
+            var remoteControlOptions = _project is not null
+                ? RemoteControlOptions.FromProjectSettings(_project.Settings)
+                : RemoteControlOptions.Default;
 
-            var result = await consoleService.SendAsync(
-                _selectedDevice.Id,
-                ConsoleCommand.Create(command),
-                TryResolveSelectedTarget(out _)?.ProcessIdentity,
-                cancellationToken: OperationCancellationToken);
+            var remoteControlService = new RemoteControlService();
+            var request = new RemoteControlTeleportRequest(
+                remoteControlOptions.HttpPort,
+                pawnPath,
+                preset.X, preset.Y, preset.Z,
+                preset.Pitch, preset.Yaw, preset.Roll);
+
+            var result = await remoteControlService.TeleportActorAsync(request, cancellationToken: OperationCancellationToken);
 
             CameraOutput = result.Succeeded
-                ? $"[OK] 已跳转到「{_selectedCameraPreset.Name}」{Environment.NewLine}{command}"
-                : $"[FAIL] {command}{Environment.NewLine}Exit: {result.ExitCode}{Environment.NewLine}{result.StandardError}";
+                ? $"[OK] 已跳转到「{_selectedCameraPreset.Name}」"
+                : $"[FAIL] Exit: {result.ExitCode}{Environment.NewLine}{result.StandardError}";
         }
         catch (Exception ex)
         {
@@ -3261,6 +3285,35 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         finally
         {
             IsCameraJumping = false;
+            OnPropertyChanged(nameof(HasCameraOutput));
+        }
+    }
+
+    private string GetPawnPathForMap(string mapName) =>
+        _project?.Settings.DefaultPawnPaths is { } paths
+            && paths.TryGetValue(mapName, out var path) ? path : string.Empty;
+
+    private async Task SaveDefaultPawnPathAsync()
+    {
+        if (_project is null || string.IsNullOrWhiteSpace(_selectedCameraMap)) return;
+
+        var existing = _project.Settings.DefaultPawnPaths ?? new Dictionary<string, string>();
+        var updated = new Dictionary<string, string>(existing, StringComparer.OrdinalIgnoreCase)
+        {
+            [_selectedCameraMap] = _defaultPawnPath
+        };
+        // 空值时移除该地图的条目
+        if (string.IsNullOrWhiteSpace(_defaultPawnPath))
+            updated.Remove(_selectedCameraMap);
+
+        var newSettings = _project.Settings with { DefaultPawnPaths = updated };
+        try
+        {
+            _project = await _projectService.UpdateSettingsAsync(_project, newSettings, cancellationToken: OperationCancellationToken);
+        }
+        catch (Exception ex)
+        {
+            CameraOutput = $"[ERROR] 保存 DefaultPawnPath 失败: {ex.Message}";
             OnPropertyChanged(nameof(HasCameraOutput));
         }
     }

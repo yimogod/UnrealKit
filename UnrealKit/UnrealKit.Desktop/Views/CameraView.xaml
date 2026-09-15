@@ -5,6 +5,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -19,17 +20,27 @@
                       ToolTip="选择地图后，下方列表显示该地图下配置的全部相机预设" />
         </DockPanel>
 
+        <!-- Pawn 路径 -->
+        <DockPanel Grid.Row="1" Margin="0,0,0,10" LastChildFill="True">
+            <TextBlock DockPanel.Dock="Left" Text="Pawn 路径" VerticalAlignment="Center" Margin="0,0,10,0"
+                       Style="{StaticResource SectionTitleTextStyle}" />
+            <TextBox Text="{Binding DefaultPawnPath, UpdateSourceTrigger=LostFocus}"
+                     Padding="6,4"
+                     FontFamily="Consolas, Courier New, monospace"
+                     ToolTip="当前地图的 Pawn objectPath，例如 /Game/Maps/MyMap.MyMap:PersistentLevel.BP_Character_0" />
+        </DockPanel>
+
         <!-- 预设列表标题 -->
-        <DockPanel Grid.Row="1" Margin="0,0,0,6" LastChildFill="False">
+        <DockPanel Grid.Row="2" Margin="0,0,0,6" LastChildFill="False">
             <TextBlock DockPanel.Dock="Left" Text="相机预设" VerticalAlignment="Center"
                        Style="{StaticResource SectionTitleTextStyle}" />
             <Button DockPanel.Dock="Right" Content="跳转" Padding="18,6"
                     Command="{Binding JumpToCameraCommand}"
-                    ToolTip="将运行中的 UE 相机移到所选预设的位置和旋转" />
+                    ToolTip="将运行中的 UE Pawn 移到所选预设的位置和旋转" />
         </DockPanel>
 
         <!-- 预设列表 -->
-        <ListBox Grid.Row="2"
+        <ListBox Grid.Row="3"
                  ItemsSource="{Binding CameraPresets}"
                  SelectedItem="{Binding SelectedCameraPreset}"
                  HorizontalContentAlignment="Stretch"
@@ -57,7 +68,7 @@
         </ListBox>
 
         <!-- 回显区 -->
-        <ScrollViewer Grid.Row="3" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" MaxHeight="90"
+        <ScrollViewer Grid.Row="4" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" MaxHeight="90"
                       Visibility="{Binding HasCameraOutput, Converter={StaticResource BoolToVisibilityConverter}}">
             <TextBox Text="{Binding CameraOutput, Mode=OneWay}" Style="{StaticResource ConsoleEchoTextBoxStyle}" />
         </ScrollViewer>

@@ -87,6 +87,30 @@ public sealed class RemoteControlService : IRemoteControlService
     /// 成功时把响应 body 原样放进 <see cref="ProcessExecutionResult.StandardOutput"/>：
     /// 函数返回值（顶层 <c>ReturnValue</c>）的解析属于调用方语义，不在传输层做。
     /// </summary>
+    private async Task<ProcessExecutionResult> CallWithObjectParametersAsync(
+        int httpPort,
+        string objectPath,
+        string functionName,
+        IReadOnlyDictionary<string, object> parameters,
+        bool generateTransaction,
+        CancellationToken cancellationToken)
+    {
+        var startedAt = _timeProvider.GetUtcNow();
+        var uri = BuildUri(httpPort);
+        using var content = new StringContent(
+            JsonSerializer.Serialize(new
+            {
+                objectPath,
+                functionName,
+                parameters,
+                generateTransaction
+            }),
+            Encoding.UTF8,
+            "application/json");
+
+        return await SendRequestAsync(uri, content, startedAt, cancellationToken);
+    }
+
     private async Task<ProcessExecutionResult> CallAsync(
         int httpPort,
         string objectPath,
@@ -107,6 +131,16 @@ public sealed class RemoteControlService : IRemoteControlService
             }),
             Encoding.UTF8,
             "application/json");
+
+        return await SendRequestAsync(uri, content, startedAt, cancellationToken);
+    }
+
+    private async Task<ProcessExecutionResult> SendRequestAsync(
+        Uri uri,
+        StringContent content,
+        DateTimeOffset startedAt,
+        CancellationToken cancellationToken)
+    {
 
         HttpResponseMessage response;
         try
@@ -162,6 +196,35 @@ public sealed class RemoteControlService : IRemoteControlService
 
             return result;
         }
+    }
+
+    public Task<ProcessExecutionResult> TeleportActorAsync(
+        RemoteControlTeleportRequest request,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(request.HttpPort);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.ObjectPath);
+
+        var ic = System.Globalization.CultureInfo.InvariantCulture;
+        var parameters = new Dictionary<string, object>
+        {
+            ["DestLocation"] = new { X = request.X, Y = request.Y, Z = request.Z },
+            ["DestRotation"] = new { Pitch = request.Pitch, Yaw = request.Yaw, Roll = request.Roll }
+        };
+
+        progress?.Report(new OperationProgress(
+            "remote-control-teleport", "Sending", null, null,
+            $"K2_TeleportTo {request.ObjectPath} → ({request.X:F0},{request.Y:F0},{request.Z:F0})"));
+
+        return CallWithObjectParametersAsync(
+            request.HttpPort,
+            request.ObjectPath,
+            "K2_TeleportTo",
+            parameters,
+            generateTransaction: true,
+            cancellationToken);
     }
 
     private RemoteControlException BuildFailure(string message, Exception exception, DateTimeOffset startedAt) =>

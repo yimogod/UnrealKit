@@ -71,7 +71,13 @@ public enum RemoteControlVariableType
 }
 
 /// <summary>
-/// 一次「读回 cvar 当前值」的调用数据。
+/// 通过 K2_TeleportTo 移动指定 Actor 到目标位置和旋转。
+/// </summary>
+public sealed record RemoteControlTeleportRequest(
+    int HttpPort,
+    string ObjectPath,
+    double X, double Y, double Z,
+    double Pitch, double Yaw, double Roll);
 ///
 /// 与 <see cref="RemoteControlCommandRequest"/> 走**同一个** HTTP 端点
 /// （<c>PUT http://127.0.0.1:{port}/remote/object/call</c>）和同一个 objectPath，
