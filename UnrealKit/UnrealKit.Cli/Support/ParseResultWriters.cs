@@ -173,6 +173,8 @@ internal static class ParseResultWriters
         HtmlTableReport.WriteAndOpen(PakScanHtmlBuilder.Build(result),             texPath);
         HtmlTableReport.WriteAndOpen(PakScanStaticMeshHtmlBuilder.Build(result),   smPath);
         HtmlTableReport.WriteAndOpen(PakScanSkeletalMeshHtmlBuilder.Build(result), skmPath);
+        var matPath = base_ + "_Materials.html";
+        HtmlTableReport.WriteAndOpen(PakScanMaterialHtmlBuilder.Build(result),     matPath);
         CliOutput.WriteDiagnostics(result.Diagnostics);
     }
 

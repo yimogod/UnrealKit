@@ -209,6 +209,12 @@ public sealed record PakScanSkeletalMeshOption(
     string LodCount, string MaterialCount, string BoneCount,
     string VertexCount, string TriangleCount, string PakChunkId);
 
+public sealed record PakScanMaterialOption(
+    string Name, string Path,
+    string BlendMode, string ShadingModel,
+    string ReferencedTextureCount, string TwoSided,
+    string PakChunkId);
+
 public sealed record PakScanDiagnosticOption(string Severity, string Code, string Message);
 
 /// <summary>

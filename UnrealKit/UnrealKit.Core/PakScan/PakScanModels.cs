@@ -27,6 +27,15 @@ public sealed record PakMeshEntry(
     int TriangleCount,
     string PakChunkId);
 
+public sealed record PakMaterialEntry(
+    string Name,
+    string ObjectPath,
+    string BlendMode,
+    string ShadingModel,
+    int ReferencedTextureCount,
+    bool TwoSided,
+    string PakChunkId);
+
 public sealed record PakScanReport(
     string InputDirectory,
     int TotalAssetsScanned,
@@ -35,7 +44,9 @@ public sealed record PakScanReport(
     int StaticMeshCount,
     IReadOnlyList<PakMeshEntry> StaticMeshes,
     int SkeletalMeshCount,
-    IReadOnlyList<PakMeshEntry> SkeletalMeshes);
+    IReadOnlyList<PakMeshEntry> SkeletalMeshes,
+    int MaterialCount,
+    IReadOnlyList<PakMaterialEntry> Materials);
 
 public sealed record PakScanResult(
     string InputPath,
@@ -66,6 +77,9 @@ public sealed record PakScanStaticMeshFound(PakMeshEntry Mesh) : PakScanEntry;
 /// <summary>发现一个 SkeletalMesh。</summary>
 public sealed record PakScanSkeletalMeshFound(PakMeshEntry Mesh) : PakScanEntry;
 
+/// <summary>发现一个 Material。</summary>
+public sealed record PakScanMaterialFound(PakMaterialEntry Material) : PakScanEntry;
+
 /// <summary>产生一条诊断信息（警告、错误等）。</summary>
 public sealed record PakScanDiagnosticEntry(Diagnostic Diagnostic) : PakScanEntry;
 
@@ -75,4 +89,5 @@ public sealed record PakScanCompleteEntry(
     int TextureCount,
     int StaticMeshCount,
     int SkeletalMeshCount,
+    int MaterialCount,
     TimeSpan Elapsed) : PakScanEntry;

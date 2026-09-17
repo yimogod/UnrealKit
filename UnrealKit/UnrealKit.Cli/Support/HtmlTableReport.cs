@@ -436,6 +436,45 @@ internal static class PakScanSkeletalMeshHtmlBuilder
     }
 }
 
+// ── PakScan Material HTML 构造器 ──────────────────────────────────────────────
+
+internal static class PakScanMaterialHtmlBuilder
+{
+    internal static string Build(UnrealKit.Core.PakScan.PakScanResult result)
+    {
+        var report    = result.Report;
+        var materials = report?.Materials ?? [];
+        var scanDir   = report?.InputDirectory ?? result.InputPath;
+
+        HtmlColumn[] columns =
+        [
+            new("n",   "名称",         HtmlColumnType.Text),
+            new("bm",  "BlendMode",    HtmlColumnType.Tag),
+            new("sm",  "ShadingModel", HtmlColumnType.Tag),
+            new("tx",  "纹理引用数",    HtmlColumnType.Number, DefaultSort: true, DefaultSortDesc: true),
+            new("ts",  "TwoSided",     HtmlColumnType.Tag),
+            new("p",   "路径",         HtmlColumnType.Path, Sortable: false),
+        ];
+
+        var rows = materials.Select(m => new object?[]
+        {
+            m.Name, m.BlendMode, m.ShadingModel,
+            m.ReferencedTextureCount, m.TwoSided.ToString(), m.ObjectPath,
+        }).ToArray();
+
+        var meta = new HtmlMetaItem[]
+        {
+            new("目录",     scanDir),
+            new("Material", (report?.MaterialCount ?? 0).ToString()),
+            new("生成时间", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+        };
+
+        var title = $"PakScan — Material — {Path.GetFileName(scanDir.TrimEnd('/', '\\'))}";
+        return HtmlTableReport.Build(title, columns, rows, meta, null,
+            result.Diagnostics, searchPlaceholder: "搜索名称 / 路径…");
+    }
+}
+
 // ── PakScan CSV 构造器 ────────────────────────────────────────────────────────
 
 internal static class PakScanCsvBuilder
@@ -504,5 +543,26 @@ internal static class PakScanCsvBuilder
             m.Name, m.LodCount, m.MaterialCount, m.BoneCount, m.VertexCount, m.TriangleCount, m.ObjectPath,
         }).ToArray();
         return CsvTableReport.Build(SkeletalMeshColumns, rows);
+    }
+
+    private static readonly CsvColumn[] MaterialColumns =
+    [
+        new("Name",                   "Name"),
+        new("BlendMode",              "BlendMode"),
+        new("ShadingModel",           "ShadingModel"),
+        new("ReferencedTextureCount", "ReferencedTextureCount"),
+        new("TwoSided",               "TwoSided"),
+        new("ObjectPath",             "ObjectPath"),
+    ];
+
+    internal static string BuildMaterialCsv(UnrealKit.Core.PakScan.PakScanResult result)
+    {
+        var materials = result.Report?.Materials ?? [];
+        var rows = materials.Select(m => new object?[]
+        {
+            m.Name, m.BlendMode, m.ShadingModel,
+            m.ReferencedTextureCount, m.TwoSided, m.ObjectPath,
+        }).ToArray();
+        return CsvTableReport.Build(MaterialColumns, rows);
     }
 }

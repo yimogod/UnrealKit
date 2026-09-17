@@ -111,6 +111,13 @@ public partial class PakScanView : UserControl
         ApplyDataGridSort(e, vm.PakSkeletalMeshes);
     }
 
+    private void MaterialDataGrid_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        if (DataContext is not ShellViewModel vm) return;
+        e.Handled = true;
+        ApplyDataGridSort(e, vm.PakMaterials);
+    }
+
     // Cycles: none → ascending → descending → ascending …
     private static void ApplyDataGridSort<T>(DataGridSortingEventArgs e, PagedSearchList<T> list)
         where T : class

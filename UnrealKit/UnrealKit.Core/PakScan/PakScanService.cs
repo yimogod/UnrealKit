@@ -3,6 +3,7 @@ using System.Threading.Channels;
 using CUE4Parse.Compression;
 using CUE4Parse.Encryption.Aes;
 using CUE4Parse.FileProvider;
+using CUE4Parse.UE4.Assets.Exports.Material;
 using CUE4Parse.UE4.Assets.Exports.SkeletalMesh;
 using CUE4Parse.UE4.Assets.Exports.StaticMesh;
 using CUE4Parse.UE4.Assets.Exports.Texture;
@@ -142,6 +143,7 @@ public sealed class PakScanService : IPakScanService
                 var textureCount = 0;
                 var staticMeshCount = 0;
                 var skeletalMeshCount = 0;
+                var materialCount = 0;
                 var sw = System.Diagnostics.Stopwatch.StartNew();
 
                 await channel.Writer.WriteAsync(new PakScanStartEntry(totalCount), cancellationToken);
@@ -187,6 +189,14 @@ public sealed class PakScanService : IPakScanService
                                 staticMeshCount++;
                             }
                         }
+                        else if (className == "Material")
+                        {
+                            if (provider.TryLoadPackageObject<UMaterial>(objectPath, out var mat) && mat is not null)
+                            {
+                                await channel.Writer.WriteAsync(new PakScanMaterialFound(BuildMaterialEntry(mat, objectPath, chunkId)), cancellationToken);
+                                materialCount++;
+                            }
+                        }
                         else if (className is null)
                         {
                             // IoPackage 或 header 解析失败，退回盲试；SkeletalMesh 仍先于 StaticMesh
@@ -208,6 +218,11 @@ public sealed class PakScanService : IPakScanService
                                 await channel.Writer.WriteAsync(new PakScanStaticMeshFound(BuildStaticMeshEntry(sm, objectPath, chunkId)), cancellationToken);
                                 staticMeshCount++;
                             }
+                            else if (provider.TryLoadPackageObject<UMaterial>(objectPath, out var mat) && mat is not null)
+                            {
+                                await channel.Writer.WriteAsync(new PakScanMaterialFound(BuildMaterialEntry(mat, objectPath, chunkId)), cancellationToken);
+                                materialCount++;
+                            }
                         }
                     }
                     catch (OperationCanceledException)
@@ -225,9 +240,9 @@ public sealed class PakScanService : IPakScanService
 
                 sw.Stop();
                 await channel.Writer.WriteAsync(new PakScanDiagnosticEntry(new Diagnostic(DiagnosticSeverity.Information, "PKS006",
-                    $"扫描完成：{textureCount} 个 Texture2D，{staticMeshCount} 个 StaticMesh，{skeletalMeshCount} 个 SkeletalMesh，共扫描 {scannedCount} 个资产，耗时 {FormatElapsed(sw.Elapsed)}")), cancellationToken);
+                    $"扫描完成：{textureCount} 个 Texture2D，{staticMeshCount} 个 StaticMesh，{skeletalMeshCount} 个 SkeletalMesh，{materialCount} 个 Material，共扫描 {scannedCount} 个资产，耗时 {FormatElapsed(sw.Elapsed)}")), cancellationToken);
 
-                await channel.Writer.WriteAsync(new PakScanCompleteEntry(scannedCount, textureCount, staticMeshCount, skeletalMeshCount, sw.Elapsed), cancellationToken);
+                await channel.Writer.WriteAsync(new PakScanCompleteEntry(scannedCount, textureCount, staticMeshCount, skeletalMeshCount, materialCount, sw.Elapsed), cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -262,6 +277,7 @@ public sealed class PakScanService : IPakScanService
         var textures       = new List<PakTextureEntry>();
         var staticMeshes   = new List<PakMeshEntry>();
         var skeletalMeshes = new List<PakMeshEntry>();
+        var materials      = new List<PakMaterialEntry>();
         int totalCount = 0;
 
         await foreach (var entry in ScanStreamAsync(pakDirectory, config, cancellationToken))
@@ -291,13 +307,17 @@ public sealed class PakScanService : IPakScanService
                     skeletalMeshes.Add(skm.Mesh);
                     break;
 
+                case PakScanMaterialFound mat:
+                    materials.Add(mat.Material);
+                    break;
+
                 case PakScanDiagnosticEntry d:
                     diagnostics.Add(d.Diagnostic);
                     break;
 
                 case PakScanCompleteEntry c:
                     progress?.Report(new OperationProgress("pakScan", "Done", c.TotalScanned, c.TotalScanned,
-                        $"扫描完成：{c.TextureCount} 个纹理，{c.StaticMeshCount} 个 StaticMesh，{c.SkeletalMeshCount} 个 SkeletalMesh，共 {c.TotalScanned} 个资产，耗时 {FormatElapsed(c.Elapsed)}"));
+                        $"扫描完成：{c.TextureCount} 个纹理，{c.StaticMeshCount} 个 StaticMesh，{c.SkeletalMeshCount} 个 SkeletalMesh，{c.MaterialCount} 个 Material，共 {c.TotalScanned} 个资产，耗时 {FormatElapsed(c.Elapsed)}"));
                     break;
             }
         }
@@ -305,8 +325,9 @@ public sealed class PakScanService : IPakScanService
         if (diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error))
             return new PakScanResult(pakDirectory, null, diagnostics);
 
-        var report = new PakScanReport(pakDirectory, textures.Count + staticMeshes.Count + skeletalMeshes.Count,
-            textures.Count, textures, staticMeshes.Count, staticMeshes, skeletalMeshes.Count, skeletalMeshes);
+        var report = new PakScanReport(pakDirectory, textures.Count + staticMeshes.Count + skeletalMeshes.Count + materials.Count,
+            textures.Count, textures, staticMeshes.Count, staticMeshes, skeletalMeshes.Count, skeletalMeshes,
+            materials.Count, materials);
         return new PakScanResult(pakDirectory, report, diagnostics);
     }
 
@@ -509,6 +530,11 @@ public sealed class PakScanService : IPakScanService
         int triangleCount = lod0?.Sections?.Sum(s => (int)s.NumTriangles) ?? 0;
         return new PakMeshEntry(skm.Name, objectPath, PakMeshKind.SkeletalMesh, lodCount, materialCount, boneCount, vertexCount, triangleCount, pakChunkId);
     }
+
+    private static PakMaterialEntry BuildMaterialEntry(UMaterial mat, string objectPath, string pakChunkId) =>
+        new(mat.Name, objectPath,
+            mat.BlendMode.ToString(), mat.ShadingModel.ToString(),
+            mat.ReferencedTextures.Count, mat.TwoSided, pakChunkId);
 
     // 读 package header 拿第一个 export 的类名，不触发 export 内容反序列化。
     // 对于 IoPackage（.utoc/.ucas）无法轻量读取类名，返回 null 退回全量路径。
