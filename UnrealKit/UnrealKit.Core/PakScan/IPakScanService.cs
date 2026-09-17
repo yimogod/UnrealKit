@@ -28,4 +28,22 @@ public interface IPakScanService
     /// 返回 null 表示 provider 未就绪、资产加载失败或不是 Mesh 类型。
     /// </summary>
     Task<byte[]?> ExportMeshGlbAsync(string objectPath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 流式扫描 pak 目录中所有 .umap 地图，统计每张地图的 StaticMeshActor 放置次数。
+    /// 若 _provider 已由 ScanStreamAsync 初始化则复用，否则自行 Initialize + MountAsync。
+    /// </summary>
+    IAsyncEnumerable<PakScanEntry> ScanMapActorsStreamAsync(
+        string pakDirectory,
+        PakScanConfig? config = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 聚合版本，等待全部地图扫描完成后返回 MapActorScanResult。
+    /// </summary>
+    Task<MapActorScanResult> ScanMapActorsAsync(
+        string pakDirectory,
+        PakScanConfig? config = null,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
 }

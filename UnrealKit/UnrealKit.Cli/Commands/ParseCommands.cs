@@ -26,6 +26,7 @@ internal static class ParseCommands
             "memreport" => await ParseMemReportAsync(arguments[1..]),
             "static-camera" => await ParseStaticCameraAsync(arguments[1..]),
             "pak-scan" => await ParsePakScanAsync(arguments[1..]),
+            "map-actor-stats" => await ParseMapActorStatsAsync(arguments[1..]),
             _ => FailUsage()
         };
     }
@@ -86,6 +87,30 @@ internal static class ParseCommands
         else
         {
             ParseResultWriters.WritePakScan(result, CliOptions.IsJsonFormat(options), outputFile);
+        }
+        return result.IsSuccess ? 0 : 1;
+    }
+
+    private static async Task<int> ParseMapActorStatsAsync(string[] options)
+    {
+        CliOptions.EnsureOnly(options, CliOptions.Allowed("--input", "--aes-key", "--game-version", "--oodle-path", "--output", "--format"));
+        var input = CliOptions.GetRequired(options, "--input");
+        var config = new PakScanConfig
+        {
+            AesKey = CliOptions.GetOptional(options, "--aes-key") ?? string.Empty,
+            GameVersion = CliOptions.GetOptional(options, "--game-version") ?? "GAME_UE5_3",
+            OodleDllPath = CliOptions.GetOptional(options, "--oodle-path") ?? string.Empty,
+        };
+        var result = await new PakScanService().ScanMapActorsAsync(input, config);
+        var outputFile = CliOptions.GetOptional(options, "--output");
+        if (CliOptions.IsHtmlFormat(options))
+        {
+            var basePath = outputFile is not null ? Path.ChangeExtension(outputFile, null) : "MapActorStats";
+            ParseResultWriters.WriteMapActorStatsHtml(result, basePath + "_MapMeshPlacements.html", basePath + "_MapMeshAggregates.html");
+        }
+        else
+        {
+            ParseResultWriters.WriteMapActorStats(result, CliOptions.IsJsonFormat(options), outputFile);
         }
         return result.IsSuccess ? 0 : 1;
     }

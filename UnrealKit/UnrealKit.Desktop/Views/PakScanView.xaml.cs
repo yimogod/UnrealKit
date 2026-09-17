@@ -118,6 +118,20 @@ public partial class PakScanView : UserControl
         ApplyDataGridSort(e, vm.PakMaterials);
     }
 
+    private void MapMeshUsageDataGrid_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        if (DataContext is not ShellViewModel vm) return;
+        e.Handled = true;
+        ApplyDataGridSort(e, vm.PakMapMeshUsages);
+    }
+
+    private void MapMeshAggregateDataGrid_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        if (DataContext is not ShellViewModel vm) return;
+        e.Handled = true;
+        ApplyDataGridSort(e, vm.PakMapMeshAggregates);
+    }
+
     // Cycles: none → ascending → descending → ascending …
     private static void ApplyDataGridSort<T>(DataGridSortingEventArgs e, PagedSearchList<T> list)
         where T : class

@@ -49,6 +49,7 @@ internal enum HtmlFilterMode
     Exact,
     NumberAtLeast,
     NumberAtLeastEither,
+    NumberAtMost,
 }
 
 // ── 元信息行 ─────────────────────────────────────────────────────────────────
@@ -83,7 +84,8 @@ internal static class HtmlTableReport
         IReadOnlyList<HtmlMetaItem>? meta = null,
         IReadOnlyList<HtmlFilter>? filters = null,
         IReadOnlyList<Diagnostic>? diagnostics = null,
-        string searchPlaceholder = "搜索…")
+        string searchPlaceholder = "搜索…",
+        string? uniqueCountKey = null)
     {
         var defaultSortCol = columns.FirstOrDefault(c => c.DefaultSort) ?? columns[0];
         var defaultSortDir = defaultSortCol.DefaultSortDesc ? -1 : 1;
@@ -91,20 +93,21 @@ internal static class HtmlTableReport
 
         var model = new
         {
-            title             = HtmlEscape(title),
+            title              = HtmlEscape(title),
             search_placeholder = HtmlEscape(searchPlaceholder),
-            meta_html         = BuildMetaHtml(meta),
-            filter_html       = BuildFilterHtml(filters),
-            thead_html        = BuildTheadHtml(columns),
-            diag_html         = BuildDiagHtml(diagnostics),
-            data_json         = SerializeRows(columns, rows),
-            cols_json         = SerializeColDefs(columns),
-            bytes_key_json    = bytesColKey != null ? $"\"{JsEscape(bytesColKey)}\"" : "null",
-            col_count         = columns.Count,
-            sort_key_json     = $"\"{JsEscape(defaultSortCol.Key)}\"",
-            sort_dir          = defaultSortDir,
-            filter_logic_js   = BuildFilterLogicJs(filters, columns),
-            enum_fill_js      = BuildEnumFillJs(filters),
+            meta_html          = BuildMetaHtml(meta),
+            filter_html        = BuildFilterHtml(filters),
+            thead_html         = BuildTheadHtml(columns),
+            diag_html          = BuildDiagHtml(diagnostics),
+            data_json          = SerializeRows(columns, rows),
+            cols_json          = SerializeColDefs(columns),
+            bytes_key_json     = bytesColKey != null ? $"\"{JsEscape(bytesColKey)}\"" : "null",
+            col_count          = columns.Count,
+            sort_key_json      = $"\"{JsEscape(defaultSortCol.Key)}\"",
+            sort_dir           = defaultSortDir,
+            filter_logic_js    = BuildFilterLogicJs(filters, columns),
+            enum_fill_js       = BuildEnumFillJs(filters),
+            uniq_key_json      = uniqueCountKey != null ? $"\"{JsEscape(uniqueCountKey)}\"" : "null",
         };
 
         var ctx = new TemplateContext { LimitToString = 0 };
@@ -210,12 +213,25 @@ internal static class HtmlTableReport
         var sb = new StringBuilder();
         foreach (var f in filters)
         {
-            sb.Append($"<select id=\"{HtmlEscape(f.Id)}\" onchange=\"onFilter()\">");
-            sb.Append($"<option value=\"\">{HtmlEscape(f.Label)}</option>");
-            if (f.FixedOptions is { Count: > 0 })
-                foreach (var opt in f.FixedOptions)
-                    sb.Append($"<option value=\"{HtmlEscape(opt.Value)}\">{HtmlEscape(opt.Label)}</option>");
-            sb.Append("</select>\n");
+            if (f.FilterMode is HtmlFilterMode.NumberAtLeast or HtmlFilterMode.NumberAtMost)
+            {
+                // 数字输入框，不用 <select>
+                var placeholder = HtmlEscape(f.Label);
+                sb.Append($"<label style=\"display:inline-flex;align-items:center;gap:4px;\">" +
+                          $"{placeholder}：" +
+                          $"<input id=\"{HtmlEscape(f.Id)}\" type=\"number\" min=\"0\" placeholder=\"–\" " +
+                          $"style=\"width:72px;\" oninput=\"onFilter()\">" +
+                          $"</label>\n");
+            }
+            else
+            {
+                sb.Append($"<select id=\"{HtmlEscape(f.Id)}\" onchange=\"onFilter()\">");
+                sb.Append($"<option value=\"\">{HtmlEscape(f.Label)}</option>");
+                if (f.FixedOptions is { Count: > 0 })
+                    foreach (var opt in f.FixedOptions)
+                        sb.Append($"<option value=\"{HtmlEscape(opt.Value)}\">{HtmlEscape(opt.Label)}</option>");
+                sb.Append("</select>\n");
+            }
         }
         return sb.ToString();
     }
@@ -286,6 +302,10 @@ internal static class HtmlTableReport
                         var col2 = JsEscape(f.FilterColumn2 ?? f.FilterColumn);
                         sb.AppendLine($"    var _f{id}=parseInt(document.getElementById('{id}').value||'0')||0;" +
                                       $"if(_f{id}&&r.{col}<_f{id}&&r.{col2}<_f{id})return false;");
+                        break;
+                    case HtmlFilterMode.NumberAtMost:
+                        sb.AppendLine($"    var _f{id}=document.getElementById('{id}').value;" +
+                                      $"if(_f{id}!==''&&_f{id}!==null){{var _n{id}=parseInt(_f{id});if(!isNaN(_n{id})&&r.{col}>_n{id})return false;}}");
                         break;
                 }
             }
@@ -564,5 +584,84 @@ internal static class PakScanCsvBuilder
             m.ReferencedTextureCount, m.TwoSided, m.ObjectPath,
         }).ToArray();
         return CsvTableReport.Build(MaterialColumns, rows);
+    }
+}
+
+// ── 地图 Actor 统计 HTML 构造器 ───────────────────────────────────────────────
+
+internal static class MapMeshPlacementsHtmlBuilder
+{
+    internal static string Build(UnrealKit.Core.PakScan.MapActorScanResult result)
+    {
+        HtmlColumn[] columns =
+        [
+            new("map", "地图",     HtmlColumnType.Text),
+            new("n",   "Mesh 名", HtmlColumnType.Text, DefaultSort: false),
+            new("cnt", "放置次数", HtmlColumnType.Number, DefaultSort: true, DefaultSortDesc: true),
+            new("mp",  "地图路径", HtmlColumnType.Path, Sortable: false),
+            new("p",   "Mesh 路径", HtmlColumnType.Path, Sortable: false),
+        ];
+
+        var rows = result.PerMapEntries
+            .SelectMany(e => e.Placements.Select(p => new object?[]
+            {
+                Path.GetFileNameWithoutExtension(e.MapObjectPath),
+                Path.GetFileNameWithoutExtension(p.MeshObjectPath),
+                p.Count,
+                e.MapObjectPath,
+                p.MeshObjectPath,
+            }))
+            .ToArray();
+
+        var meta = new HtmlMetaItem[]
+        {
+            new("目录",          result.InputDirectory),
+            new("地图总数",       result.TotalMapsScanned.ToString()),
+            new("独立 Mesh 数",   result.Aggregates.Count.ToString()),
+            new("生成时间",       DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+        };
+
+        return HtmlTableReport.Build(
+            $"地图 Actor 统计 — 按地图 — {Path.GetFileName(result.InputDirectory.TrimEnd('/', '\\'))}",
+            columns, rows, meta,
+            [new HtmlFilter("fCntMax", "放置次数 ≤", "cnt", FilterMode: HtmlFilterMode.NumberAtMost)],
+            result.Diagnostics, searchPlaceholder: "搜索地图 / Mesh 名…",
+            uniqueCountKey: "p");
+    }
+}
+
+internal static class MapMeshAggregatesHtmlBuilder
+{
+    internal static string Build(UnrealKit.Core.PakScan.MapActorScanResult result)
+    {
+        HtmlColumn[] columns =
+        [
+            new("n",   "Mesh 名",  HtmlColumnType.Text),
+            new("tot", "总放置次数", HtmlColumnType.Number, DefaultSort: true, DefaultSortDesc: true),
+            new("mc",  "出现地图数", HtmlColumnType.Number),
+            new("p",   "路径",      HtmlColumnType.Path, Sortable: false),
+        ];
+
+        var rows = result.Aggregates.Select(a => new object?[]
+        {
+            Path.GetFileNameWithoutExtension(a.MeshObjectPath),
+            a.TotalCount,
+            a.MapCount,
+            a.MeshObjectPath,
+        }).ToArray();
+
+        var meta = new HtmlMetaItem[]
+        {
+            new("目录",         result.InputDirectory),
+            new("独立 Mesh 数",  result.Aggregates.Count.ToString()),
+            new("生成时间",      DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+        };
+
+        return HtmlTableReport.Build(
+            $"地图 Actor 统计 — 汇总 — {Path.GetFileName(result.InputDirectory.TrimEnd('/', '\\'))}",
+            columns, rows, meta,
+            [new HtmlFilter("fTotMax", "总次数 ≤", "tot", FilterMode: HtmlFilterMode.NumberAtMost)],
+            result.Diagnostics, searchPlaceholder: "搜索 Mesh 名 / 路径…",
+            uniqueCountKey: "p");
     }
 }

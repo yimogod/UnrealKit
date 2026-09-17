@@ -226,6 +226,12 @@ public sealed record LocalPakPackageOption(string FolderName, string LocalDirect
     public string Display => FolderName;
 }
 
+public sealed record PakMapMeshUsageOption(
+    string MapName, string MapPath, string MeshName, string MeshPath, string Count);
+
+public sealed record PakMapMeshAggregateOption(
+    string MeshName, string MeshPath, string TotalCount, string MapCount);
+
 /// <summary>
 /// 一条相机预设的界面投影。封装底层 <see cref="CameraPreset"/>，
 /// 供 CameraView 的 ListBox 绑定。

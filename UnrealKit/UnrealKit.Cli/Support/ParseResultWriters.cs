@@ -244,4 +244,62 @@ internal static class ParseResultWriters
 
         CliOutput.WriteDiagnostics(result.Diagnostics);
     }
+
+    internal static void WriteMapActorStats(MapActorScanResult result, bool json, string? outputFile)
+    {
+        if (json)
+        {
+            var jsonText = JsonSerializer.Serialize(result, IndentedJson);
+            if (outputFile is not null)
+                File.WriteAllText(outputFile, jsonText);
+            else
+                Console.WriteLine(jsonText);
+
+            CliOutput.WriteDiagnostics(result.Diagnostics);
+            return;
+        }
+
+        // Per-map placements
+        var usagesHeader = "MapPath\tMeshPath\tCount";
+        var usagesLines = result.PerMapEntries
+            .SelectMany(e => e.Placements.Select(p => $"{e.MapObjectPath}\t{p.MeshObjectPath}\t{p.Count}"));
+
+        // Cross-map aggregates
+        var aggHeader = "MeshPath\tTotalCount\tMapCount";
+        var aggLines = result.Aggregates.Select(a => $"{a.MeshObjectPath}\t{a.TotalCount}\t{a.MapCount}");
+
+        if (outputFile is not null)
+        {
+            var basePath    = Path.ChangeExtension(outputFile, null);
+            var usagesFile  = basePath + "_MapMeshPlacements.tsv";
+            var aggFile     = basePath + "_MapMeshAggregates.tsv";
+            File.WriteAllLines(usagesFile, usagesLines.Prepend(usagesHeader));
+            File.WriteAllLines(aggFile,   aggLines.Prepend(aggHeader));
+            Console.WriteLine($"Map actor stats: {result.TotalMapsScanned} map(s) → {usagesFile}");
+            Console.WriteLine($"                 {result.Aggregates.Count} unique mesh(es) → {aggFile}");
+        }
+        else
+        {
+            Console.WriteLine(usagesHeader);
+            foreach (var line in usagesLines)
+                Console.WriteLine(line);
+
+            Console.WriteLine();
+            Console.WriteLine(aggHeader);
+            foreach (var line in aggLines)
+                Console.WriteLine(line);
+
+            Console.WriteLine();
+            Console.WriteLine($"Total: {result.TotalMapsScanned} map(s), {result.Aggregates.Count} unique mesh(es)");
+        }
+
+        CliOutput.WriteDiagnostics(result.Diagnostics);
+    }
+
+    internal static void WriteMapActorStatsHtml(MapActorScanResult result, string usagesPath, string aggregatesPath)
+    {
+        HtmlTableReport.WriteAndOpen(MapMeshPlacementsHtmlBuilder.Build(result), usagesPath);
+        HtmlTableReport.WriteAndOpen(MapMeshAggregatesHtmlBuilder.Build(result), aggregatesPath);
+        CliOutput.WriteDiagnostics(result.Diagnostics);
+    }
 }

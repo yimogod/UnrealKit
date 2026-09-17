@@ -3,13 +3,17 @@ using System.Threading.Channels;
 using CUE4Parse.Compression;
 using CUE4Parse.Encryption.Aes;
 using CUE4Parse.FileProvider;
+using CUE4Parse.UE4.Assets.Exports;
 using CUE4Parse.UE4.Assets.Exports.Material;
 using CUE4Parse.UE4.Assets.Exports.SkeletalMesh;
 using CUE4Parse.UE4.Assets.Exports.StaticMesh;
 using CUE4Parse.UE4.Assets.Exports.Texture;
+using CUE4Parse.UE4.Assets.Exports.Component.StaticMesh;
 using CUE4Parse.UE4.Assets.Objects;
 using CUE4Parse.UE4.Assets.Objects.Properties;
 using CUE4Parse.UE4.Objects.Core.Misc;
+using CUE4Parse.UE4.Objects.Engine;
+using CUE4Parse.UE4.Objects.UObject;
 using CUE4Parse.UE4.Versions;
 using CUE4Parse_Conversion.Dto;
 using CUE4Parse_Conversion.Formats.Meshes;
@@ -572,5 +576,428 @@ public sealed class PakScanService : IPakScanService
         if (GameVersionMap.TryGetValue(version, out var game))
             return game;
         return EGame.GAME_UE5_3;
+    }
+
+    // ── 地图 Actor 扫描 ───────────────────────────────────────────────────────
+
+    public async IAsyncEnumerable<PakScanEntry> ScanMapActorsStreamAsync(
+        string pakDirectory,
+        PakScanConfig? config = null,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        config ??= PakScanConfig.Default;
+
+        if (!Directory.Exists(pakDirectory))
+        {
+            yield return new PakScanDiagnosticEntry(new Diagnostic(DiagnosticSeverity.Error, "PKS001",
+                $"Pak 目录不存在：{pakDirectory}", pakDirectory));
+            yield break;
+        }
+
+        var hasPakFiles = Directory.EnumerateFiles(pakDirectory, "*.pak", SearchOption.AllDirectories).Any()
+            || Directory.EnumerateFiles(pakDirectory, "*.utoc", SearchOption.AllDirectories).Any()
+            || Directory.EnumerateFiles(pakDirectory, "*.ucas", SearchOption.AllDirectories).Any();
+
+        if (!hasPakFiles)
+        {
+            yield return new PakScanDiagnosticEntry(new Diagnostic(DiagnosticSeverity.Error, "PKS002",
+                $"目录中未找到任何 .pak / .utoc / .ucas 文件：{pakDirectory}", pakDirectory,
+                "请确认路径指向包含游戏包文件的目录"));
+            yield break;
+        }
+
+        var channel = Channel.CreateUnbounded<PakScanEntry>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = true,
+        });
+
+        var scanTask = Task.Run(async () =>
+        {
+            try
+            {
+                DefaultFileProvider provider;
+                if (_provider is not null)
+                {
+                    // 复用资产扫描已初始化的 provider
+                    provider = _provider;
+                }
+                else
+                {
+                    var game = ResolveGameVersion(config.GameVersion);
+
+                    if (!string.IsNullOrWhiteSpace(config.OodleDllPath) && File.Exists(config.OodleDllPath))
+                    {
+                        try { OodleHelper.Initialize(config.OodleDllPath); }
+                        catch { /* 忽略，Oodle 不影响 .umap 解析主流程 */ }
+                    }
+
+                    provider = new DefaultFileProvider(
+                        pakDirectory,
+                        SearchOption.AllDirectories,
+                        new VersionContainer(game),
+                        StringComparer.OrdinalIgnoreCase);
+
+                    provider.Initialize();
+                    _provider = provider;
+
+                    if (!string.IsNullOrWhiteSpace(config.AesKey))
+                    {
+                        try
+                        {
+                            var key = new FAesKey(config.AesKey);
+                            await provider.SubmitKeyAsync(new FGuid(), key);
+                        }
+                        catch (Exception ex)
+                        {
+                            await channel.Writer.WriteAsync(new PakScanDiagnosticEntry(new Diagnostic(
+                                DiagnosticSeverity.Warning, "PKS004",
+                                $"AES 密钥提交失败，加密资产将无法读取：{ex.Message}",
+                                SuggestedFix: "请确认密钥格式为十六进制字符串")), cancellationToken);
+                        }
+                    }
+
+                    await provider.MountAsync();
+                }
+
+                var umapPaths = provider.Files.Keys
+                    .Where(p => p.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
+                    .Where(p => !config.ExcludeEnginePaths || !p.Contains("/Engine/", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                if (umapPaths.Count == 0)
+                {
+                    await channel.Writer.WriteAsync(new PakScanDiagnosticEntry(new Diagnostic(
+                        DiagnosticSeverity.Error, "PKS010",
+                        $"目录中未找到任何 .umap 文件：{pakDirectory}", pakDirectory,
+                        "请确认 pak 包含地图文件，或关闭 ExcludeEnginePaths 选项")), cancellationToken);
+                    return;
+                }
+
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var diagnostics = new List<Diagnostic>();
+                var perMapEntries = new List<MapMeshUsageEntry>(umapPaths.Count);
+                int scanned = 0;
+                int mapsWithErrors = 0;
+
+                await channel.Writer.WriteAsync(new PakMapScanStartEntry(umapPaths.Count), cancellationToken);
+
+                foreach (var umapPath in umapPaths)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var mapObjectPath = umapPath[..^".umap".Length];
+                    MapMeshUsageEntry entry;
+
+                    try
+                    {
+                        entry = ScanSingleMap(provider, umapPath, mapObjectPath);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        mapsWithErrors++;
+                        scanned++;
+                        var diag = new Diagnostic(DiagnosticSeverity.Warning, "PKS009",
+                            $"地图解析失败，已跳过：{umapPath} — {ex.Message}", umapPath);
+                        diagnostics.Add(diag);
+                        await channel.Writer.WriteAsync(new PakScanDiagnosticEntry(diag), cancellationToken);
+                        await channel.Writer.WriteAsync(
+                            new PakMapScanProgressEntry(scanned, umapPaths.Count, umapPath, 0), cancellationToken);
+                        continue;
+                    }
+
+                    perMapEntries.Add(entry);
+                    scanned++;
+                    await channel.Writer.WriteAsync(new PakMapMeshUsageFound(entry), cancellationToken);
+                    await channel.Writer.WriteAsync(
+                        new PakMapScanProgressEntry(scanned, umapPaths.Count, umapPath, entry.Placements.Count),
+                        cancellationToken);
+                }
+
+                sw.Stop();
+                var result = BuildMapActorStats(pakDirectory, perMapEntries, mapsWithErrors, diagnostics);
+                await channel.Writer.WriteAsync(new PakMapScanCompleteEntry(result, sw.Elapsed), cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // 正常取消
+            }
+            catch (Exception ex)
+            {
+                await channel.Writer.WriteAsync(new PakScanDiagnosticEntry(new Diagnostic(
+                    DiagnosticSeverity.Error, "PKS008",
+                    $"地图扫描过程中发生未预期错误：{ex.Message}")), CancellationToken.None);
+            }
+            finally
+            {
+                channel.Writer.Complete();
+            }
+        }, cancellationToken);
+
+        await foreach (var entry in channel.Reader.ReadAllAsync(cancellationToken))
+            yield return entry;
+
+        await scanTask;
+    }
+
+    public async Task<MapActorScanResult> ScanMapActorsAsync(
+        string pakDirectory,
+        PakScanConfig? config = null,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        MapActorScanResult? finalResult = null;
+        var earlyDiags = new List<Diagnostic>();
+
+        await foreach (var entry in ScanMapActorsStreamAsync(pakDirectory, config, cancellationToken))
+        {
+            switch (entry)
+            {
+                case PakMapScanStartEntry s:
+                    progress?.Report(new OperationProgress("pakMapScan", "MapScan", 0, s.TotalMaps,
+                        $"开始地图扫描，共 {s.TotalMaps} 个…"));
+                    break;
+
+                case PakMapScanProgressEntry p:
+                    progress?.Report(new OperationProgress("pakMapScan", "MapScan", p.Scanned, p.Total,
+                        $"地图扫描中… {p.Scanned}/{p.Total}  {p.MapPath}"));
+                    break;
+
+                case PakMapMeshUsageFound:
+                    break;
+
+                case PakMapScanCompleteEntry c:
+                    finalResult = c.Result;
+                    progress?.Report(new OperationProgress("pakMapScan", "Done",
+                        c.Result.TotalMapsScanned, c.Result.TotalMapsScanned,
+                        $"地图扫描完成：{c.Result.TotalMapsScanned} 张地图，{c.Result.Aggregates.Count} 个 Mesh，耗时 {FormatElapsed(c.Elapsed)}"));
+                    break;
+
+                case PakScanDiagnosticEntry d:
+                    earlyDiags.Add(d.Diagnostic);
+                    break;
+            }
+        }
+
+        // 早期错误（PKS001/PKS002/PKS010）时 PakMapScanCompleteEntry 不会发出
+        return finalResult ?? new MapActorScanResult(pakDirectory, [], [], 0, 0, earlyDiags);
+    }
+
+    private static MapMeshUsageEntry ScanSingleMap(
+        DefaultFileProvider provider,
+        string umapPath,
+        string mapObjectPath)
+    {
+        if (!provider.TryLoadPackage(umapPath, out var pkg) || pkg is null)
+            throw new InvalidOperationException($"无法加载地图包：{umapPath}");
+
+        var world = pkg.GetExports().OfType<UWorld>().FirstOrDefault()
+            ?? throw new InvalidOperationException($"地图包内未找到 UWorld 导出：{umapPath}");
+
+        var level = world.PersistentLevel.Load<ULevel>();
+        if (level?.Actors is null)
+            return new MapMeshUsageEntry(mapObjectPath, [], 0, 0);
+
+        var meshCounts = new Dictionary<string, int>(512, StringComparer.OrdinalIgnoreCase);
+        int totalActors = 0;
+        int failedActors = 0;
+
+        foreach (var actorPtr in level.Actors)
+        {
+            if (actorPtr is null || actorPtr.IsNull) continue;
+
+            // 廉价类名检查，不加载 export 内容
+            var exportTypeName = actorPtr.ResolvedObject?.Class?.Name.Text;
+            if (!string.Equals(exportTypeName, "StaticMeshActor", StringComparison.Ordinal))
+                continue;
+
+            UObject? actorObj;
+            try
+            {
+                actorObj = actorPtr.Load<UObject>();
+                if (actorObj is null) continue;
+            }
+            catch
+            {
+                failedActors++;
+                continue;
+            }
+
+            totalActors++;
+
+            try
+            {
+                // 取 StaticMeshComponent 子对象引用
+                if (!actorObj.TryGetValue<FPackageIndex>(out var smCompIdx, "StaticMeshComponent")
+                    || smCompIdx is null || smCompIdx.IsNull)
+                    continue;
+
+                var smComp = smCompIdx.Load<UStaticMeshComponent>();
+                if (smComp is null) continue;
+
+                // GetStaticMesh() 从属性表读取，不加载 UStaticMesh 本体
+                var meshIdx = smComp.GetStaticMesh();
+                if (meshIdx is null || meshIdx.IsNull) continue;
+
+                var meshPath = BuildMeshObjectPath(meshIdx);
+                if (meshPath is null) continue;
+
+                meshCounts.TryGetValue(meshPath, out var prev);
+                meshCounts[meshPath] = prev + 1;
+            }
+            catch
+            {
+                failedActors++;
+            }
+        }
+
+        // 第二遍：统计 PackedLevelActor / PackedLevelInstance 内的 ISM 组件
+        // 这类 actor 是 LevelInstance 的打包变体，无独立子关卡 .umap，
+        // 所有 StaticMesh 放置已合并为 UInstancedStaticMeshComponent export，
+        // 存在于本 .umap 中，outer chain 指向对应的 PackedLevelActor。
+        ScanPackedLevelActorISMs(pkg, level.Actors, meshCounts, ref failedActors);
+
+        var placements = meshCounts
+            .OrderByDescending(kv => kv.Value)
+            .Select(kv => new MapMeshPlacement(kv.Key, kv.Value))
+            .ToList();
+
+        return new MapMeshUsageEntry(mapObjectPath, placements, totalActors, failedActors);
+    }
+
+    /// <summary>
+    /// 统计地图中 PackedLevelActor / PackedLevelInstance 携带的 ISM 组件放置数。
+    /// 这类 actor 是 LevelInstance 的打包变体，无独立子关卡 .umap；
+    /// 所有 StaticMesh 放置合并为 UInstancedStaticMeshComponent export，
+    /// 直接存在于父 .umap，outer chain 指向对应的 PackedLevelActor。
+    /// </summary>
+    private static void ScanPackedLevelActorISMs(
+        CUE4Parse.UE4.Assets.IPackage pkg,
+        FPackageIndex?[] levelActors,
+        Dictionary<string, int> meshCounts,
+        ref int failedActors)
+    {
+        // 快速检查：关卡里有没有 PackedLevelActor，没有就直接返回
+        bool hasPackedActors = false;
+        foreach (var actorPtr in levelActors)
+        {
+            if (actorPtr is null || actorPtr.IsNull) continue;
+            var t = actorPtr.ResolvedObject?.Class?.Name.Text;
+            if (t is "PackedLevelActor" or "APackedLevelActor"
+                  or "PackedLevelInstance" or "APackedLevelInstance")
+            {
+                hasPackedActors = true;
+                break;
+            }
+        }
+        if (!hasPackedActors) return;
+
+        // 遍历包内所有 export，找 UInstancedStaticMeshComponent，
+        // 通过 UObject.Outer（ResolvedObject）向上追溯 outer chain 判断归属
+        foreach (var export in pkg.GetExports())
+        {
+            if (export is not UInstancedStaticMeshComponent ismComp) continue;
+
+            bool ownedByPackedActor = false;
+            var outer = ismComp.Outer;           // ResolvedObject?
+            while (outer is not null)
+            {
+                var cls = outer.Class?.Name.Text;
+                if (cls is "PackedLevelActor" or "APackedLevelActor"
+                        or "PackedLevelInstance" or "APackedLevelInstance")
+                {
+                    ownedByPackedActor = true;
+                    break;
+                }
+                outer = outer.Outer;
+            }
+            if (!ownedByPackedActor) continue;
+
+            try
+            {
+                var meshIdx = ismComp.GetStaticMesh();
+                if (meshIdx is null || meshIdx.IsNull) continue;
+
+                var meshPath = BuildMeshObjectPath(meshIdx);
+                if (meshPath is null) continue;
+
+                // PerInstanceSMData 是反序列化字段，直接读取；fallback 为 1
+                var instanceCount = ismComp.PerInstanceSMData?.Length ?? 1;
+                if (instanceCount <= 0) instanceCount = 1;
+
+                meshCounts.TryGetValue(meshPath, out var prev);
+                meshCounts[meshPath] = prev + instanceCount;
+            }
+            catch
+            {
+                failedActors++;
+            }
+        }
+    }
+
+    private static string? BuildMeshObjectPath(FPackageIndex meshIdx)
+    {
+        var resolved = meshIdx.ResolvedObject;
+        if (resolved is null) return null;
+
+        // 尝试直接用 ToString()；CUE4Parse 对 import/export 的默认 ToString 已给出
+        // 形如 "Game/Meshes/SM_Rock.SM_Rock" 的路径，与 PakMeshEntry.ObjectPath 格式一致。
+        // 若格式不匹配则退回手动 outer chain 拼接。
+        var str = resolved.ToString();
+        if (!string.IsNullOrEmpty(str) && str.Contains('/'))
+            return str;
+
+        // 手动拼接：walk outer chain
+        var segments = new List<string>(4);
+        var cur = resolved;
+        while (cur is not null)
+        {
+            segments.Add(cur.Name.Text);
+            cur = cur.Outer;
+        }
+        segments.Reverse();
+        return segments.Count > 0 ? string.Join('/', segments) : null;
+    }
+
+    internal static MapActorScanResult BuildMapActorStats(
+        string inputDirectory,
+        IReadOnlyList<MapMeshUsageEntry> perMapEntries,
+        int mapsWithErrors,
+        IReadOnlyList<Diagnostic> diagnostics)
+    {
+        var crossMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var meshMapCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var mapEntry in perMapEntries)
+        {
+            foreach (var placement in mapEntry.Placements)
+            {
+                crossMap.TryGetValue(placement.MeshObjectPath, out var prevTotal);
+                crossMap[placement.MeshObjectPath] = prevTotal + placement.Count;
+
+                meshMapCount.TryGetValue(placement.MeshObjectPath, out var prevMaps);
+                meshMapCount[placement.MeshObjectPath] = prevMaps + 1;
+            }
+        }
+
+        var aggregates = crossMap
+            .OrderByDescending(kv => kv.Value)
+            .Select(kv => new MapMeshAggregate(
+                kv.Key,
+                kv.Value,
+                meshMapCount.GetValueOrDefault(kv.Key)))
+            .ToList();
+
+        return new MapActorScanResult(
+            inputDirectory,
+            perMapEntries,
+            aggregates,
+            perMapEntries.Count + mapsWithErrors,
+            mapsWithErrors,
+            diagnostics);
     }
 }

@@ -57,6 +57,36 @@ public sealed record PakScanResult(
         && Diagnostics.All(d => d.Severity != DiagnosticSeverity.Error);
 }
 
+// ── 地图 Actor 扫描数据模型 ───────────────────────────────────────────────────
+
+/// <summary>单张地图里某个 StaticMesh 被 StaticMeshActor 放置的次数。</summary>
+public sealed record MapMeshPlacement(string MeshObjectPath, int Count);
+
+/// <summary>单张地图的 StaticMeshActor 统计，Placements 按 Count 降序。</summary>
+public sealed record MapMeshUsageEntry(
+    string MapObjectPath,
+    IReadOnlyList<MapMeshPlacement> Placements,
+    int TotalActorCount,
+    int FailedActorCount);
+
+/// <summary>某个 StaticMesh 在所有扫描地图的累计放置统计。</summary>
+public sealed record MapMeshAggregate(
+    string MeshObjectPath,
+    int TotalCount,
+    int MapCount);
+
+/// <summary>地图 Actor 扫描的顶层结果。</summary>
+public sealed record MapActorScanResult(
+    string InputDirectory,
+    IReadOnlyList<MapMeshUsageEntry> PerMapEntries,
+    IReadOnlyList<MapMeshAggregate> Aggregates,
+    int TotalMapsScanned,
+    int TotalMapsWithErrors,
+    IReadOnlyList<Diagnostic> Diagnostics)
+{
+    public bool IsSuccess => Diagnostics.All(d => d.Severity != DiagnosticSeverity.Error);
+}
+
 // ── 流式推送条目 ──────────────────────────────────────────────────────────────
 
 /// <summary>ScanStreamAsync 每次 yield 的条目基类。</summary>
@@ -91,3 +121,21 @@ public sealed record PakScanCompleteEntry(
     int SkeletalMeshCount,
     int MaterialCount,
     TimeSpan Elapsed) : PakScanEntry;
+
+// ── 地图 Actor 扫描流式事件 ───────────────────────────────────────────────────
+
+/// <summary>地图 Actor 扫描开始，携带待扫描 .umap 总数。</summary>
+public sealed record PakMapScanStartEntry(int TotalMaps) : PakScanEntry;
+
+/// <summary>完成一张地图的扫描。</summary>
+public sealed record PakMapScanProgressEntry(
+    int Scanned,
+    int Total,
+    string MapPath,
+    int PlacementsFound) : PakScanEntry;
+
+/// <summary>一张地图的 StaticMesh 放置统计已就绪。</summary>
+public sealed record PakMapMeshUsageFound(MapMeshUsageEntry Entry) : PakScanEntry;
+
+/// <summary>所有地图扫描完成，携带最终结果。</summary>
+public sealed record PakMapScanCompleteEntry(MapActorScanResult Result, TimeSpan Elapsed) : PakScanEntry;

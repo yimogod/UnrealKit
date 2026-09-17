@@ -98,6 +98,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _pakOodlePath = UnrealKit.Core.PakScan.PakScanConfig.ResolveDefaultOodlePath();
     private string _pakGameVersion = "GAME_UE5_6";
     private UnrealKit.Core.PakScan.PakScanResult? _lastPakScanResult;
+    private UnrealKit.Core.PakScan.MapActorScanResult? _lastMapActorScanResult;
+    private string _mapActorScanDescription = "选择游戏包目录，点击「扫描地图 Actor」统计 StaticMeshActor 放置次数。";
     private readonly UnrealKit.Core.PakScan.PakScanService _pakScanService = new();
     private PakScanTextureOption? _selectedPakTexture;
     private System.Windows.Media.Imaging.BitmapSource? _selectedTextureBitmap;
@@ -115,6 +117,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public PagedSearchList<PakScanStaticMeshOption>   PakStaticMeshes  { get; }
     public PagedSearchList<PakScanSkeletalMeshOption> PakSkeletalMeshes { get; }
     public PagedSearchList<PakScanMaterialOption>     PakMaterials     { get; }
+    public PagedSearchList<PakMapMeshUsageOption>     PakMapMeshUsages     { get; }
+    public PagedSearchList<PakMapMeshAggregateOption> PakMapMeshAggregates { get; }
     private LocalPakPackageOption? _selectedLocalPakPackage;
     private string _consoleCommandText = string.Empty;
     private string _consoleOutput = string.Empty;
@@ -204,6 +208,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         PakMaterials.RegisterSortKey("BlendMode",   m => m.BlendMode);
         PakMaterials.RegisterSortKey("ShadingModel",m => m.ShadingModel);
         PakMaterials.RegisterSortKey("Textures",    m => int.TryParse(m.ReferencedTextureCount, out var v) ? v : 0);
+
+        PakMapMeshUsages     = new PagedSearchList<PakMapMeshUsageOption>    (u => u.MeshName, u => u.MeshPath, () => _pakPageSize);
+        PakMapMeshAggregates = new PagedSearchList<PakMapMeshAggregateOption>(a => a.MeshName, a => a.MeshPath, () => _pakPageSize);
+        PakMapMeshUsages.RegisterSortKey("MapName",  u => u.MapName);
+        PakMapMeshUsages.RegisterSortKey("MeshName", u => u.MeshName);
+        PakMapMeshUsages.RegisterSortKey("Count",    u => int.TryParse(u.Count, out var v) ? v : 0);
+        PakMapMeshAggregates.RegisterSortKey("MeshName",   a => a.MeshName);
+        PakMapMeshAggregates.RegisterSortKey("TotalCount", a => int.TryParse(a.TotalCount, out var v) ? v : 0);
+        PakMapMeshAggregates.RegisterSortKey("MapCount",   a => int.TryParse(a.MapCount, out var v) ? v : 0);
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
@@ -239,6 +252,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         ScanPakCommand = new AsyncDelegateCommand(ScanPakAsync, () => !IsBusy && SelectedLocalPakPackage is not null);
         ExportPakScanHtmlCommand = new DelegateCommand(ExportPakScanHtml, () => _lastPakScanResult is not null);
         ExportPakScanCsvCommand  = new DelegateCommand(ExportPakScanCsv,  () => _lastPakScanResult is not null);
+        ScanMapActorsCommand = new AsyncDelegateCommand(ScanMapActorsAsync, () => !IsBusy && SelectedLocalPakPackage is not null);
+        ExportMapActorStatsHtmlCommand = new DelegateCommand(ExportMapActorStatsHtml, () => _lastMapActorScanResult is not null);
         DownloadPakCommand = new AsyncDelegateCommand(DownloadLatestPakAsync, CanDownloadLatestPak);
         OpenPakDownloadDirectoryCommand = new AsyncDelegateCommand(
             OpenPakDownloadDirectoryAsync,
@@ -326,6 +341,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<PakScanSkeletalMeshOption> PakScanSkeletalMeshes => PakSkeletalMeshes.Items;
     public ObservableCollection<PakScanMaterialOption>     PakScanMaterials      => PakMaterials.Items;
     public ObservableCollection<PakScanDiagnosticOption> PakScanDiagnostics { get; } = [];
+    public ObservableCollection<PakMapMeshUsageOption>     PakScanMapMeshUsages     => PakMapMeshUsages.Items;
+    public ObservableCollection<PakMapMeshAggregateOption> PakScanMapMeshAggregates => PakMapMeshAggregates.Items;
     public ObservableCollection<LocalPakPackageOption> LocalPakPackages { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
@@ -356,6 +373,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand ScanPakCommand { get; }
     public ICommand ExportPakScanHtmlCommand  { get; }
     public ICommand ExportPakScanCsvCommand   { get; }
+    public ICommand ScanMapActorsCommand { get; }
+    public ICommand ExportMapActorStatsHtmlCommand { get; }
     public ICommand DownloadPakCommand { get; }
     public ICommand OpenPakDownloadDirectoryCommand { get; }
     public ICommand RefreshLocalPakPackagesCommand { get; }
@@ -553,6 +572,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string RenderDocSummary { get => _renderDocSummary; private set => SetField(ref _renderDocSummary, value); }
 
     public string PakScanDescription { get => _pakScanDescription; private set => SetField(ref _pakScanDescription, value); }
+    public string MapActorScanDescription { get => _mapActorScanDescription; private set => SetField(ref _mapActorScanDescription, value); }
 
     public PakScanTextureOption? SelectedPakTexture
     {
@@ -3349,9 +3369,114 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
     }
 
+    private async Task ScanMapActorsAsync() => await RunAsync("Scanning map actors...", async progress =>
+    {
+        PakMapMeshUsages.Clear();
+        PakMapMeshAggregates.Clear();
+        _lastMapActorScanResult = null;
+
+        var inputPath = SelectedLocalPakPackage!.LocalDirectory;
+        var config = new UnrealKit.Core.PakScan.PakScanConfig
+        {
+            AesKey = PakAesKeyForPlatform(DownloadPlatform),
+            OodleDllPath = PakOodlePath.Trim(),
+            GameVersion = string.IsNullOrWhiteSpace(PakGameVersion) ? "GAME_UE5_6" : PakGameVersion.Trim(),
+        };
+
+        await foreach (var entry in _pakScanService.ScanMapActorsStreamAsync(inputPath, config, OperationCancellationToken))
+        {
+            switch (entry)
+            {
+                case UnrealKit.Core.PakScan.PakMapScanStartEntry s:
+                    progress?.Report(new OperationProgress("pakMapScan", "MapScan", 0, s.TotalMaps,
+                        $"开始地图扫描，共 {s.TotalMaps} 个…"));
+                    MapActorScanDescription = $"开始地图扫描，共 {s.TotalMaps} 个地图…";
+                    break;
+
+                case UnrealKit.Core.PakScan.PakMapScanProgressEntry p:
+                    progress?.Report(new OperationProgress("pakMapScan", "MapScan", p.Scanned, p.Total,
+                        $"地图扫描中… {p.Scanned}/{p.Total}  {p.MapPath}"));
+                    MapActorScanDescription = $"地图扫描中… {p.Scanned}/{p.Total}  {System.IO.Path.GetFileNameWithoutExtension(p.MapPath)}";
+                    break;
+
+                case UnrealKit.Core.PakScan.PakMapMeshUsageFound:
+                    break;
+
+                case UnrealKit.Core.PakScan.PakScanDiagnosticEntry:
+                    break;
+
+                case UnrealKit.Core.PakScan.PakMapScanCompleteEntry c:
+                    _lastMapActorScanResult = c.Result;
+                    progress?.Report(new OperationProgress("pakMapScan", "Done",
+                        c.Result.TotalMapsScanned, c.Result.TotalMapsScanned,
+                        $"地图扫描完成：{c.Result.TotalMapsScanned} 张地图，{c.Result.Aggregates.Count} 个 Mesh，耗时 {c.Elapsed.TotalSeconds:F1}s"));
+                    break;
+            }
+        }
+
+        if (_lastMapActorScanResult is { } result)
+        {
+            PakMapMeshUsages.Reset(result.PerMapEntries.SelectMany(e => e.Placements.Select(p =>
+                new PakMapMeshUsageOption(
+                    System.IO.Path.GetFileNameWithoutExtension(e.MapObjectPath),
+                    e.MapObjectPath,
+                    System.IO.Path.GetFileNameWithoutExtension(p.MeshObjectPath),
+                    p.MeshObjectPath,
+                    p.Count.ToString()))));
+
+            PakMapMeshAggregates.Reset(result.Aggregates.Select(a =>
+                new PakMapMeshAggregateOption(
+                    System.IO.Path.GetFileNameWithoutExtension(a.MeshObjectPath),
+                    a.MeshObjectPath,
+                    a.TotalCount.ToString(),
+                    a.MapCount.ToString())));
+
+            MapActorScanDescription = result.IsSuccess
+                ? $"地图扫描完成：{result.TotalMapsScanned} 张地图，{result.Aggregates.Count} 个独立 Mesh，{result.PerMapEntries.SelectMany(e => e.Placements).Sum(p => p.Count)} 次放置"
+                : "地图扫描完成（有错误），请查看诊断信息。";
+        }
+        else
+        {
+            MapActorScanDescription = "地图扫描失败，请查看诊断信息。";
+        }
+
+        StatusMessage = _lastMapActorScanResult?.IsSuccess == true
+            ? $"地图 Actor 扫描完成：{_lastMapActorScanResult.Aggregates.Count} 个 Mesh"
+            : "地图 Actor 扫描完成（有错误）";
+        RaiseCommandStates();
+    });
+
+    private void ExportMapActorStatsHtml()
+    {
+        var result = _lastMapActorScanResult;
+        if (result is null) return;
+
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "HTML files (*.html)|*.html",
+            FileName = "MapActorStats",
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var basePath = System.IO.Path.ChangeExtension(dlg.FileName, null);
+            var usagesPath = basePath + "_MapMeshPlacements.html";
+            var aggregatesPath = basePath + "_MapMeshAggregates.html";
+
+            HtmlTableReport.WriteAndOpen(MapMeshPlacementsHtmlBuilder.Build(result), usagesPath);
+            HtmlTableReport.WriteAndOpen(MapMeshAggregatesHtmlBuilder.Build(result), aggregatesPath);
+            AddOperationLog("Info", $"地图 Actor 统计 HTML 已保存：{usagesPath}，{aggregatesPath}");
+        }
+        catch (Exception ex)
+        {
+            AddOperationLog("Error", $"地图 Actor 统计 HTML 导出失败：{ex.Message}");
+        }
+    }
+
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, ScanPakCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand, _jumpToCameraCommand, TakeScreenshotCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, ScanPakCommand, ScanMapActorsCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand, _jumpToCameraCommand, TakeScreenshotCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
@@ -3361,6 +3486,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         (OpenSavedDirectoryCommand as DelegateCommand)?.RaiseCanExecuteChanged();
         (ExportPakScanHtmlCommand as DelegateCommand)?.RaiseCanExecuteChanged();
         (ExportPakScanCsvCommand  as DelegateCommand)?.RaiseCanExecuteChanged();
+        (ExportMapActorStatsHtmlCommand as DelegateCommand)?.RaiseCanExecuteChanged();
         (OpenScreenshotFolderCommand as DelegateCommand)?.RaiseCanExecuteChanged();
     }
 
