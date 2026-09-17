@@ -231,9 +231,13 @@ public sealed class ProjectService : IProjectService
             document.SetValue(ConsoleSequencesSection, sequence.Name, sequence.StepsDefinition);
         }
 
+        // key 用序号而非 preset.Name，避免指令字符串含 '='（如 "obj list Class=Character"）
+        // 时 INI 解析器按首个 '=' 截断 key，导致读回来 Name 错乱。真实 Name 存在 value 第 6 段。
+        var presetIndex = 0;
         foreach (var preset in settings.ConsoleCommandPresets)
         {
-            document.SetValue(ConsoleCommandPresetsSection, preset.Name, FormatConsoleCommandPreset(preset));
+            document.SetValue(ConsoleCommandPresetsSection, presetIndex.ToString(System.Globalization.CultureInfo.InvariantCulture), FormatConsoleCommandPreset(preset));
+            presetIndex++;
         }
 
         // 别名键是设备标识，可能含 `:`（Wi-Fi 的 ip:port），INI 的分隔符是首个 `=`，因此无需转义。
@@ -517,9 +521,11 @@ public sealed class ProjectService : IProjectService
     /// <c>Coexist</c>，读写对称，手写配置时也只需记住这两个词。
     /// </summary>
     /// <summary>
-    /// 控制台预设指令的 INI 值格式: <c>Kind|Group|Cvar|DefaultValue|Command</c>。
-    /// 五段定长而不是「按类型只写用到的段」：定长让手写配置时段位固定，
-    /// 也让 Bool 改成 Value 时不必重排字段顺序。
+    /// 控制台预设指令的 INI 值格式: <c>Kind|Group|Cvar|DefaultValue|Command|Name</c>。
+    /// 六段定长：前五段与旧格式相同，第六段存 Name（指令名/指令文本）。
+    /// Name 单独存入 value 而不仅依赖 key，是因为指令字符串可能含 '='（如 "obj list Class=Character"），
+    /// INI 解析器以首个 '=' 分割 key/value，含 '=' 的 key 读回来会被截断，
+    /// 从第六段恢复 Name 可绕过该限制，同时向后兼容旧格式（无第六段时回落到 key）。
     /// </summary>
     private static string FormatConsoleCommandPreset(ConsoleCommandPreset preset) =>
         string.Join(ConsoleCommandPresetSeparator,
@@ -527,7 +533,8 @@ public sealed class ProjectService : IProjectService
             preset.Group,
             preset.Cvar ?? string.Empty,
             preset.DefaultValue ?? string.Empty,
-            preset.Command ?? string.Empty);
+            preset.Command ?? string.Empty,
+            preset.Name);
 
     private const char ConsoleCommandPresetSeparator = '|';
 
@@ -640,10 +647,10 @@ public sealed class ProjectService : IProjectService
     private static ConsoleCommandPreset ParseConsoleCommandPreset(string name, string value)
     {
         var fields = value.Split(ConsoleCommandPresetSeparator);
-        if (fields.Length is < 2 or > 5)
+        if (fields.Length is < 2 or > 6)
         {
             throw new InvalidDataException(
-                $"控制台预设指令 {name} 格式无效: 需要 \"Kind|Group|Cvar|DefaultValue|Command\"，收到 \"{value}\"。");
+                $"控制台预设指令 {name} 格式无效: 需要 \"Kind|Group|Cvar|DefaultValue|Command[|Name]\"，收到 \"{value}\"。");
         }
 
         if (!Enum.TryParse<ConsoleCommandKind>(fields[0].Trim(), ignoreCase: true, out var kind))
@@ -659,24 +666,27 @@ public sealed class ProjectService : IProjectService
         var cvar = Field(2);
         var defaultValue = Field(3);
         var command = Field(4);
+        // 第 6 段存真实 Name，解决指令字符串含 '=' 时 INI key 被截断的问题。
+        // 无第 6 段时（旧格式）回落到 key。
+        var resolvedName = Field(5) is { Length: > 0 } n6 ? n6 : name.Trim();
 
         if (group.Length == 0)
         {
-            throw new InvalidDataException($"控制台预设指令 {name} 未指定分组 (第 2 段)。");
+            throw new InvalidDataException($"控制台预设指令 {resolvedName} 未指定分组 (第 2 段)。");
         }
 
         if (kind is ConsoleCommandKind.Bool or ConsoleCommandKind.Value && cvar.Length == 0)
         {
-            throw new InvalidDataException($"控制台预设指令 {name} 是 {kind} 型，必须在第 3 段给出 Cvar。");
+            throw new InvalidDataException($"控制台预设指令 {resolvedName} 是 {kind} 型，必须在第 3 段给出 Cvar。");
         }
 
         if (kind is ConsoleCommandKind.Action && command.Length == 0)
         {
-            throw new InvalidDataException($"控制台预设指令 {name} 是 Action 型，必须在第 5 段给出 Command。");
+            throw new InvalidDataException($"控制台预设指令 {resolvedName} 是 Action 型，必须在第 5 段给出 Command。");
         }
 
         return new ConsoleCommandPreset(
-            name.Trim(),
+            resolvedName,
             kind,
             group,
             cvar.Length == 0 ? null : cvar,

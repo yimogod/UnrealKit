@@ -163,11 +163,16 @@ public sealed class ConsoleCommandPresetTests : IDisposable
         var service = new ProjectService();
         var created = await service.CreateProjectAsync(
             new CreateProjectRequest(Path.Combine(_temporaryDirectory, "PresetOverride"), "PresetOverride"));
-        var configPath = ConfigPath(created.Project);
-        var config = await File.ReadAllTextAsync(configPath);
-        await File.WriteAllTextAsync(configPath, config.Replace(
-            "r.ScreenPercentage=Value|Rendering|r.ScreenPercentage|100|",
-            "r.ScreenPercentage=Value|MyRendering|r.ScreenPercentage|75|"));
+
+        // 通过 UpdateSettingsAsync 覆盖内置预设，而不是直接做字符串替换。
+        // 字符串替换依赖旧的 "Name=..." key 格式，新格式 key 是序号，不可靠。
+        var overridden = created.Project.Settings.ConsoleCommandPresets
+            .Select(p => p.Name == "r.ScreenPercentage"
+                ? p with { DefaultValue = "75", Group = "MyRendering" }
+                : p)
+            .ToList();
+        var updated = created.Project.Settings with { ConsoleCommandPresets = overridden };
+        await service.UpdateSettingsAsync(created.Project, updated);
 
         var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
 
