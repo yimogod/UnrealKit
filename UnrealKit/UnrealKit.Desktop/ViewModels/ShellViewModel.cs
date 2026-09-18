@@ -99,7 +99,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _pakGameVersion = "GAME_UE5_6";
     private UnrealKit.Core.PakScan.PakScanResult? _lastPakScanResult;
     private UnrealKit.Core.PakScan.MapActorScanResult? _lastMapActorScanResult;
-    private string _mapActorScanDescription = "选择游戏包目录，点击「扫描地图 Actor」统计 StaticMeshActor 放置次数。";
+    private string _mapActorScanDescription = "选择游戏包目录，点击「扫描Actor」统计 StaticMeshActor 放置次数。";
     private readonly UnrealKit.Core.PakScan.PakScanService _pakScanService = new();
     private PakScanTextureOption? _selectedPakTexture;
     private System.Windows.Media.Imaging.BitmapSource? _selectedTextureBitmap;
@@ -2527,23 +2527,36 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private void ExportPakScanHtml()
     {
         if (_lastPakScanResult is null) return;
-        var stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
 
-        var texHtml  = PakScanHtmlBuilder.Build(_lastPakScanResult);
-        var texPath  = Path.Combine(Path.GetTempPath(), $"PakScanTextures_{stamp}.html");
-        HtmlTableReport.WriteAndOpen(texHtml, texPath);
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "HTML files (*.html)|*.html",
+            FileName = "PakScan",
+        };
+        if (dlg.ShowDialog() != true) return;
 
-        var smHtml  = PakScanStaticMeshHtmlBuilder.Build(_lastPakScanResult);
-        var smPath  = Path.Combine(Path.GetTempPath(), $"PakScanStaticMeshes_{stamp}.html");
-        HtmlTableReport.WriteAndOpen(smHtml, smPath);
+        try
+        {
+            var basePath = System.IO.Path.ChangeExtension(dlg.FileName, null);
 
-        var skmHtml = PakScanSkeletalMeshHtmlBuilder.Build(_lastPakScanResult);
-        var skmPath = Path.Combine(Path.GetTempPath(), $"PakScanSkeletalMeshes_{stamp}.html");
-        HtmlTableReport.WriteAndOpen(skmHtml, skmPath);
+            var texPath = basePath + "_Textures.html";
+            HtmlTableReport.WriteAndOpen(PakScanHtmlBuilder.Build(_lastPakScanResult), texPath);
 
-        var matHtml = PakScanMaterialHtmlBuilder.Build(_lastPakScanResult);
-        var matPath = Path.Combine(Path.GetTempPath(), $"PakScanMaterials_{stamp}.html");
-        HtmlTableReport.WriteAndOpen(matHtml, matPath);
+            var smPath = basePath + "_StaticMeshes.html";
+            HtmlTableReport.WriteAndOpen(PakScanStaticMeshHtmlBuilder.Build(_lastPakScanResult), smPath);
+
+            var skmPath = basePath + "_SkeletalMeshes.html";
+            HtmlTableReport.WriteAndOpen(PakScanSkeletalMeshHtmlBuilder.Build(_lastPakScanResult), skmPath);
+
+            var matPath = basePath + "_Materials.html";
+            HtmlTableReport.WriteAndOpen(PakScanMaterialHtmlBuilder.Build(_lastPakScanResult), matPath);
+
+            AddOperationLog("Info", $"Pak 扫描 HTML 已保存：{texPath}，{smPath}，{skmPath}，{matPath}");
+        }
+        catch (Exception ex)
+        {
+            AddOperationLog("Error", $"Pak 扫描 HTML 导出失败：{ex.Message}");
+        }
     }
 
     private void ExportPakScanCsv()
@@ -3390,13 +3403,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 case UnrealKit.Core.PakScan.PakMapScanStartEntry s:
                     progress?.Report(new OperationProgress("pakMapScan", "MapScan", 0, s.TotalMaps,
                         $"开始地图扫描，共 {s.TotalMaps} 个…"));
-                    MapActorScanDescription = $"开始地图扫描，共 {s.TotalMaps} 个地图…";
                     break;
 
                 case UnrealKit.Core.PakScan.PakMapScanProgressEntry p:
                     progress?.Report(new OperationProgress("pakMapScan", "MapScan", p.Scanned, p.Total,
                         $"地图扫描中… {p.Scanned}/{p.Total}  {p.MapPath}"));
-                    MapActorScanDescription = $"地图扫描中… {p.Scanned}/{p.Total}  {System.IO.Path.GetFileNameWithoutExtension(p.MapPath)}";
                     break;
 
                 case UnrealKit.Core.PakScan.PakMapMeshUsageFound:

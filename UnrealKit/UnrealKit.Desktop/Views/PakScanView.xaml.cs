@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -140,5 +140,10 @@ public partial class PakScanView : UserControl
         bool descending = e.Column.SortDirection != ListSortDirection.Ascending;
         e.Column.SortDirection = descending ? ListSortDirection.Descending : ListSortDirection.Ascending;
         list.ApplySort(header, descending);
+    }
+
+    private void Button_Click(object sender, RoutedEventArgs e)
+    {
+
     }
 }

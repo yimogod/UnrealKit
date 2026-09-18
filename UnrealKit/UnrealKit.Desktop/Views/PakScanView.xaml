@@ -27,18 +27,16 @@
             </Grid>
             <TextBlock Text="{Binding PakScanDescription}" />
             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                <Button Content="扫描" Command="{Binding ScanPakCommand}" Padding="18,8" />
+                <Button Content="扫描Asset" Command="{Binding ScanPakCommand}" Padding="18,8" />
+                <Button Content="扫描Actor" Command="{Binding ScanMapActorsCommand}" Padding="18,8" Margin="8,0,0,0" Click="Button_Click" />
                 <Button Content="导出 HTML" Command="{Binding ExportPakScanHtmlCommand}" Padding="14,8" Margin="8,0,0,0" />
                 <Button Content="导出 CSV"  Command="{Binding ExportPakScanCsvCommand}"  Padding="14,8" Margin="8,0,0,0" />
                 <Button Content="预览贴图" x:Name="OpenTexturePreviewButton"
                         Click="OpenTexturePreviewButton_Click"
                         Padding="14,8" Margin="8,0,0,0" />
+                <Button Content="导出Actor HTML" Command="{Binding ExportMapActorStatsHtmlCommand}" Padding="14,8" Margin="8,0,0,0" />
             </StackPanel>
             <TextBlock Text="{Binding MapActorScanDescription}" Margin="0,8,0,0" />
-            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                <Button Content="扫描地图 Actor" Command="{Binding ScanMapActorsCommand}" Padding="18,8" />
-                <Button Content="导出统计 HTML" Command="{Binding ExportMapActorStatsHtmlCommand}" Padding="14,8" Margin="8,0,0,0" />
-            </StackPanel>
         </StackPanel>
         <TabControl Grid.Row="1" MinHeight="350" Margin="0,18,0,0">
                     <TabItem Header="Textures">
@@ -205,7 +203,7 @@
                             </DataGrid.Columns>
                         </DataGrid>
                     </TabItem>
-                    <TabItem Header="地图 Actor 统计">
+                    <TabItem Header="ActorMap">
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
                                 <TextBlock Text="搜索：" VerticalAlignment="Center" Margin="0,0,4,0" />
@@ -237,7 +235,7 @@
                             </DataGrid>
                         </DockPanel>
                     </TabItem>
-                    <TabItem Header="Actor 全局统计">
+                    <TabItem Header="ActorGlobal">
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
                                 <TextBlock Text="搜索：" VerticalAlignment="Center" Margin="0,0,4,0" />
