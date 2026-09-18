@@ -296,10 +296,11 @@ internal static class ParseResultWriters
         CliOutput.WriteDiagnostics(result.Diagnostics);
     }
 
-    internal static void WriteMapActorStatsHtml(MapActorScanResult result, string usagesPath, string aggregatesPath)
+    internal static void WriteMapActorStatsHtml(MapActorScanResult result, string usagesPath, string aggregatesPath, string localPath)
     {
         HtmlTableReport.WriteAndOpen(MapMeshPlacementsHtmlBuilder.Build(result), usagesPath);
         HtmlTableReport.WriteAndOpen(MapMeshAggregatesHtmlBuilder.Build(result), aggregatesPath);
+        HtmlTableReport.WriteAndOpen(MapMeshLocalPlacementsHtmlBuilder.Build(result), localPath);
         CliOutput.WriteDiagnostics(result.Diagnostics);
     }
 }

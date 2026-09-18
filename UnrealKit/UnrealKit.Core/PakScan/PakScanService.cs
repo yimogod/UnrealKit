@@ -1090,18 +1090,38 @@ public sealed class PakScanService : IPakScanService
                 var assetPath = worldAsset.AssetPathName.Text;
                 if (string.IsNullOrEmpty(assetPath)) continue;
 
-                // 去掉 .umap 后缀，统一为 objectPath 格式
+                // AssetPathName 格式为 /Game/Maps/LA.LA（FSoftObjectPath 规范）
+                // 需统一为 provider.Files.Keys 所用的 objectPath 格式，例如 ProjectName/Content/Maps/LA
+                // 步骤：
+                // 1. 若末尾是 .umap 后缀直接去掉；否则走 FixPath 做路径规范化
+                // 2. FixPath 期望带扩展名（无扩展名时它会补 .uasset），所以先确保带 .umap
+                // 3. FixPath 后去掉扩展名，还原为 objectPath
+                string normalizedPath;
                 if (assetPath.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
-                    assetPath = assetPath[..^".umap".Length];
+                {
+                    // 已有 .umap 后缀，直接走 FixPath（它会去掉前导 / 并展开 /Game/ 前缀）
+                    normalizedPath = provider.FixPath(assetPath);
+                    // FixPath 对已有扩展名的路径不会改动扩展名，去掉 .umap 得到 objectPath
+                    if (normalizedPath.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
+                        normalizedPath = normalizedPath[..^".umap".Length];
+                }
+                else
+                {
+                    // FSoftObjectPath 典型格式：/Game/Maps/LA.LA（PackageName.ObjectName）
+                    // 去掉 .ObjectName 部分
+                    var dotIdx = assetPath.LastIndexOf('.');
+                    var slashIdx = assetPath.LastIndexOf('/');
+                    if (dotIdx > slashIdx)
+                        assetPath = assetPath[..dotIdx];
 
-                // 去掉最后一段 "PackageName.ObjectName" 中的 ".ObjectName"（如存在）
-                var dotIdx = assetPath.LastIndexOf('.');
-                var slashIdx = assetPath.LastIndexOf('/');
-                if (dotIdx > slashIdx)
-                    assetPath = assetPath[..dotIdx];
+                    // 加 .umap 后缀让 FixPath 正确识别为地图包，然后去掉后缀
+                    normalizedPath = provider.FixPath(assetPath + ".umap");
+                    if (normalizedPath.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
+                        normalizedPath = normalizedPath[..^".umap".Length];
+                }
 
-                if (!string.IsNullOrEmpty(assetPath))
-                    result.Add(assetPath);
+                if (!string.IsNullOrEmpty(normalizedPath))
+                    result.Add(normalizedPath);
             }
         }
         catch

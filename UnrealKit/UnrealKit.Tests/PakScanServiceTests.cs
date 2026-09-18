@@ -106,6 +106,8 @@ public sealed class PakScanServiceTests
         var result = PakScanService.BuildMapActorStats(
             "Game/Content",
             [map1, map2],
+            referencedLevelEntries: [],
+            referencedLevels: new HashSet<string>(),
             mapsWithErrors: 0,
             diagnostics: []);
 

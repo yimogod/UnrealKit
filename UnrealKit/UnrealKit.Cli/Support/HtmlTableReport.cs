@@ -630,6 +630,46 @@ internal static class MapMeshPlacementsHtmlBuilder
     }
 }
 
+internal static class MapMeshLocalPlacementsHtmlBuilder
+{
+    internal static string Build(UnrealKit.Core.PakScan.MapActorScanResult result)
+    {
+        HtmlColumn[] columns =
+        [
+            new("map", "子关卡",   HtmlColumnType.Text),
+            new("n",   "Mesh 名", HtmlColumnType.Text, DefaultSort: false),
+            new("cnt", "放置次数", HtmlColumnType.Number, DefaultSort: true, DefaultSortDesc: true),
+            new("mp",  "子关卡路径", HtmlColumnType.Path, Sortable: false),
+            new("p",   "Mesh 路径", HtmlColumnType.Path, Sortable: false),
+        ];
+
+        var rows = result.ReferencedLevelEntries
+            .SelectMany(e => e.Placements.Select(p => new object?[]
+            {
+                Path.GetFileNameWithoutExtension(e.MapObjectPath),
+                Path.GetFileNameWithoutExtension(p.MeshObjectPath),
+                p.Count,
+                e.MapObjectPath,
+                p.MeshObjectPath,
+            }))
+            .ToArray();
+
+        var meta = new HtmlMetaItem[]
+        {
+            new("目录",          result.InputDirectory),
+            new("子关卡总数",     result.ReferencedLevelEntries.Count.ToString()),
+            new("生成时间",       DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+        };
+
+        return HtmlTableReport.Build(
+            $"地图 Actor 统计 — 子关卡 — {Path.GetFileName(result.InputDirectory.TrimEnd('/', '\\'))}",
+            columns, rows, meta,
+            [new HtmlFilter("fCntMax", "放置次数 ≤", "cnt", FilterMode: HtmlFilterMode.NumberAtMost)],
+            result.Diagnostics, searchPlaceholder: "搜索子关卡 / Mesh 名…",
+            uniqueCountKey: "p");
+    }
+}
+
 internal static class MapMeshAggregatesHtmlBuilder
 {
     internal static string Build(UnrealKit.Core.PakScan.MapActorScanResult result)

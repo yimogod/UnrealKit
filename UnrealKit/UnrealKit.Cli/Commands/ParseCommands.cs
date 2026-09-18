@@ -106,7 +106,7 @@ internal static class ParseCommands
         if (CliOptions.IsHtmlFormat(options))
         {
             var basePath = outputFile is not null ? Path.ChangeExtension(outputFile, null) : "MapActorStats";
-            ParseResultWriters.WriteMapActorStatsHtml(result, basePath + "_MapMeshPlacements.html", basePath + "_MapMeshAggregates.html");
+            ParseResultWriters.WriteMapActorStatsHtml(result, basePath + "_MapMeshPlacements.html", basePath + "_MapMeshAggregates.html", basePath + "_MapMeshLocalPlacements.html");
         }
         else
         {

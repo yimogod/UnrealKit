@@ -3508,10 +3508,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             var basePath = System.IO.Path.ChangeExtension(dlg.FileName, null);
             var usagesPath = basePath + "_MapMeshPlacements.html";
             var aggregatesPath = basePath + "_MapMeshAggregates.html";
+            var localPath = basePath + "_MapMeshLocalPlacements.html";
 
             HtmlTableReport.WriteAndOpen(MapMeshPlacementsHtmlBuilder.Build(result), usagesPath);
             HtmlTableReport.WriteAndOpen(MapMeshAggregatesHtmlBuilder.Build(result), aggregatesPath);
-            AddOperationLog("Info", $"地图 Actor 统计 HTML 已保存：{usagesPath}，{aggregatesPath}");
+            HtmlTableReport.WriteAndOpen(MapMeshLocalPlacementsHtmlBuilder.Build(result), localPath);
+            AddOperationLog("Info", $"地图 Actor 统计 HTML 已保存：{usagesPath}，{aggregatesPath}，{localPath}");
         }
         catch (Exception ex)
         {
