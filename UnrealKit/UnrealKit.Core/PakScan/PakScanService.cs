@@ -861,12 +861,80 @@ public sealed class PakScanService : IPakScanService
         // 存在于本 .umap 中，outer chain 指向对应的 PackedLevelActor。
         ScanPackedLevelActorISMs(pkg, level.Actors, meshCounts, ref failedActors);
 
+        // 第三遍：扫描 World Partition 外部 actor 包
+        // UE5 World Partition 地图把绝大多数 actor 存为独立 .uasset，
+        // 路径格式：<mapObjectPath>/__ExternalActors__/**/*.uasset
+        ScanExternalActors(provider, mapObjectPath, meshCounts, ref totalActors, ref failedActors);
+
         var placements = meshCounts
             .OrderByDescending(kv => kv.Value)
             .Select(kv => new MapMeshPlacement(kv.Key, kv.Value))
             .ToList();
 
         return new MapMeshUsageEntry(mapObjectPath, placements, totalActors, failedActors);
+    }
+
+    /// <summary>
+    /// 扫描 UE5 World Partition 地图的外部 actor 包。
+    /// 路径格式：{mapObjectPath}/__ExternalActors__/**/*.uasset
+    /// 每个文件是一个独立 actor 包，直接检查其 export 类型和 StaticMeshComponent。
+    /// </summary>
+    private static void ScanExternalActors(
+        DefaultFileProvider provider,
+        string mapObjectPath,
+        Dictionary<string, int> meshCounts,
+        ref int totalActors,
+        ref int failedActors)
+    {
+        // 构造外部 actor 目录前缀，例如 "Game/Maps/MyMap/__ExternalActors__/"
+        var prefix = mapObjectPath + "/__ExternalActors__/";
+
+        // 从 provider.Files.Keys 筛选属于本地图的外部 actor 文件
+        var externalActorPaths = provider.Files.Keys
+            .Where(p => p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                     && p.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (externalActorPaths.Count == 0) return;
+
+        foreach (var actorAssetPath in externalActorPaths)
+        {
+            try
+            {
+                if (!provider.TryLoadPackage(actorAssetPath, out var actorPkg) || actorPkg is null)
+                    continue;
+
+                // 每个外部 actor 包通常只有一个 actor export
+                foreach (var export in actorPkg.GetExports())
+                {
+                    var typeName = export.ExportType;
+                    if (!string.Equals(typeName, "StaticMeshActor", StringComparison.Ordinal))
+                        continue;
+
+                    totalActors++;
+
+                    if (!export.TryGetValue<FPackageIndex>(out var smCompIdx, "StaticMeshComponent")
+                        || smCompIdx is null || smCompIdx.IsNull)
+                        continue;
+
+                    var smComp = smCompIdx.Load<UStaticMeshComponent>();
+                    if (smComp is null) continue;
+
+                    var meshIdx = smComp.GetStaticMesh();
+                    if (meshIdx is null || meshIdx.IsNull) continue;
+
+                    var meshPath = BuildMeshObjectPath(meshIdx);
+                    if (meshPath is null) continue;
+
+                    meshCounts.TryGetValue(meshPath, out var prev);
+                    meshCounts[meshPath] = prev + 1;
+                }
+            }
+            catch
+            {
+                failedActors++;
+            }
+        }
     }
 
     /// <summary>
