@@ -206,80 +206,67 @@
                         </DataGrid>
                     </TabItem>
                     <TabItem Header="地图 Actor 统计">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*" />
-                                <RowDefinition Height="8" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <!-- 按地图的放置明细 -->
-                            <DockPanel Grid.Row="0">
-                                <TextBlock DockPanel.Dock="Top" Text="▶ 按地图明细（StaticMeshActor 放置次数）"
-                                           FontWeight="SemiBold" Margin="0,0,0,4" />
-                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
-                                    <TextBlock Text="搜索：" VerticalAlignment="Center" Margin="0,0,4,0" />
-                                    <TextBox Text="{Binding PakMapMeshUsages.Search, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="260" FontFamily="Consolas"
-                                             ToolTip="按 Mesh 名 / 路径搜索" />
-                                </StackPanel>
-                                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,4,0,0">
-                                    <Button Content="◀" Command="{Binding PakMapMeshUsages.PrevPageCommand}" Padding="8,4" />
-                                    <TextBlock Text="{Binding PakMapMeshUsages.PageInfo}" VerticalAlignment="Center" Margin="8,0" />
-                                    <Button Content="▶" Command="{Binding PakMapMeshUsages.NextPageCommand}" Padding="8,4" />
-                                    <TextBlock Text="每页：" VerticalAlignment="Center" Margin="16,0,4,0" />
-                                    <ComboBox ItemsSource="{Binding PakPageSizeOptions}" SelectedItem="{Binding PakPageSize}" Width="60" />
-                                </StackPanel>
-                                <DataGrid x:Name="MapMeshUsageDataGrid"
-                                          ItemsSource="{Binding PakScanMapMeshUsages}"
-                                          AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
-                                          SelectionMode="Single"
-                                          VirtualizingPanel.IsVirtualizing="True"
-                                          VirtualizingPanel.VirtualizationMode="Recycling"
-                                          Sorting="MapMeshUsageDataGrid_Sorting">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="地图"    Binding="{Binding MapName}"  Width="200" />
-                                        <DataGridTextColumn Header="Mesh"    Binding="{Binding MeshName}" Width="200" />
-                                        <DataGridTextColumn Header="放置次数" Binding="{Binding Count}"    Width="80" />
-                                        <DataGridTextColumn Header="地图路径" Binding="{Binding MapPath}"  Width="350" />
-                                        <DataGridTextColumn Header="Mesh 路径" Binding="{Binding MeshPath}" Width="*" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </DockPanel>
-                            <!-- 分隔线 -->
-                            <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" Height="4" />
-                            <!-- 跨地图汇总 -->
-                            <DockPanel Grid.Row="2">
-                                <TextBlock DockPanel.Dock="Top" Text="▶ 跨地图汇总（所有地图累计放置次数）"
-                                           FontWeight="SemiBold" Margin="0,0,0,4" />
-                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
-                                    <TextBlock Text="搜索：" VerticalAlignment="Center" Margin="0,0,4,0" />
-                                    <TextBox Text="{Binding PakMapMeshAggregates.Search, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="260" FontFamily="Consolas"
-                                             ToolTip="按 Mesh 名 / 路径搜索" />
-                                </StackPanel>
-                                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,4,0,0">
-                                    <Button Content="◀" Command="{Binding PakMapMeshAggregates.PrevPageCommand}" Padding="8,4" />
-                                    <TextBlock Text="{Binding PakMapMeshAggregates.PageInfo}" VerticalAlignment="Center" Margin="8,0" />
-                                    <Button Content="▶" Command="{Binding PakMapMeshAggregates.NextPageCommand}" Padding="8,4" />
-                                    <TextBlock Text="每页：" VerticalAlignment="Center" Margin="16,0,4,0" />
-                                    <ComboBox ItemsSource="{Binding PakPageSizeOptions}" SelectedItem="{Binding PakPageSize}" Width="60" />
-                                </StackPanel>
-                                <DataGrid x:Name="MapMeshAggregateDataGrid"
-                                          ItemsSource="{Binding PakScanMapMeshAggregates}"
-                                          AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
-                                          SelectionMode="Single"
-                                          VirtualizingPanel.IsVirtualizing="True"
-                                          VirtualizingPanel.VirtualizationMode="Recycling"
-                                          Sorting="MapMeshAggregateDataGrid_Sorting">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Mesh"     Binding="{Binding MeshName}"   Width="200" />
-                                        <DataGridTextColumn Header="总次数"    Binding="{Binding TotalCount}" Width="80" />
-                                        <DataGridTextColumn Header="出现地图数" Binding="{Binding MapCount}"   Width="80" />
-                                        <DataGridTextColumn Header="路径"      Binding="{Binding MeshPath}"   Width="*" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </DockPanel>
-                        </Grid>
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="搜索：" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBox Text="{Binding PakMapMeshUsages.Search, UpdateSourceTrigger=PropertyChanged}"
+                                         Width="260" FontFamily="Consolas"
+                                         ToolTip="按 Mesh 名 / 路径搜索" />
+                            </StackPanel>
+                            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,4,0,0">
+                                <Button Content="◀" Command="{Binding PakMapMeshUsages.PrevPageCommand}" Padding="8,4" />
+                                <TextBlock Text="{Binding PakMapMeshUsages.PageInfo}" VerticalAlignment="Center" Margin="8,0" />
+                                <Button Content="▶" Command="{Binding PakMapMeshUsages.NextPageCommand}" Padding="8,4" />
+                                <TextBlock Text="每页：" VerticalAlignment="Center" Margin="16,0,4,0" />
+                                <ComboBox ItemsSource="{Binding PakPageSizeOptions}" SelectedItem="{Binding PakPageSize}" Width="60" />
+                            </StackPanel>
+                            <DataGrid x:Name="MapMeshUsageDataGrid"
+                                      ItemsSource="{Binding PakScanMapMeshUsages}"
+                                      AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                      SelectionMode="Single"
+                                      VirtualizingPanel.IsVirtualizing="True"
+                                      VirtualizingPanel.VirtualizationMode="Recycling"
+                                      Sorting="MapMeshUsageDataGrid_Sorting">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="地图"    Binding="{Binding MapName}"  Width="200" />
+                                    <DataGridTextColumn Header="Mesh"    Binding="{Binding MeshName}" Width="200" />
+                                    <DataGridTextColumn Header="放置次数" Binding="{Binding Count}"    Width="80" />
+                                    <DataGridTextColumn Header="地图路径" Binding="{Binding MapPath}"  Width="350" />
+                                    <DataGridTextColumn Header="Mesh 路径" Binding="{Binding MeshPath}" Width="*" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
+                    <TabItem Header="Actor 全局统计">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="搜索：" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBox Text="{Binding PakMapMeshAggregates.Search, UpdateSourceTrigger=PropertyChanged}"
+                                         Width="260" FontFamily="Consolas"
+                                         ToolTip="按 Mesh 名 / 路径搜索" />
+                            </StackPanel>
+                            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,4,0,0">
+                                <Button Content="◀" Command="{Binding PakMapMeshAggregates.PrevPageCommand}" Padding="8,4" />
+                                <TextBlock Text="{Binding PakMapMeshAggregates.PageInfo}" VerticalAlignment="Center" Margin="8,0" />
+                                <Button Content="▶" Command="{Binding PakMapMeshAggregates.NextPageCommand}" Padding="8,4" />
+                                <TextBlock Text="每页：" VerticalAlignment="Center" Margin="16,0,4,0" />
+                                <ComboBox ItemsSource="{Binding PakPageSizeOptions}" SelectedItem="{Binding PakPageSize}" Width="60" />
+                            </StackPanel>
+                            <DataGrid x:Name="MapMeshAggregateDataGrid"
+                                      ItemsSource="{Binding PakScanMapMeshAggregates}"
+                                      AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                      SelectionMode="Single"
+                                      VirtualizingPanel.IsVirtualizing="True"
+                                      VirtualizingPanel.VirtualizationMode="Recycling"
+                                      Sorting="MapMeshAggregateDataGrid_Sorting">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Mesh"     Binding="{Binding MeshName}"   Width="200" />
+                                    <DataGridTextColumn Header="总次数"    Binding="{Binding TotalCount}" Width="80" />
+                                    <DataGridTextColumn Header="出现地图数" Binding="{Binding MapCount}"   Width="80" />
+                                    <DataGridTextColumn Header="路径"      Binding="{Binding MeshPath}"   Width="*" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
                     </TabItem>
         </TabControl>
     </Grid>
