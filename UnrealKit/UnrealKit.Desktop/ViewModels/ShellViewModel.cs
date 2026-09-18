@@ -211,12 +211,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         PakMapMeshUsages     = new PagedSearchList<PakMapMeshUsageOption>    (u => u.MeshName, u => u.MeshPath, () => _pakPageSize);
         PakMapMeshAggregates = new PagedSearchList<PakMapMeshAggregateOption>(a => a.MeshName, a => a.MeshPath, () => _pakPageSize);
-        PakMapMeshUsages.RegisterSortKey("MapName",  u => u.MapName);
-        PakMapMeshUsages.RegisterSortKey("MeshName", u => u.MeshName);
+        PakMapMeshUsages.RegisterSortKey("Map",      u => u.MapName);
+        PakMapMeshUsages.RegisterSortKey("Mesh",     u => u.MeshName);
         PakMapMeshUsages.RegisterSortKey("Count",    u => int.TryParse(u.Count, out var v) ? v : 0);
-        PakMapMeshAggregates.RegisterSortKey("MeshName",   a => a.MeshName);
+        PakMapMeshUsages.RegisterSortKey("MapPath",  u => u.MapPath);
+        PakMapMeshUsages.RegisterSortKey("MeshPath", u => u.MeshPath);
+        PakMapMeshAggregates.RegisterSortKey("Mesh",       a => a.MeshName);
         PakMapMeshAggregates.RegisterSortKey("TotalCount", a => int.TryParse(a.TotalCount, out var v) ? v : 0);
         PakMapMeshAggregates.RegisterSortKey("MapCount",   a => int.TryParse(a.MapCount, out var v) ? v : 0);
+        PakMapMeshAggregates.RegisterSortKey("MeshPath",   a => a.MeshPath);
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _adbServiceFactory = adbServiceFactory ?? throw new ArgumentNullException(nameof(adbServiceFactory));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
@@ -3429,7 +3432,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         {
             PakMapMeshUsages.Reset(result.PerMapEntries.SelectMany(e => e.Placements.Select(p =>
                 new PakMapMeshUsageOption(
-                    System.IO.Path.GetFileNameWithoutExtension(e.MapObjectPath),
+                    ResolveMapName(e.MapObjectPath),
                     e.MapObjectPath,
                     System.IO.Path.GetFileNameWithoutExtension(p.MeshObjectPath),
                     p.MeshObjectPath,
@@ -3456,6 +3459,20 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             : "地图 Actor 扫描完成（有错误）";
         RaiseCommandStates();
     });
+
+    private static string ResolveMapName(string mapObjectPath)
+    {
+        const string marker = "_Generated_";
+        int idx = mapObjectPath.IndexOf(marker, StringComparison.Ordinal);
+        if (idx >= 0)
+        {
+            // Take the segment immediately before _Generated_
+            var before = mapObjectPath[..idx].TrimEnd('/');
+            int slash = before.LastIndexOf('/');
+            return slash >= 0 ? before[(slash + 1)..] : before;
+        }
+        return System.IO.Path.GetFileNameWithoutExtension(mapObjectPath);
+    }
 
     private void ExportMapActorStatsHtml()
     {

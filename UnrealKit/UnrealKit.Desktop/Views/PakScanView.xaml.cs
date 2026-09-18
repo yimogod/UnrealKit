@@ -137,7 +137,7 @@ public partial class PakScanView : UserControl
         where T : class
     {
         var header = e.Column.Header?.ToString() ?? string.Empty;
-        bool descending = e.Column.SortDirection != ListSortDirection.Ascending;
+        bool descending = e.Column.SortDirection == ListSortDirection.Ascending;
         e.Column.SortDirection = descending ? ListSortDirection.Descending : ListSortDirection.Ascending;
         list.ApplySort(header, descending);
     }

@@ -226,11 +226,11 @@
                                       VirtualizingPanel.VirtualizationMode="Recycling"
                                       Sorting="MapMeshUsageDataGrid_Sorting">
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="地图"    Binding="{Binding MapName}"  Width="200" />
-                                    <DataGridTextColumn Header="Mesh"    Binding="{Binding MeshName}" Width="200" />
-                                    <DataGridTextColumn Header="放置次数" Binding="{Binding Count}"    Width="80" />
-                                    <DataGridTextColumn Header="地图路径" Binding="{Binding MapPath}"  Width="350" />
-                                    <DataGridTextColumn Header="Mesh 路径" Binding="{Binding MeshPath}" Width="*" />
+                                    <DataGridTextColumn Header="Map"      Binding="{Binding MapName}"  Width="200" />
+                                    <DataGridTextColumn Header="Mesh"     Binding="{Binding MeshName}" Width="200" />
+                                    <DataGridTextColumn Header="Count"    Binding="{Binding Count}"    Width="80" />
+                                    <DataGridTextColumn Header="MapPath"  Binding="{Binding MapPath}"  Width="350" />
+                                    <DataGridTextColumn Header="MeshPath" Binding="{Binding MeshPath}" Width="*" />
                                 </DataGrid.Columns>
                             </DataGrid>
                         </DockPanel>
@@ -258,10 +258,10 @@
                                       VirtualizingPanel.VirtualizationMode="Recycling"
                                       Sorting="MapMeshAggregateDataGrid_Sorting">
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Mesh"     Binding="{Binding MeshName}"   Width="200" />
-                                    <DataGridTextColumn Header="总次数"    Binding="{Binding TotalCount}" Width="80" />
-                                    <DataGridTextColumn Header="出现地图数" Binding="{Binding MapCount}"   Width="80" />
-                                    <DataGridTextColumn Header="路径"      Binding="{Binding MeshPath}"   Width="*" />
+                                    <DataGridTextColumn Header="Mesh"       Binding="{Binding MeshName}"   Width="200" />
+                                    <DataGridTextColumn Header="TotalCount" Binding="{Binding TotalCount}" Width="80" />
+                                    <DataGridTextColumn Header="MapCount"   Binding="{Binding MapCount}"   Width="80" />
+                                    <DataGridTextColumn Header="MeshPath"   Binding="{Binding MeshPath}"   Width="*" />
                                 </DataGrid.Columns>
                             </DataGrid>
                         </DockPanel>
