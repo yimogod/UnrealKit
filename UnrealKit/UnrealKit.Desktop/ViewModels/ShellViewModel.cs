@@ -3441,7 +3441,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         {
             PakMapMeshUsages.Reset(result.PerMapEntries.SelectMany(e => e.Placements.Select(p =>
                 new PakMapMeshUsageOption(
-                    ResolveMapName(e.MapObjectPath),
+                    UnrealKit.Core.PakScan.MapObjectPathHelper.ResolveMapName(e.MapObjectPath),
                     e.MapObjectPath,
                     System.IO.Path.GetFileNameWithoutExtension(p.MeshObjectPath),
                     p.MeshObjectPath,
@@ -3456,11 +3456,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
             PakMapLocalMeshUsages.Reset(result.ReferencedLevelEntries.SelectMany(e => e.Placements.Select(p =>
                 new PakMapMeshUsageOption(
-                    ResolveMapName(e.MapObjectPath),
+                    UnrealKit.Core.PakScan.MapObjectPathHelper.ResolveMapName(e.MapObjectPath),
                     e.MapObjectPath,
                     System.IO.Path.GetFileNameWithoutExtension(p.MeshObjectPath),
                     p.MeshObjectPath,
-                    p.Count.ToString()))));
+                    p.Count.ToString()))));;
 
             MapActorScanDescription = result.IsSuccess
                 ? $"地图扫描完成：{result.TotalMapsScanned} 张地图，{result.Aggregates.Count} 个独立 Mesh，{result.PerMapEntries.SelectMany(e => e.Placements).Sum(p => p.Count)} 次放置"
@@ -3476,20 +3476,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             : "地图 Actor 扫描完成（有错误）";
         RaiseCommandStates();
     });
-
-    private static string ResolveMapName(string mapObjectPath)
-    {
-        const string marker = "_Generated_";
-        int idx = mapObjectPath.IndexOf(marker, StringComparison.Ordinal);
-        if (idx >= 0)
-        {
-            // Take the segment immediately before _Generated_
-            var before = mapObjectPath[..idx].TrimEnd('/');
-            int slash = before.LastIndexOf('/');
-            return slash >= 0 ? before[(slash + 1)..] : before;
-        }
-        return System.IO.Path.GetFileNameWithoutExtension(mapObjectPath);
-    }
 
     private void ExportMapActorStatsHtml()
     {

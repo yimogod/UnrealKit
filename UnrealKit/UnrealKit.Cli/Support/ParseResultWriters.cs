@@ -260,9 +260,16 @@ internal static class ParseResultWriters
         }
 
         // Per-map placements
-        var usagesHeader = "MapPath\tMeshPath\tCount";
+        var usagesHeader = "MapName\tMapPath\tMeshPath\tCount";
         var usagesLines = result.PerMapEntries
-            .SelectMany(e => e.Placements.Select(p => $"{e.MapObjectPath}\t{p.MeshObjectPath}\t{p.Count}"));
+            .SelectMany(e => e.Placements.Select(p =>
+                $"{MapObjectPathHelper.ResolveMapName(e.MapObjectPath)}\t{e.MapObjectPath}\t{p.MeshObjectPath}\t{p.Count}"));
+
+        // Referenced level (local) placements
+        var localHeader = "LevelName\tLevelPath\tMeshPath\tCount";
+        var localLines = result.ReferencedLevelEntries
+            .SelectMany(e => e.Placements.Select(p =>
+                $"{MapObjectPathHelper.ResolveMapName(e.MapObjectPath)}\t{e.MapObjectPath}\t{p.MeshObjectPath}\t{p.Count}"));
 
         // Cross-map aggregates
         var aggHeader = "MeshPath\tTotalCount\tMapCount";
@@ -272,10 +279,13 @@ internal static class ParseResultWriters
         {
             var basePath    = Path.ChangeExtension(outputFile, null);
             var usagesFile  = basePath + "_MapMeshPlacements.tsv";
+            var localFile   = basePath + "_MapMeshLocalPlacements.tsv";
             var aggFile     = basePath + "_MapMeshAggregates.tsv";
             File.WriteAllLines(usagesFile, usagesLines.Prepend(usagesHeader));
-            File.WriteAllLines(aggFile,   aggLines.Prepend(aggHeader));
+            File.WriteAllLines(localFile,  localLines.Prepend(localHeader));
+            File.WriteAllLines(aggFile,    aggLines.Prepend(aggHeader));
             Console.WriteLine($"Map actor stats: {result.TotalMapsScanned} map(s) → {usagesFile}");
+            Console.WriteLine($"                 {result.ReferencedLevelEntries.Count} sub-level(s) → {localFile}");
             Console.WriteLine($"                 {result.Aggregates.Count} unique mesh(es) → {aggFile}");
         }
         else
@@ -285,12 +295,17 @@ internal static class ParseResultWriters
                 Console.WriteLine(line);
 
             Console.WriteLine();
+            Console.WriteLine(localHeader);
+            foreach (var line in localLines)
+                Console.WriteLine(line);
+
+            Console.WriteLine();
             Console.WriteLine(aggHeader);
             foreach (var line in aggLines)
                 Console.WriteLine(line);
 
             Console.WriteLine();
-            Console.WriteLine($"Total: {result.TotalMapsScanned} map(s), {result.Aggregates.Count} unique mesh(es)");
+            Console.WriteLine($"Total: {result.TotalMapsScanned} map(s), {result.ReferencedLevelEntries.Count} sub-level(s), {result.Aggregates.Count} unique mesh(es)");
         }
 
         CliOutput.WriteDiagnostics(result.Diagnostics);

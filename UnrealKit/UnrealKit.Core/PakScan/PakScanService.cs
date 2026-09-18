@@ -9,6 +9,7 @@ using CUE4Parse.UE4.Assets.Exports.SkeletalMesh;
 using CUE4Parse.UE4.Assets.Exports.StaticMesh;
 using CUE4Parse.UE4.Assets.Exports.Texture;
 using CUE4Parse.UE4.Assets.Exports.Component.StaticMesh;
+using CUE4Parse.UE4.Assets.Exports.WorldPartition;
 using CUE4Parse.UE4.Assets.Objects;
 using CUE4Parse.UE4.Assets.Objects.Properties;
 using CUE4Parse.UE4.Objects.Core.Misc;
@@ -1066,62 +1067,82 @@ public sealed class PakScanService : IPakScanService
             var world = pkg.GetExports().OfType<UWorld>().FirstOrDefault();
             if (world is null) return result;
 
+            // ── 链路一：ALevelInstance actor（非 World Partition 场景）──────────────
             var level = world.PersistentLevel.Load<ULevel>();
-            if (level?.Actors is null) return result;
-
-            foreach (var actorPtr in level.Actors)
+            if (level?.Actors is not null)
             {
-                if (actorPtr is null || actorPtr.IsNull) continue;
-
-                var typeName = actorPtr.ResolvedObject?.Class?.Name.Text;
-                if (typeName is not ("LevelInstance" or "ALevelInstance"
-                    or "LevelStreamingLevelInstanceEditor" or "LevelInstanceActor"))
-                    continue;
-
-                UObject? actorObj;
-                try { actorObj = actorPtr.Load<UObject>(); }
-                catch { continue; }
-                if (actorObj is null) continue;
-
-                // WorldAsset 是 TSoftObjectPtr<UWorld>，属性类型为 SoftObject
-                if (!actorObj.TryGetValue<FSoftObjectPath>(out var worldAsset, "WorldAsset"))
-                    continue;
-
-                var assetPath = worldAsset.AssetPathName.Text;
-                if (string.IsNullOrEmpty(assetPath)) continue;
-
-                // AssetPathName 格式为 /Game/Maps/LA.LA（FSoftObjectPath 规范）
-                // 需统一为 provider.Files.Keys 所用的 objectPath 格式，例如 ProjectName/Content/Maps/LA
-                // 步骤：
-                // 1. 若末尾是 .umap 后缀直接去掉；否则走 FixPath 做路径规范化
-                // 2. FixPath 期望带扩展名（无扩展名时它会补 .uasset），所以先确保带 .umap
-                // 3. FixPath 后去掉扩展名，还原为 objectPath
-                string normalizedPath;
-                if (assetPath.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
+                foreach (var actorPtr in level.Actors)
                 {
-                    // 已有 .umap 后缀，直接走 FixPath（它会去掉前导 / 并展开 /Game/ 前缀）
-                    normalizedPath = provider.FixPath(assetPath);
-                    // FixPath 对已有扩展名的路径不会改动扩展名，去掉 .umap 得到 objectPath
-                    if (normalizedPath.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
-                        normalizedPath = normalizedPath[..^".umap".Length];
+                    if (actorPtr is null || actorPtr.IsNull) continue;
+
+                    var typeName = actorPtr.ResolvedObject?.Class?.Name.Text;
+                    if (typeName is not ("LevelInstance" or "ALevelInstance"
+                        or "LevelStreamingLevelInstanceEditor" or "LevelInstanceActor"))
+                        continue;
+
+                    UObject? actorObj;
+                    try { actorObj = actorPtr.Load<UObject>(); }
+                    catch { continue; }
+                    if (actorObj is null) continue;
+
+                    // cooked pak 里属性名是 CookedWorldAsset，编辑器包里是 WorldAsset，两个都试
+                    if (!actorObj.TryGetValue<FSoftObjectPath>(out var worldAsset, "CookedWorldAsset") &&
+                        !actorObj.TryGetValue<FSoftObjectPath>(out worldAsset, "WorldAsset"))
+                        continue;
+
+                    var normalized = NormalizeSoftPath(provider, worldAsset.AssetPathName.Text);
+                    if (!string.IsNullOrEmpty(normalized))
+                        result.Add(normalized);
                 }
-                else
+            }
+
+            // ── 链路二：World Partition RuntimeHash（Spatial Hash 和 HashSet 两种）──
+            var wpIndex = world.GetOrDefault<FPackageIndex>("WorldPartition");
+            if (wpIndex is null || wpIndex.IsNull) return result;
+
+            UWorldPartition? wp;
+            try { wp = wpIndex.Load<UWorldPartition>(); }
+            catch { return result; }
+            if (wp?.RuntimeHash is null || wp.RuntimeHash.IsNull) return result;
+
+            CUE4Parse.UE4.Assets.Exports.UObject? runtimeHashObj;
+            try { runtimeHashObj = wp.RuntimeHash.Load(); }
+            catch { return result; }
+
+            // 收集所有 streaming cell 的 FPackageIndex
+            var cellIndices = new List<FPackageIndex>();
+
+            if (runtimeHashObj is UWorldPartitionRuntimeSpatialHash spatialHash)
+            {
+                foreach (var grid in spatialHash.StreamingGrids)
+                    foreach (var gridLevel in grid.GridLevels)
+                        foreach (var layerCell in gridLevel.LayerCells)
+                            cellIndices.AddRange(layerCell.GridCells);
+            }
+            else if (runtimeHashObj is UWorldPartitionRuntimeHashSet hashSet)
+            {
+                foreach (var streamingData in hashSet.RuntimeStreamingData)
                 {
-                    // FSoftObjectPath 典型格式：/Game/Maps/LA.LA（PackageName.ObjectName）
-                    // 去掉 .ObjectName 部分
-                    var dotIdx = assetPath.LastIndexOf('.');
-                    var slashIdx = assetPath.LastIndexOf('/');
-                    if (dotIdx > slashIdx)
-                        assetPath = assetPath[..dotIdx];
-
-                    // 加 .umap 后缀让 FixPath 正确识别为地图包，然后去掉后缀
-                    normalizedPath = provider.FixPath(assetPath + ".umap");
-                    if (normalizedPath.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
-                        normalizedPath = normalizedPath[..^".umap".Length];
+                    cellIndices.AddRange(streamingData.SpatiallyLoadedCells);
+                    cellIndices.AddRange(streamingData.NonSpatiallyLoadedCells);
                 }
+            }
 
-                if (!string.IsNullOrEmpty(normalizedPath))
-                    result.Add(normalizedPath);
+            foreach (var cellIndex in cellIndices)
+            {
+                if (cellIndex.IsNull) continue;
+                try
+                {
+                    if (cellIndex.Load() is not UWorldPartitionRuntimeLevelStreamingCell cell) continue;
+                    if (cell.LevelStreaming is null || cell.LevelStreaming.IsNull) continue;
+                    if (cell.LevelStreaming.Load() is not ULevelStreaming streaming) continue;
+                    if (streaming.WorldAsset is null) continue;
+
+                    var normalized = NormalizeSoftPath(provider, streaming.WorldAsset.Value.AssetPathName.Text);
+                    if (!string.IsNullOrEmpty(normalized))
+                        result.Add(normalized);
+                }
+                catch { /* 单个 cell 失败不影响整体 */ }
             }
         }
         catch
@@ -1288,5 +1309,32 @@ public sealed class PakScanService : IPakScanService
             perMapEntries.Count + mapsWithErrors,
             mapsWithErrors,
             diagnostics);
+    }
+
+    /// <summary>
+    /// 将 FSoftObjectPath 的 AssetPathName 文本规范化为 provider.Files.Keys 格式（无扩展名 objectPath）。
+    /// </summary>
+    private static string NormalizeSoftPath(DefaultFileProvider provider, string assetPath)
+    {
+        if (string.IsNullOrEmpty(assetPath)) return string.Empty;
+
+        if (assetPath.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
+        {
+            var fixed1 = provider.FixPath(assetPath);
+            if (fixed1.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
+                fixed1 = fixed1[..^".umap".Length];
+            return fixed1;
+        }
+
+        // FSoftObjectPath 典型格式：/Game/Maps/LA.LA（PackageName.ObjectName）
+        var dotIdx = assetPath.LastIndexOf('.');
+        var slashIdx = assetPath.LastIndexOf('/');
+        if (dotIdx > slashIdx)
+            assetPath = assetPath[..dotIdx];
+
+        var fixed2 = provider.FixPath(assetPath + ".umap");
+        if (fixed2.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
+            fixed2 = fixed2[..^".umap".Length];
+        return fixed2;
     }
 }

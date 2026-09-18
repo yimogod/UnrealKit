@@ -1,3 +1,4 @@
+using System.IO;
 using UnrealKit.Core.Diagnostics;
 
 namespace UnrealKit.Core.PakScan;
@@ -140,3 +141,25 @@ public sealed record PakMapMeshUsageFound(MapMeshUsageEntry Entry) : PakScanEntr
 
 /// <summary>所有地图扫描完成，携带最终结果。</summary>
 public sealed record PakMapScanCompleteEntry(MapActorScanResult Result, TimeSpan Elapsed) : PakScanEntry;
+
+/// <summary>
+/// 将地图 objectPath 解析为可读名称。
+/// World Partition 生成的子关卡路径含 _Generated_ 片段，取其父目录名；否则取末段文件名。
+/// 例：.../TarkovWorldA/_Generated_/CGQQ... → "TarkovWorldA"
+/// </summary>
+public static class MapObjectPathHelper
+{
+    private const string GeneratedMarker = "_Generated_";
+
+    public static string ResolveMapName(string mapObjectPath)
+    {
+        int idx = mapObjectPath.IndexOf(GeneratedMarker, StringComparison.Ordinal);
+        if (idx >= 0)
+        {
+            var before = mapObjectPath[..idx].TrimEnd('/');
+            int slash = before.LastIndexOf('/');
+            return slash >= 0 ? before[(slash + 1)..] : before;
+        }
+        return Path.GetFileNameWithoutExtension(mapObjectPath);
+    }
+}

@@ -4,6 +4,7 @@ using System.Text;
 using Scriban;
 using Scriban.Runtime;
 using UnrealKit.Core.Diagnostics;
+using UnrealKit.Core.PakScan;
 
 namespace UnrealKit.Cli;
 
@@ -605,7 +606,7 @@ internal static class MapMeshPlacementsHtmlBuilder
         var rows = result.PerMapEntries
             .SelectMany(e => e.Placements.Select(p => new object?[]
             {
-                Path.GetFileNameWithoutExtension(e.MapObjectPath),
+                MapObjectPathHelper.ResolveMapName(e.MapObjectPath),
                 Path.GetFileNameWithoutExtension(p.MeshObjectPath),
                 p.Count,
                 e.MapObjectPath,
@@ -646,7 +647,7 @@ internal static class MapMeshLocalPlacementsHtmlBuilder
         var rows = result.ReferencedLevelEntries
             .SelectMany(e => e.Placements.Select(p => new object?[]
             {
-                Path.GetFileNameWithoutExtension(e.MapObjectPath),
+                MapObjectPathHelper.ResolveMapName(e.MapObjectPath),
                 Path.GetFileNameWithoutExtension(p.MeshObjectPath),
                 p.Count,
                 e.MapObjectPath,
