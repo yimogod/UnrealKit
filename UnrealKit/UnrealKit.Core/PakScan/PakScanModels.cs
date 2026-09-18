@@ -79,6 +79,7 @@ public sealed record MapMeshAggregate(
 public sealed record MapActorScanResult(
     string InputDirectory,
     IReadOnlyList<MapMeshUsageEntry> PerMapEntries,
+    IReadOnlyList<MapMeshUsageEntry> ReferencedLevelEntries,
     IReadOnlyList<MapMeshAggregate> Aggregates,
     int TotalMapsScanned,
     int TotalMapsWithErrors,

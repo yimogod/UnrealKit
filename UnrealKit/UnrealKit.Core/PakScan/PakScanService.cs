@@ -674,9 +674,26 @@ public sealed class PakScanService : IPakScanService
                     return;
                 }
 
+                // 第一遍：收集所有 LevelInstance 引用关系，被引用的子关卡不作为独立 entry 输出
+                var levelInstanceRefs = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+                var referencedLevels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var umapPath in umapPaths)
+                {
+                    var mapObjectPath = umapPath[..^".umap".Length];
+                    var refs = CollectLevelInstanceRefs(provider, umapPath);
+                    if (refs.Count > 0)
+                    {
+                        levelInstanceRefs[mapObjectPath] = refs;
+                        foreach (var r in refs)
+                            referencedLevels.Add(r);
+                    }
+                }
+
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 var diagnostics = new List<Diagnostic>();
                 var perMapEntries = new List<MapMeshUsageEntry>(umapPaths.Count);
+                // 被引用的子关卡单独扫描，供 ActorLocal 视图使用；不进入 perMapEntries
+                var referencedLevelEntries = new List<MapMeshUsageEntry>();
                 int scanned = 0;
                 int mapsWithErrors = 0;
 
@@ -687,11 +704,16 @@ public sealed class PakScanService : IPakScanService
                     cancellationToken.ThrowIfCancellationRequested();
 
                     var mapObjectPath = umapPath[..^".umap".Length];
+                    bool isReferenced = referencedLevels.Contains(mapObjectPath);
+
                     MapMeshUsageEntry entry;
 
                     try
                     {
-                        entry = ScanSingleMap(provider, umapPath, mapObjectPath);
+                        // 子关卡只扫描自身 actor，不再递归展开（它就是被展开的那一层）
+                        entry = isReferenced
+                            ? ScanSingleMap(provider, umapPath, mapObjectPath)
+                            : ScanSingleMap(provider, umapPath, mapObjectPath, levelInstanceRefs, referencedLevels);
                     }
                     catch (OperationCanceledException)
                     {
@@ -710,16 +732,24 @@ public sealed class PakScanService : IPakScanService
                         continue;
                     }
 
-                    perMapEntries.Add(entry);
+                    if (isReferenced)
+                    {
+                        referencedLevelEntries.Add(entry);
+                    }
+                    else
+                    {
+                        perMapEntries.Add(entry);
+                        await channel.Writer.WriteAsync(new PakMapMeshUsageFound(entry), cancellationToken);
+                    }
+
                     scanned++;
-                    await channel.Writer.WriteAsync(new PakMapMeshUsageFound(entry), cancellationToken);
                     await channel.Writer.WriteAsync(
                         new PakMapScanProgressEntry(scanned, umapPaths.Count, umapPath, entry.Placements.Count),
                         cancellationToken);
                 }
 
                 sw.Stop();
-                var result = BuildMapActorStats(pakDirectory, perMapEntries, mapsWithErrors, diagnostics);
+                var result = BuildMapActorStats(pakDirectory, perMapEntries, referencedLevelEntries, referencedLevels, mapsWithErrors, diagnostics);
                 await channel.Writer.WriteAsync(new PakMapScanCompleteEntry(result, sw.Elapsed), cancellationToken);
             }
             catch (OperationCanceledException)
@@ -784,13 +814,15 @@ public sealed class PakScanService : IPakScanService
         }
 
         // 早期错误（PKS001/PKS002/PKS010）时 PakMapScanCompleteEntry 不会发出
-        return finalResult ?? new MapActorScanResult(pakDirectory, [], [], 0, 0, earlyDiags);
+        return finalResult ?? new MapActorScanResult(pakDirectory, [], [], [], 0, 0, earlyDiags);
     }
 
     private static MapMeshUsageEntry ScanSingleMap(
         DefaultFileProvider provider,
         string umapPath,
-        string mapObjectPath)
+        string mapObjectPath,
+        IReadOnlyDictionary<string, List<string>>? levelInstanceRefs = null,
+        IReadOnlySet<string>? referencedLevels = null)
     {
         if (!provider.TryLoadPackage(umapPath, out var pkg) || pkg is null)
             throw new InvalidOperationException($"无法加载地图包：{umapPath}");
@@ -865,6 +897,18 @@ public sealed class PakScanService : IPakScanService
         // UE5 World Partition 地图把绝大多数 actor 存为独立 .uasset，
         // 路径格式：<mapObjectPath>/__ExternalActors__/**/*.uasset
         ScanExternalActors(provider, mapObjectPath, meshCounts, ref totalActors, ref failedActors);
+
+        // 第四遍：展开非 packed ALevelInstance 引用的子关卡，按引用次数累加
+        // 子关卡本身不作为独立 entry 输出（已在调用方过滤），所以这里是唯一计数入口
+        if (levelInstanceRefs is not null && levelInstanceRefs.TryGetValue(mapObjectPath, out var childRefs))
+        {
+            var visiting = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { mapObjectPath };
+            foreach (var childObjectPath in childRefs)
+            {
+                MergeLevelInstanceMeshCounts(
+                    provider, childObjectPath, meshCounts, levelInstanceRefs, referencedLevels, visiting);
+            }
+        }
 
         var placements = meshCounts
             .OrderByDescending(kv => kv.Value)
@@ -1007,6 +1051,160 @@ public sealed class PakScanService : IPakScanService
         }
     }
 
+    /// <summary>
+    /// 轻量扫描一个 .umap，返回其中所有非 packed ALevelInstance actor 引用的子关卡 objectPath 列表。
+    /// 同一子关卡被引用多次则重复出现（代表多个放置实例）。
+    /// </summary>
+    private static List<string> CollectLevelInstanceRefs(DefaultFileProvider provider, string umapPath)
+    {
+        var result = new List<string>();
+        try
+        {
+            if (!provider.TryLoadPackage(umapPath, out var pkg) || pkg is null)
+                return result;
+
+            var world = pkg.GetExports().OfType<UWorld>().FirstOrDefault();
+            if (world is null) return result;
+
+            var level = world.PersistentLevel.Load<ULevel>();
+            if (level?.Actors is null) return result;
+
+            foreach (var actorPtr in level.Actors)
+            {
+                if (actorPtr is null || actorPtr.IsNull) continue;
+
+                var typeName = actorPtr.ResolvedObject?.Class?.Name.Text;
+                if (typeName is not ("LevelInstance" or "ALevelInstance"
+                    or "LevelStreamingLevelInstanceEditor" or "LevelInstanceActor"))
+                    continue;
+
+                UObject? actorObj;
+                try { actorObj = actorPtr.Load<UObject>(); }
+                catch { continue; }
+                if (actorObj is null) continue;
+
+                // WorldAsset 是 TSoftObjectPtr<UWorld>，属性类型为 SoftObject
+                if (!actorObj.TryGetValue<FSoftObjectPath>(out var worldAsset, "WorldAsset"))
+                    continue;
+
+                var assetPath = worldAsset.AssetPathName.Text;
+                if (string.IsNullOrEmpty(assetPath)) continue;
+
+                // 去掉 .umap 后缀，统一为 objectPath 格式
+                if (assetPath.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
+                    assetPath = assetPath[..^".umap".Length];
+
+                // 去掉最后一段 "PackageName.ObjectName" 中的 ".ObjectName"（如存在）
+                var dotIdx = assetPath.LastIndexOf('.');
+                var slashIdx = assetPath.LastIndexOf('/');
+                if (dotIdx > slashIdx)
+                    assetPath = assetPath[..dotIdx];
+
+                if (!string.IsNullOrEmpty(assetPath))
+                    result.Add(assetPath);
+            }
+        }
+        catch
+        {
+            // 收集阶段失败不影响主扫描
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// 递归展开一个子关卡的 mesh 统计，合并进父关卡的 meshCounts。
+    /// visiting 用于检测循环引用；referencedLevels 用于判断子关卡是否已被收录（避免遗漏
+    /// 仅被间接引用的层级）。
+    /// </summary>
+    private static void MergeLevelInstanceMeshCounts(
+        DefaultFileProvider provider,
+        string childObjectPath,
+        Dictionary<string, int> meshCounts,
+        IReadOnlyDictionary<string, List<string>> levelInstanceRefs,
+        IReadOnlySet<string>? referencedLevels,
+        HashSet<string> visiting)
+    {
+        if (!visiting.Add(childObjectPath))
+            return; // 循环引用，跳过
+
+        try
+        {
+            var childUmapPath = childObjectPath + ".umap";
+            if (!provider.Files.ContainsKey(childUmapPath))
+                return;
+
+            if (!provider.TryLoadPackage(childUmapPath, out var pkg) || pkg is null)
+                return;
+
+            var world = pkg.GetExports().OfType<UWorld>().FirstOrDefault();
+            if (world is null) return;
+
+            var level = world.PersistentLevel.Load<ULevel>();
+            if (level?.Actors is null) return;
+
+            // 统计子关卡自己的 StaticMeshActor
+            foreach (var actorPtr in level.Actors)
+            {
+                if (actorPtr is null || actorPtr.IsNull) continue;
+
+                var exportTypeName = actorPtr.ResolvedObject?.Class?.Name.Text;
+                if (!string.Equals(exportTypeName, "StaticMeshActor", StringComparison.Ordinal))
+                    continue;
+
+                UObject? actorObj;
+                try { actorObj = actorPtr.Load<UObject>(); }
+                catch { continue; }
+                if (actorObj is null) continue;
+
+                try
+                {
+                    if (!actorObj.TryGetValue<FPackageIndex>(out var smCompIdx, "StaticMeshComponent")
+                        || smCompIdx is null || smCompIdx.IsNull)
+                        continue;
+
+                    var smComp = smCompIdx.Load<UStaticMeshComponent>();
+                    if (smComp is null) continue;
+
+                    var meshIdx = smComp.GetStaticMesh();
+                    if (meshIdx is null || meshIdx.IsNull) continue;
+
+                    var meshPath = BuildMeshObjectPath(meshIdx);
+                    if (meshPath is null) continue;
+
+                    meshCounts.TryGetValue(meshPath, out var prev);
+                    meshCounts[meshPath] = prev + 1;
+                }
+                catch { }
+            }
+
+            // 子关卡里的 PackedLevelActor ISM
+            var dummyFailed = 0;
+            ScanPackedLevelActorISMs(pkg, level.Actors, meshCounts, ref dummyFailed);
+
+            // 子关卡里的 World Partition 外部 actor
+            var dummyTotal = 0;
+            ScanExternalActors(provider, childObjectPath, meshCounts, ref dummyTotal, ref dummyFailed);
+
+            // 递归展开子关卡自己的 LevelInstance 引用
+            if (levelInstanceRefs.TryGetValue(childObjectPath, out var grandChildRefs))
+            {
+                foreach (var grandChild in grandChildRefs)
+                {
+                    MergeLevelInstanceMeshCounts(
+                        provider, grandChild, meshCounts, levelInstanceRefs, referencedLevels, visiting);
+                }
+            }
+        }
+        catch
+        {
+            // 子关卡解析失败不影响父关卡
+        }
+        finally
+        {
+            visiting.Remove(childObjectPath);
+        }
+    }
+
     private static string? BuildMeshObjectPath(FPackageIndex meshIdx)
     {
         var resolved = meshIdx.ResolvedObject;
@@ -1034,6 +1232,8 @@ public sealed class PakScanService : IPakScanService
     internal static MapActorScanResult BuildMapActorStats(
         string inputDirectory,
         IReadOnlyList<MapMeshUsageEntry> perMapEntries,
+        IReadOnlyList<MapMeshUsageEntry> referencedLevelEntries,
+        IReadOnlySet<string> referencedLevels,
         int mapsWithErrors,
         IReadOnlyList<Diagnostic> diagnostics)
     {
@@ -1063,6 +1263,7 @@ public sealed class PakScanService : IPakScanService
         return new MapActorScanResult(
             inputDirectory,
             perMapEntries,
+            referencedLevelEntries,
             aggregates,
             perMapEntries.Count + mapsWithErrors,
             mapsWithErrors,

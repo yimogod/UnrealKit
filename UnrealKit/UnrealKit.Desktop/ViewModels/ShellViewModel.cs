@@ -119,6 +119,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public PagedSearchList<PakScanMaterialOption>     PakMaterials     { get; }
     public PagedSearchList<PakMapMeshUsageOption>     PakMapMeshUsages     { get; }
     public PagedSearchList<PakMapMeshAggregateOption> PakMapMeshAggregates { get; }
+    public PagedSearchList<PakMapMeshUsageOption>     PakMapLocalMeshUsages { get; }
     private LocalPakPackageOption? _selectedLocalPakPackage;
     private string _consoleCommandText = string.Empty;
     private string _consoleOutput = string.Empty;
@@ -211,11 +212,17 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         PakMapMeshUsages     = new PagedSearchList<PakMapMeshUsageOption>    (u => u.MeshName, u => u.MeshPath, () => _pakPageSize);
         PakMapMeshAggregates = new PagedSearchList<PakMapMeshAggregateOption>(a => a.MeshName, a => a.MeshPath, () => _pakPageSize);
+        PakMapLocalMeshUsages = new PagedSearchList<PakMapMeshUsageOption>   (u => u.MeshName, u => u.MeshPath, () => _pakPageSize);
         PakMapMeshUsages.RegisterSortKey("Map",      u => u.MapName);
         PakMapMeshUsages.RegisterSortKey("Mesh",     u => u.MeshName);
         PakMapMeshUsages.RegisterSortKey("Count",    u => int.TryParse(u.Count, out var v) ? v : 0);
         PakMapMeshUsages.RegisterSortKey("MapPath",  u => u.MapPath);
         PakMapMeshUsages.RegisterSortKey("MeshPath", u => u.MeshPath);
+        PakMapLocalMeshUsages.RegisterSortKey("Map",      u => u.MapName);
+        PakMapLocalMeshUsages.RegisterSortKey("Mesh",     u => u.MeshName);
+        PakMapLocalMeshUsages.RegisterSortKey("Count",    u => int.TryParse(u.Count, out var v) ? v : 0);
+        PakMapLocalMeshUsages.RegisterSortKey("MapPath",  u => u.MapPath);
+        PakMapLocalMeshUsages.RegisterSortKey("MeshPath", u => u.MeshPath);
         PakMapMeshAggregates.RegisterSortKey("Mesh",       a => a.MeshName);
         PakMapMeshAggregates.RegisterSortKey("TotalCount", a => int.TryParse(a.TotalCount, out var v) ? v : 0);
         PakMapMeshAggregates.RegisterSortKey("MapCount",   a => int.TryParse(a.MapCount, out var v) ? v : 0);
@@ -346,6 +353,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<PakScanDiagnosticOption> PakScanDiagnostics { get; } = [];
     public ObservableCollection<PakMapMeshUsageOption>     PakScanMapMeshUsages     => PakMapMeshUsages.Items;
     public ObservableCollection<PakMapMeshAggregateOption> PakScanMapMeshAggregates => PakMapMeshAggregates.Items;
+    public ObservableCollection<PakMapMeshUsageOption>     PakScanMapLocalMeshUsages => PakMapLocalMeshUsages.Items;
     public ObservableCollection<LocalPakPackageOption> LocalPakPackages { get; } = [];
     public ICommand CreateProjectCommand { get; }
     public ICommand OpenProjectCommand { get; }
@@ -3389,6 +3397,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         PakMapMeshUsages.Clear();
         PakMapMeshAggregates.Clear();
+        PakMapLocalMeshUsages.Clear();
         _lastMapActorScanResult = null;
 
         var inputPath = SelectedLocalPakPackage!.LocalDirectory;
@@ -3444,6 +3453,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     a.MeshObjectPath,
                     a.TotalCount.ToString(),
                     a.MapCount.ToString())));
+
+            PakMapLocalMeshUsages.Reset(result.ReferencedLevelEntries.SelectMany(e => e.Placements.Select(p =>
+                new PakMapMeshUsageOption(
+                    ResolveMapName(e.MapObjectPath),
+                    e.MapObjectPath,
+                    System.IO.Path.GetFileNameWithoutExtension(p.MeshObjectPath),
+                    p.MeshObjectPath,
+                    p.Count.ToString()))));
 
             MapActorScanDescription = result.IsSuccess
                 ? $"地图扫描完成：{result.TotalMapsScanned} 张地图，{result.Aggregates.Count} 个独立 Mesh，{result.PerMapEntries.SelectMany(e => e.Placements).Sum(p => p.Count)} 次放置"

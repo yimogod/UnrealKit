@@ -235,6 +235,38 @@
                             </DataGrid>
                         </DockPanel>
                     </TabItem>
+                    <TabItem Header="ActorLocal">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="搜索：" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBox Text="{Binding PakMapLocalMeshUsages.Search, UpdateSourceTrigger=PropertyChanged}"
+                                         Width="260" FontFamily="Consolas"
+                                         ToolTip="按 Mesh 名 / 路径搜索" />
+                            </StackPanel>
+                            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,4,0,0">
+                                <Button Content="◀" Command="{Binding PakMapLocalMeshUsages.PrevPageCommand}" Padding="8,4" />
+                                <TextBlock Text="{Binding PakMapLocalMeshUsages.PageInfo}" VerticalAlignment="Center" Margin="8,0" />
+                                <Button Content="▶" Command="{Binding PakMapLocalMeshUsages.NextPageCommand}" Padding="8,4" />
+                                <TextBlock Text="每页：" VerticalAlignment="Center" Margin="16,0,4,0" />
+                                <ComboBox ItemsSource="{Binding PakPageSizeOptions}" SelectedItem="{Binding PakPageSize}" Width="60" />
+                            </StackPanel>
+                            <DataGrid x:Name="MapLocalMeshUsageDataGrid"
+                                      ItemsSource="{Binding PakScanMapLocalMeshUsages}"
+                                      AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                      SelectionMode="Single"
+                                      VirtualizingPanel.IsVirtualizing="True"
+                                      VirtualizingPanel.VirtualizationMode="Recycling"
+                                      Sorting="MapLocalMeshUsageDataGrid_Sorting">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Map"      Binding="{Binding MapName}"  Width="200" />
+                                    <DataGridTextColumn Header="Mesh"     Binding="{Binding MeshName}" Width="200" />
+                                    <DataGridTextColumn Header="Count"    Binding="{Binding Count}"    Width="80" />
+                                    <DataGridTextColumn Header="MapPath"  Binding="{Binding MapPath}"  Width="350" />
+                                    <DataGridTextColumn Header="MeshPath" Binding="{Binding MeshPath}" Width="*" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
                     <TabItem Header="ActorGlobal">
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
