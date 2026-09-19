@@ -12,6 +12,7 @@ using CUE4Parse.UE4.Assets.Exports.Component.StaticMesh;
 using CUE4Parse.UE4.Assets.Exports.WorldPartition;
 using CUE4Parse.UE4.Assets.Objects;
 using CUE4Parse.UE4.Assets.Objects.Properties;
+using CUE4Parse.UE4.Assets;
 using CUE4Parse.UE4.Objects.Core.Misc;
 using CUE4Parse.UE4.Objects.Engine;
 using CUE4Parse.UE4.Objects.UObject;
@@ -520,8 +521,13 @@ public sealed class PakScanService : IPakScanService
         int lodCount = sm.RenderData?.LODs?.Length ?? 0;
         int materialCount = sm.StaticMaterials?.Length ?? sm.Materials?.Length ?? 0;
         var lod0 = sm.RenderData?.LODs?.Length > 0 ? sm.RenderData.LODs[0] : null;
-        int vertexCount = lod0?.NumVertices ?? 0;
-        int triangleCount = (lod0?.IndexBuffer?.Buffer?.Length ?? 0) / 3;
+        // NumVertices 只在 UE3 路径被赋值；UE5 cooked build 用 PositionVertexBuffer.NumVertices，
+        // 再 fallback 到 Sections 的 MaxVertexIndex 推算（non-inlined bulk data 时 PositionVertexBuffer 为 null）。
+        int vertexCount = lod0?.PositionVertexBuffer?.NumVertices
+            ?? (lod0?.Sections?.Length > 0 ? lod0.Sections.Max(s => s.MaxVertexIndex) + 1 : 0);
+        // IndexBuffer.Buffer 在 non-inlined bulk data 时为 null；Sections.NumTriangles 是直接序列化字段，始终可靠。
+        int triangleCount = lod0?.Sections?.Sum(s => s.NumTriangles)
+            ?? (lod0?.IndexBuffer?.Buffer?.Length ?? 0) / 3;
         return new PakMeshEntry(sm.Name, objectPath, PakMeshKind.StaticMesh, lodCount, materialCount, 0, vertexCount, triangleCount, pakChunkId);
     }
 
@@ -620,7 +626,6 @@ public sealed class PakScanService : IPakScanService
                 DefaultFileProvider provider;
                 if (_provider is not null)
                 {
-                    // 复用资产扫描已初始化的 provider
                     provider = _provider;
                 }
                 else
@@ -690,6 +695,26 @@ public sealed class PakScanService : IPakScanService
                     }
                 }
 
+                // 补充 World Partition streaming cells：路径含 _Generated_ 的 umap
+                // 是其父目录名对应 map 的子关卡（WP chain 在 cooked build 里无法从 umap 直接读取）
+                const string generatedMarker = "/_Generated_/";
+                foreach (var umapPath in umapPaths)
+                {
+                    var mapObjectPath = umapPath[..^".umap".Length];
+                    var idx = mapObjectPath.IndexOf(generatedMarker, StringComparison.OrdinalIgnoreCase);
+                    if (idx < 0) continue;
+
+                    // 父 map objectPath = _Generated_ 之前的部分
+                    var parentObjectPath = mapObjectPath[..idx];
+                    referencedLevels.Add(mapObjectPath);
+                    if (!levelInstanceRefs.TryGetValue(parentObjectPath, out var list))
+                    {
+                        list = new List<string>();
+                        levelInstanceRefs[parentObjectPath] = list;
+                    }
+                    list.Add(mapObjectPath);
+                }
+
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 var diagnostics = new List<Diagnostic>();
                 var perMapEntries = new List<MapMeshUsageEntry>(umapPaths.Count);
@@ -725,7 +750,7 @@ public sealed class PakScanService : IPakScanService
                         mapsWithErrors++;
                         scanned++;
                         var diag = new Diagnostic(DiagnosticSeverity.Warning, "PKS009",
-                            $"地图解析失败，已跳过：{umapPath} — {ex.Message}", umapPath);
+                            $"地图解析失败，已跳过：{umapPath} — [{ex.GetType().Name}] {ex.Message}\n{ex.StackTrace?.Split('\n').FirstOrDefault()}", umapPath);
                         diagnostics.Add(diag);
                         await channel.Writer.WriteAsync(new PakScanDiagnosticEntry(diag), cancellationToken);
                         await channel.Writer.WriteAsync(
@@ -825,8 +850,21 @@ public sealed class PakScanService : IPakScanService
         IReadOnlyDictionary<string, List<string>>? levelInstanceRefs = null,
         IReadOnlySet<string>? referencedLevels = null)
     {
-        if (!provider.TryLoadPackage(umapPath, out var pkg) || pkg is null)
-            throw new InvalidOperationException($"无法加载地图包：{umapPath}");
+        IPackage pkg;
+        try { pkg = provider.LoadPackage(umapPath); }
+        catch (Exception ex)
+        {
+            // 展开完整异常链以拿到根本原因
+            var chain = new System.Text.StringBuilder();
+            var e = ex;
+            while (e is not null)
+            {
+                chain.Append($"[{e.GetType().Name}] {e.Message}; ");
+                e = e.InnerException;
+            }
+            throw new InvalidOperationException(
+                $"无法加载地图包：{umapPath} — {chain}", ex);
+        }
 
         var world = pkg.GetExports().OfType<UWorld>().FirstOrDefault()
             ?? throw new InvalidOperationException($"地图包内未找到 UWorld 导出：{umapPath}");
@@ -1152,8 +1190,6 @@ public sealed class PakScanService : IPakScanService
         return result;
     }
 
-    /// <summary>
-    /// 递归展开一个子关卡的 mesh 统计，合并进父关卡的 meshCounts。
     /// visiting 用于检测循环引用；referencedLevels 用于判断子关卡是否已被收录（避免遗漏
     /// 仅被间接引用的层级）。
     /// </summary>

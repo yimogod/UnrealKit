@@ -75,7 +75,7 @@ internal static class ParseCommands
         var config = new PakScanConfig
         {
             AesKey = CliOptions.GetOptional(options, "--aes-key") ?? string.Empty,
-            GameVersion = CliOptions.GetOptional(options, "--game-version") ?? "GAME_UE5_3",
+            GameVersion = CliOptions.GetOptional(options, "--game-version") ?? "GAME_UE5_6",
             OodleDllPath = CliOptions.GetOptional(options, "--oodle-path") ?? string.Empty,
         };
         var result = await new PakScanService().ScanAsync(input, config);
@@ -98,7 +98,7 @@ internal static class ParseCommands
         var config = new PakScanConfig
         {
             AesKey = CliOptions.GetOptional(options, "--aes-key") ?? string.Empty,
-            GameVersion = CliOptions.GetOptional(options, "--game-version") ?? "GAME_UE5_3",
+            GameVersion = CliOptions.GetOptional(options, "--game-version") ?? "GAME_UE5_6",
             OodleDllPath = CliOptions.GetOptional(options, "--oodle-path") ?? string.Empty,
         };
         var result = await new PakScanService().ScanMapActorsAsync(input, config);

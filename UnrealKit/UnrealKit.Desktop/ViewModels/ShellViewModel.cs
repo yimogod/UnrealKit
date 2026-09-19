@@ -2486,8 +2486,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private async Task ExportSelectedMeshGlbAsync(string? objectPath)
     {
-        _meshExportCts?.Cancel();
-        _meshExportCts?.Dispose();
+        // 只 cancel 旧任务，不立刻 dispose——后台 Task.Run 还持有该 token，
+        // dispose 后再调用 ThrowIfCancellationRequested 会抛出非 OCE 异常。
+        var oldCts = _meshExportCts;
+        oldCts?.Cancel();
         _meshExportCts = null;
 
         MeshPreviewGlbPath = string.Empty;
@@ -2495,6 +2497,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         if (objectPath is null)
         {
             MeshPreviewStatus = string.Empty;
+            oldCts?.Dispose();
             return;
         }
 
@@ -2506,7 +2509,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         {
             var glbBytes = await _pakScanService.ExportMeshGlbAsync(objectPath, cts.Token);
 
-            if (cts.Token.IsCancellationRequested) return;
+            if (cts.IsCancellationRequested) return;
 
             if (glbBytes is null || glbBytes.Length == 0)
             {
@@ -2521,7 +2524,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(tmpPath)!);
             await System.IO.File.WriteAllBytesAsync(tmpPath, glbBytes, cts.Token);
 
-            if (!cts.Token.IsCancellationRequested)
+            if (!cts.IsCancellationRequested)
             {
                 MeshPreviewGlbPath = tmpPath;
                 MeshPreviewStatus = string.Empty;
@@ -2532,6 +2535,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         {
             if (!cts.IsCancellationRequested)
                 MeshPreviewStatus = $"导出失败：{ex.Message}";
+        }
+        finally
+        {
+            // 任务结束后才 dispose，此时后台线程已不再持有该 token。
+            cts.Dispose();
+            if (ReferenceEquals(_meshExportCts, cts))
+                _meshExportCts = null;
+            oldCts?.Dispose();
         }
     }
 
@@ -3425,7 +3436,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 case UnrealKit.Core.PakScan.PakMapMeshUsageFound:
                     break;
 
-                case UnrealKit.Core.PakScan.PakScanDiagnosticEntry:
+                case UnrealKit.Core.PakScan.PakScanDiagnosticEntry d:
+                    AddOperationLog(d.Diagnostic.Severity.ToString(), $"[{d.Diagnostic.Code}] {d.Diagnostic.Message}");
                     break;
 
                 case UnrealKit.Core.PakScan.PakMapScanCompleteEntry c:
