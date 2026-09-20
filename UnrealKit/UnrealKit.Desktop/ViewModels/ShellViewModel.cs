@@ -1665,6 +1665,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _ => $"{bytes / (1024.0 * 1024 * 1024):F2} GB"
     };
 
+    // -1 is the sentinel for "not available" (e.g. Win64 Nanite geometry not exposed by CUE4Parse).
+    private static string FormatMeshCount(int value) => value < 0 ? "N/A" : value.ToString();
+
     private Task ParseMemInfoAsync() => RunAsync("Parsing Android meminfo...", async _ =>
     {
         var inputPath = Path.GetFullPath(MemInfoInputPath);
@@ -2388,12 +2391,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             t.PakChunkId)));
         PakStaticMeshes.Reset(staticMeshes.Select(m => new PakScanStaticMeshOption(
             m.Name, m.ObjectPath,
-            m.LodCount.ToString(), m.MaterialCount.ToString(),
-            m.VertexCount.ToString(), m.TriangleCount.ToString(), m.PakChunkId)));
+            FormatMeshCount(m.LodCount), m.MaterialCount.ToString(),
+            FormatMeshCount(m.VertexCount), FormatMeshCount(m.TriangleCount), m.PakChunkId)));
         PakSkeletalMeshes.Reset(skeletalMeshes.Select(m => new PakScanSkeletalMeshOption(
             m.Name, m.ObjectPath,
-            m.LodCount.ToString(), m.MaterialCount.ToString(), m.BoneCount.ToString(),
-            m.VertexCount.ToString(), m.TriangleCount.ToString(), m.PakChunkId)));
+            FormatMeshCount(m.LodCount), m.MaterialCount.ToString(), m.BoneCount.ToString(),
+            FormatMeshCount(m.VertexCount), FormatMeshCount(m.TriangleCount), m.PakChunkId)));
         PakMaterials.Reset(materials.Select(m => new PakScanMaterialOption(
             m.Name, m.ObjectPath,
             m.BlendMode, m.ShadingModel,

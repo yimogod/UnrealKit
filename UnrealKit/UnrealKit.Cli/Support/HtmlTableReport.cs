@@ -380,6 +380,14 @@ internal static class PakScanHtmlBuilder
     }
 }
 
+// ── Mesh count formatter ─────────────────────────────────────────────────────
+
+/// <summary>-1 means "not available" (e.g. Win64 Nanite geometry not exposed by CUE4Parse).</summary>
+internal static class MeshFmt
+{
+    internal static object? Val(int v) => v < 0 ? (object?)"N/A" : v;
+}
+
 // ── PakScan StaticMesh HTML 构造器 ────────────────────────────────────────────
 
 internal static class PakScanStaticMeshHtmlBuilder
@@ -402,7 +410,7 @@ internal static class PakScanStaticMeshHtmlBuilder
 
         var rows = meshes.Select(m => new object?[]
         {
-            m.Name, m.LodCount, m.MaterialCount, m.VertexCount, m.TriangleCount, m.ObjectPath,
+            m.Name, MeshFmt.Val(m.LodCount), m.MaterialCount, MeshFmt.Val(m.VertexCount), MeshFmt.Val(m.TriangleCount), m.ObjectPath,
         }).ToArray();
 
         var meta = new HtmlMetaItem[]
@@ -441,7 +449,7 @@ internal static class PakScanSkeletalMeshHtmlBuilder
 
         var rows = meshes.Select(m => new object?[]
         {
-            m.Name, m.LodCount, m.MaterialCount, m.BoneCount, m.VertexCount, m.TriangleCount, m.ObjectPath,
+            m.Name, MeshFmt.Val(m.LodCount), m.MaterialCount, m.BoneCount, MeshFmt.Val(m.VertexCount), MeshFmt.Val(m.TriangleCount), m.ObjectPath,
         }).ToArray();
 
         var meta = new HtmlMetaItem[]
@@ -551,7 +559,7 @@ internal static class PakScanCsvBuilder
         var meshes = result.Report?.StaticMeshes ?? [];
         var rows = meshes.Select(m => new object?[]
         {
-            m.Name, m.LodCount, m.MaterialCount, m.VertexCount, m.TriangleCount, m.ObjectPath,
+            m.Name, MeshFmt.Val(m.LodCount), m.MaterialCount, MeshFmt.Val(m.VertexCount), MeshFmt.Val(m.TriangleCount), m.ObjectPath,
         }).ToArray();
         return CsvTableReport.Build(StaticMeshColumns, rows);
     }
@@ -561,7 +569,7 @@ internal static class PakScanCsvBuilder
         var meshes = result.Report?.SkeletalMeshes ?? [];
         var rows = meshes.Select(m => new object?[]
         {
-            m.Name, m.LodCount, m.MaterialCount, m.BoneCount, m.VertexCount, m.TriangleCount, m.ObjectPath,
+            m.Name, MeshFmt.Val(m.LodCount), m.MaterialCount, m.BoneCount, MeshFmt.Val(m.VertexCount), MeshFmt.Val(m.TriangleCount), m.ObjectPath,
         }).ToArray();
         return CsvTableReport.Build(SkeletalMeshColumns, rows);
     }

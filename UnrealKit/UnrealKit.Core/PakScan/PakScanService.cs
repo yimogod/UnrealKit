@@ -109,7 +109,7 @@ public sealed class PakScanService : IPakScanService
                         await channel.Writer.WriteAsync(new PakScanDiagnosticEntry(oodleDiag), cancellationToken);
                 }
 
-                var provider = new DefaultFileProvider(
+                var provider = new PakScanFileProvider(
                     pakDirectory,
                     SearchOption.AllDirectories,
                     new VersionContainer(game),
@@ -518,16 +518,30 @@ public sealed class PakScanService : IPakScanService
 
     private static PakMeshEntry BuildStaticMeshEntry(UStaticMesh sm, string objectPath, string pakChunkId)
     {
-        int lodCount = sm.RenderData?.LODs?.Length ?? 0;
-        int materialCount = sm.StaticMaterials?.Length ?? sm.Materials?.Length ?? 0;
-        var lod0 = sm.RenderData?.LODs?.Length > 0 ? sm.RenderData.LODs[0] : null;
+        // Win64 Nanite IoPackage: RenderData is null because geometry is stored in Nanite-private
+        // bulk format that CUE4Parse cannot decode. Return -1 as "N/A" sentinel for geometry fields.
+        bool hasRenderData = sm.RenderData?.LODs?.Length > 0;
+        int lodCount = hasRenderData ? sm.RenderData!.LODs!.Length : -1;
+
+        // Win64 IoPackage: sm.StaticMaterials typed field stays empty even when the property tag is
+        // present; TryGetValue reads directly from the serialized property bag and works for both.
+        int materialCount = sm.StaticMaterials?.Length > 0
+            ? sm.StaticMaterials.Length
+            : sm.Materials?.Length > 0
+                ? sm.Materials.Length
+                : (sm.TryGetValue<FStaticMaterial[]>(out var rawMats, "StaticMaterials") ? rawMats?.Length ?? 0 : 0);
+
+        if (!hasRenderData)
+            return new PakMeshEntry(sm.Name, objectPath, PakMeshKind.StaticMesh, -1, materialCount, 0, -1, -1, pakChunkId);
+
+        var lod0 = sm.RenderData!.LODs![0];
         // NumVertices 只在 UE3 路径被赋值；UE5 cooked build 用 PositionVertexBuffer.NumVertices，
         // 再 fallback 到 Sections 的 MaxVertexIndex 推算（non-inlined bulk data 时 PositionVertexBuffer 为 null）。
-        int vertexCount = lod0?.PositionVertexBuffer?.NumVertices
-            ?? (lod0?.Sections?.Length > 0 ? lod0.Sections.Max(s => s.MaxVertexIndex) + 1 : 0);
+        int vertexCount = lod0.PositionVertexBuffer?.NumVertices
+            ?? (lod0.Sections?.Length > 0 ? lod0.Sections.Max(s => s.MaxVertexIndex) + 1 : 0);
         // IndexBuffer.Buffer 在 non-inlined bulk data 时为 null；Sections.NumTriangles 是直接序列化字段，始终可靠。
-        int triangleCount = lod0?.Sections?.Sum(s => s.NumTriangles)
-            ?? (lod0?.IndexBuffer?.Buffer?.Length ?? 0) / 3;
+        int triangleCount = lod0.Sections?.Sum(s => s.NumTriangles)
+            ?? (lod0.IndexBuffer?.Buffer?.Length ?? 0) / 3;
         return new PakMeshEntry(sm.Name, objectPath, PakMeshKind.StaticMesh, lodCount, materialCount, 0, vertexCount, triangleCount, pakChunkId);
     }
 
@@ -1372,5 +1386,26 @@ public sealed class PakScanService : IPakScanService
         if (fixed2.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
             fixed2 = fixed2[..^".umap".Length];
         return fixed2;
+    }
+}
+
+/// <summary>
+/// 继承 DefaultFileProvider，在每次构造包时强制补上 PKG_FilterEditorOnly。
+/// Win64 cooked IoStore 包有时未设置该标志，导致 UStaticMesh.Deserialize 在
+/// !IsFilterEditorOnly 检查处提前 return，RenderData 始终为 null。
+/// </summary>
+internal sealed class PakScanFileProvider(
+    string directory,
+    SearchOption searchOption,
+    CUE4Parse.UE4.Versions.VersionContainer versions,
+    StringComparer pathComparer)
+    : CUE4Parse.FileProvider.DefaultFileProvider(directory, searchOption, versions, pathComparer)
+{
+    public override CUE4Parse.UE4.Assets.IPackage LoadPackage(CUE4Parse.FileProvider.Objects.GameFile file)
+    {
+        var pkg = base.LoadPackage(file);
+        if (!pkg.HasFlags(CUE4Parse.UE4.Objects.UObject.EPackageFlags.PKG_FilterEditorOnly))
+            pkg.Summary.PackageFlags |= CUE4Parse.UE4.Objects.UObject.EPackageFlags.PKG_FilterEditorOnly;
+        return pkg;
     }
 }

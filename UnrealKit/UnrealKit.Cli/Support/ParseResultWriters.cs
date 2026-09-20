@@ -200,14 +200,14 @@ internal static class ParseResultWriters
                 $"{t.Name}\t{t.ObjectPath}\t{t.SizeX}\t{t.SizeY}\t{t.PixelFormat}\t{t.LodBias}\t{t.LodGroup}\t{t.NumMips}\t{t.EstimatedSizeBytes}");
 
             // StaticMesh section
-            var smHeader = "Name\tPath\tLodCount\tMaterialCount";
+            var smHeader = "Name\tPath\tLodCount\tMaterialCount\tVertexCount\tTriangleCount";
             var smLines  = report.StaticMeshes.Select(m =>
-                $"{m.Name}\t{m.ObjectPath}\t{m.LodCount}\t{m.MaterialCount}");
+                $"{m.Name}\t{m.ObjectPath}\t{FmtMesh(m.LodCount)}\t{m.MaterialCount}\t{FmtMesh(m.VertexCount)}\t{FmtMesh(m.TriangleCount)}");
 
             // SkeletalMesh section
-            var skmHeader = "Name\tPath\tLodCount\tMaterialCount\tBoneCount";
+            var skmHeader = "Name\tPath\tLodCount\tMaterialCount\tBoneCount\tVertexCount\tTriangleCount";
             var skmLines  = report.SkeletalMeshes.Select(m =>
-                $"{m.Name}\t{m.ObjectPath}\t{m.LodCount}\t{m.MaterialCount}\t{m.BoneCount}");
+                $"{m.Name}\t{m.ObjectPath}\t{FmtMesh(m.LodCount)}\t{m.MaterialCount}\t{m.BoneCount}\t{FmtMesh(m.VertexCount)}\t{FmtMesh(m.TriangleCount)}");
 
             if (outputFile is not null)
             {
@@ -318,4 +318,7 @@ internal static class ParseResultWriters
         HtmlTableReport.WriteAndOpen(MapMeshLocalPlacementsHtmlBuilder.Build(result), localPath);
         CliOutput.WriteDiagnostics(result.Diagnostics);
     }
+
+    // -1 is the sentinel for "not available" (e.g. Win64 Nanite geometry not exposed by CUE4Parse).
+    private static string FmtMesh(int value) => value < 0 ? "N/A" : value.ToString();
 }
