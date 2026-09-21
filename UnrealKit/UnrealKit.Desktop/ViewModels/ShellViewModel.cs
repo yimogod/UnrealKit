@@ -723,6 +723,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(PlatformScopeDescription));
             ApplyPlatformScope();
             _ = RememberPlatformScopeAsync(scope);
+            // 作用域切到具体平台时同步下载平台，省去下载页再选一次。
+            if (!scope.IsAll)
+                DownloadPlatform = scope.Name;
         }
     }
 

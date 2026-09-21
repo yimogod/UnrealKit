@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Threading.Channels;
 using CUE4Parse.Compression;
 using CUE4Parse.Encryption.Aes;
@@ -154,6 +154,8 @@ public sealed class PakScanService : IPakScanService
 
                 await channel.Writer.WriteAsync(new PakScanStartEntry(totalCount), cancellationToken);
 
+                Dictionary<string, string> TempDict = new Dictionary<string, string>();
+
                 foreach (var path in allPaths)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -167,6 +169,10 @@ public sealed class PakScanService : IPakScanService
                         // 先读 package header 拿类名，只对目标类型做完整反序列化；
                         // IoPackage 或失败时 className 为 null，退回盲试。
                         var className = GetExportClassName(provider, path);
+                        if(className == null)TempDict.Add(path, "Null");
+                        else TempDict.Add(path, className);
+                        
+
                         if (className == "Texture2D")
                         {
                             if (provider.TryLoadPackageObject<UTexture2D>(objectPath, out var tex) && tex is not null)
@@ -245,6 +251,7 @@ public sealed class PakScanService : IPakScanService
                 }
 
                 sw.Stop();
+
                 await channel.Writer.WriteAsync(new PakScanDiagnosticEntry(new Diagnostic(DiagnosticSeverity.Information, "PKS006",
                     $"扫描完成：{textureCount} 个 Texture2D，{staticMeshCount} 个 StaticMesh，{skeletalMeshCount} 个 SkeletalMesh，{materialCount} 个 Material，共扫描 {scannedCount} 个资产，耗时 {FormatElapsed(sw.Elapsed)}")), cancellationToken);
 
@@ -368,7 +375,7 @@ public sealed class PakScanService : IPakScanService
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 using var dto = new StaticMeshDto(sm, options.MeshQuality, options.NaniteMeshFormat);
-                if (dto.LODs.Count == 0) return null;
+                if (dto == null || dto.LODs.Count == 0) return null;
                 var files = new GltfMeshFormat().BuildStaticMesh(sm.Name, objectPath, options, dto);
                 return files.FirstOrDefault(f => f.Extension == "glb").Data;
             }
