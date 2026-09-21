@@ -1244,6 +1244,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             {
                 OnPropertyChanged(nameof(PlatformScopeDescription));
                 ApplyPlatformScope();
+                if (!scope.IsAll)
+                    DownloadPlatform = scope.Name;
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

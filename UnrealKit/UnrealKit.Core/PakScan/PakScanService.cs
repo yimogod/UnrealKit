@@ -109,7 +109,7 @@ public sealed class PakScanService : IPakScanService
                         await channel.Writer.WriteAsync(new PakScanDiagnosticEntry(oodleDiag), cancellationToken);
                 }
 
-                var provider = new PakScanFileProvider(
+                var provider = new DefaultFileProvider(
                     pakDirectory,
                     SearchOption.AllDirectories,
                     new VersionContainer(game),
@@ -1396,23 +1396,3 @@ public sealed class PakScanService : IPakScanService
     }
 }
 
-/// <summary>
-/// 继承 DefaultFileProvider，在每次构造包时强制补上 PKG_FilterEditorOnly。
-/// Win64 cooked IoStore 包有时未设置该标志，导致 UStaticMesh.Deserialize 在
-/// !IsFilterEditorOnly 检查处提前 return，RenderData 始终为 null。
-/// </summary>
-internal sealed class PakScanFileProvider(
-    string directory,
-    SearchOption searchOption,
-    CUE4Parse.UE4.Versions.VersionContainer versions,
-    StringComparer pathComparer)
-    : CUE4Parse.FileProvider.DefaultFileProvider(directory, searchOption, versions, pathComparer)
-{
-    public override CUE4Parse.UE4.Assets.IPackage LoadPackage(CUE4Parse.FileProvider.Objects.GameFile file)
-    {
-        var pkg = base.LoadPackage(file);
-        if (!pkg.HasFlags(CUE4Parse.UE4.Objects.UObject.EPackageFlags.PKG_FilterEditorOnly))
-            pkg.Summary.PackageFlags |= CUE4Parse.UE4.Objects.UObject.EPackageFlags.PKG_FilterEditorOnly;
-        return pkg;
-    }
-}
