@@ -138,6 +138,7 @@ public sealed class PakScanService : IPakScanService
                 }
 
                 await provider.MountAsync();
+                provider.PostMount();
 
                 var allPaths = provider.Files.Keys
                     .Where(p => p.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase))
