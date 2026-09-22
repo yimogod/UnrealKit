@@ -239,6 +239,59 @@ public sealed class RemoteControlServiceTests
         Assert.Null(handler.CapturedRequest);
     }
 
+    [Fact]
+    public async Task SetActorHiddenInGameAsync_PutsActorObjectAndHiddenState()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var service = new RemoteControlService(new HttpClient(handler));
+
+        await service.SetActorHiddenInGameAsync(new RemoteControlActorVisibilityRequest(
+            30010,
+            "/Game/Maps/Test.Test:PersistentLevel.StaticMeshActor_0"), hidden: true);
+
+        using var document = JsonDocument.Parse(handler.CapturedContent!);
+        var root = document.RootElement;
+        Assert.Equal("/Game/Maps/Test.Test:PersistentLevel.StaticMeshActor_0", root.GetProperty("objectPath").GetString());
+        Assert.Equal("SetActorHiddenInGame", root.GetProperty("functionName").GetString());
+        Assert.True(root.GetProperty("parameters").GetProperty("bNewHidden").GetBoolean());
+        Assert.True(root.GetProperty("generateTransaction").GetBoolean());
+    }
+
+    [Fact]
+    public async Task QueryActorHiddenInGameAsync_DoesNotCreateTransaction()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ReturnValue":false}""", Encoding.UTF8, "application/json")
+        });
+        var service = new RemoteControlService(new HttpClient(handler));
+
+        var result = await service.QueryActorHiddenInGameAsync(new RemoteControlActorVisibilityRequest(
+            30010,
+            "/Game/Maps/Test.Test:PersistentLevel.StaticMeshActor_0"));
+
+        Assert.Contains("""{"ReturnValue":false}""", result.StandardOutput);
+        using var document = JsonDocument.Parse(handler.CapturedContent!);
+        var root = document.RootElement;
+        Assert.Equal("GetActorHiddenInGame", root.GetProperty("functionName").GetString());
+        Assert.False(root.GetProperty("generateTransaction").GetBoolean());
+    }
+
+    [Fact]
+    public async Task HttpCommandTransport_UsesConfiguredLocalForwardPortForEveryHttpCall()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var remoteControl = new RemoteControlService(new HttpClient(handler));
+        var transport = new UnrealKit.Core.CommandChannel.HttpCommandTransport(
+            new RemoteControlOptions(30010, "/Script/Engine.Default__KismetSystemLibrary", "ExecuteConsoleCommand", "Command", 30011),
+            remoteControl,
+            useLocalForwardPort: true);
+
+        await transport.SetActorHiddenInGameAsync("/Game/Maps/Test.Test:PersistentLevel.StaticMeshActor_0", hidden: true);
+
+        Assert.Equal(new Uri("http://127.0.0.1:30011/remote/object/call"), handler.CapturedRequest!.RequestUri);
+    }
+
     private sealed class ThrowingHttpMessageHandler(Exception exception) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

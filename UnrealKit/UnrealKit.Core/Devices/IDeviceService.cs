@@ -88,6 +88,29 @@ public interface IDeviceService : IDeviceProvider
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>读取指定运行时 Actor 是否在游戏中隐藏。</summary>
+    Task<ProcessExecutionResult> QueryActorHiddenInGameAsync(
+        IDevice device,
+        string actorObjectPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        throw new DeviceCapabilityNotSupportedException(
+            DeviceCapability.SendConsoleCommand,
+            "当前",
+            "请先用 Supports(DeviceCapability.SendConsoleCommand) 探测能力再调用。");
+
+    /// <summary>设置指定运行时 Actor 在游戏中的隐藏状态。</summary>
+    Task<ProcessExecutionResult> SetActorHiddenInGameAsync(
+        IDevice device,
+        string actorObjectPath,
+        bool hidden,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        throw new DeviceCapabilityNotSupportedException(
+            DeviceCapability.SendConsoleCommand,
+            "当前",
+            "请先用 Supports(DeviceCapability.SendConsoleCommand) 探测能力再调用。");
+
     /// <summary>
     /// 流式读取 UE 日志输出。平台不支持时抛出 <see cref="DeviceCapabilityNotSupportedException"/>，
     /// 不返回空流——空流无法与「有日志能力但暂时无输出」区分。

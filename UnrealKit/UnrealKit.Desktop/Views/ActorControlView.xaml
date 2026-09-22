@@ -1,0 +1,41 @@
+<UserControl x:Class="UnrealKit.Desktop.Views.ActorControlView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <DockPanel LastChildFill="False">
+            <TextBlock DockPanel.Dock="Left" Text="运行中 Actor" Style="{StaticResource SectionTitleTextStyle}" />
+            <Button DockPanel.Dock="Right" Content="刷新 Actor" Command="{Binding RefreshRuntimeActorsCommand}"
+                    Padding="18,6" ToolTip="发送 obj list class=Actor，下载 Saved/Logs 后读取当前日志" />
+        </DockPanel>
+        <TextBlock Grid.Row="1" Margin="0,8,0,8" Text="刷新会下载 Saved/Logs，选择唯一不含 backup 的当前日志并解析最后一个 Actor 列表。双击 Actor 可在游戏中隐藏或显示它。"
+                   Style="{StaticResource HintTextStyle}" />
+        <DataGrid Grid.Row="2" ItemsSource="{Binding RuntimeActors}" AutoGenerateColumns="False" IsReadOnly="True"
+                  CanUserAddRows="False" HeadersVisibility="Column" BorderBrush="#FFE2E6EA" BorderThickness="1">
+            <DataGrid.InputBindings>
+                <MouseBinding MouseAction="LeftDoubleClick" Command="{Binding ToggleRuntimeActorVisibilityCommand}"
+                              CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+            </DataGrid.InputBindings>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="名称" Binding="{Binding Name}" Width="2*" />
+                <DataGridTextColumn Header="类型" Binding="{Binding ClassName}" Width="*" />
+                <DataGridTextColumn Header="状态" Binding="{Binding Visibility}" Width="90" />
+                <DataGridTextColumn Header="Num KB" Binding="{Binding NumKb}" Width="85" />
+                <DataGridTextColumn Header="Max KB" Binding="{Binding MaxKb}" Width="85" />
+                <DataGridTextColumn Header="Res Exc KB" Binding="{Binding ResExcKb}" Width="90" />
+                <DataGridTextColumn Header="Ded Sys KB" Binding="{Binding ResExcDedSysKb}" Width="95" />
+                <DataGridTextColumn Header="Ded Vid KB" Binding="{Binding ResExcDedVidKb}" Width="95" />
+                <DataGridTextColumn Header="Unk KB" Binding="{Binding ResExcUnkKb}" Width="85" />
+                <DataGridTextColumn Header="Object Path" Binding="{Binding ObjectPath}" Width="3*" />
+            </DataGrid.Columns>
+        </DataGrid>
+        <TextBox Grid.Row="3" Margin="0,8,0,0" Text="{Binding ActorControlOutput, Mode=OneWay}"
+                 Style="{StaticResource ConsoleEchoTextBoxStyle}" />
+    </Grid>
+</UserControl>

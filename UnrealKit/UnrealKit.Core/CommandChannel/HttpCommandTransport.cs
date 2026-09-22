@@ -15,13 +15,16 @@ public sealed class HttpCommandTransport : ICommandTransport
 {
     private readonly RemoteControlOptions _options;
     private readonly IRemoteControlService _remoteControl;
+    private readonly int _connectionPort;
 
     public HttpCommandTransport(
         RemoteControlOptions? options = null,
-        IRemoteControlService? remoteControlService = null)
+        IRemoteControlService? remoteControlService = null,
+        bool useLocalForwardPort = false)
     {
         _options = options ?? RemoteControlOptions.Default;
         _remoteControl = remoteControlService ?? new RemoteControlService();
+        _connectionPort = useLocalForwardPort ? _options.EffectiveForwardPort : _options.HttpPort;
     }
 
     public CommandTransportKind Kind => CommandTransportKind.Http;
@@ -39,7 +42,7 @@ public sealed class HttpCommandTransport : ICommandTransport
 
         return TranslateFailuresAsync(() => _remoteControl.SendConsoleCommandAsync(
             new RemoteControlCommandRequest(
-                _options.HttpPort,
+                _connectionPort,
                 _options.ObjectPath,
                 _options.FunctionName,
                 _options.CommandParameterName,
@@ -64,12 +67,40 @@ public sealed class HttpCommandTransport : ICommandTransport
 
         return TranslateFailuresAsync(() => _remoteControl.QueryConsoleVariableAsync(
             new RemoteControlVariableQueryRequest(
-                _options.HttpPort,
+                _connectionPort,
                 _options.ObjectPath,
                 variableName,
                 variableType == ConsoleVariableType.Bool
                     ? RemoteControlVariableType.Bool
                     : RemoteControlVariableType.Number),
+            progress,
+            cancellationToken));
+    }
+
+    public Task<ProcessExecutionResult> QueryActorHiddenInGameAsync(
+        string actorObjectPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorObjectPath);
+
+        return TranslateFailuresAsync(() => _remoteControl.QueryActorHiddenInGameAsync(
+            new RemoteControlActorVisibilityRequest(_connectionPort, actorObjectPath),
+            progress,
+            cancellationToken));
+    }
+
+    public Task<ProcessExecutionResult> SetActorHiddenInGameAsync(
+        string actorObjectPath,
+        bool hidden,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorObjectPath);
+
+        return TranslateFailuresAsync(() => _remoteControl.SetActorHiddenInGameAsync(
+            new RemoteControlActorVisibilityRequest(_connectionPort, actorObjectPath),
+            hidden,
             progress,
             cancellationToken));
     }

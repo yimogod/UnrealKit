@@ -78,6 +78,9 @@ public sealed record RemoteControlTeleportRequest(
     string ObjectPath,
     double X, double Y, double Z,
     double Pitch, double Yaw, double Roll);
+
+/// <summary>指定运行时 Actor 的 Web Remote Control 请求。</summary>
+public sealed record RemoteControlActorVisibilityRequest(int HttpPort, string ObjectPath);
 ///
 /// 与 <see cref="RemoteControlCommandRequest"/> 走**同一个** HTTP 端点
 /// （<c>PUT http://127.0.0.1:{port}/remote/object/call</c>）和同一个 objectPath，

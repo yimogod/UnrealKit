@@ -16,7 +16,7 @@ public interface ICommandTransport
     CommandTransportKind Kind { get; }
 
     /// <summary>
-    /// 通道在设备上监听的端口。HTTP 连接用这个端口。
+    /// 通道在设备上监听的端口。Android 将本地 <see cref="ForwardPort"/> 转发到此端口。
     /// </summary>
     int Port { get; }
 
@@ -44,6 +44,19 @@ public interface ICommandTransport
     Task<ProcessExecutionResult> QueryConsoleVariableAsync(
         string variableName,
         ConsoleVariableType variableType,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>读取指定运行时 Actor 是否在游戏中隐藏。</summary>
+    Task<ProcessExecutionResult> QueryActorHiddenInGameAsync(
+        string actorObjectPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>设置指定运行时 Actor 在游戏中的隐藏状态。</summary>
+    Task<ProcessExecutionResult> SetActorHiddenInGameAsync(
+        string actorObjectPath,
+        bool hidden,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
 }

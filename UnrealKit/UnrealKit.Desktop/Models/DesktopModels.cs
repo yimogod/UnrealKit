@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.IO;
+using UnrealKit.Core.ActorControl;
 using UnrealKit.Core.Console;
 using UnrealKit.Core.Projects;
 
@@ -252,4 +253,52 @@ public sealed record CameraPresetOption(CameraPreset Preset)
         string.Create(
             System.Globalization.CultureInfo.InvariantCulture,
             $"P={Preset.Pitch:F1}  Y={Preset.Yaw:F1}  R={Preset.Roll:F1}");
+}
+
+/// <summary>运行中 Actor 的界面投影。ObjectPath 是 Remote Control 调用的唯一标识。</summary>
+public sealed class RuntimeActorOption : INotifyPropertyChanged
+{
+    private bool _isHidden;
+
+    public RuntimeActorOption(RuntimeActorEntry actor)
+    {
+        ObjectPath = actor.ObjectPath;
+        ClassName = actor.ClassName;
+        Name = actor.ObjectPath[(actor.ObjectPath.LastIndexOf('.') + 1)..];
+        NumKb = Format(actor.NumKb);
+        MaxKb = Format(actor.MaxKb);
+        ResExcKb = Format(actor.ResExcKb);
+        ResExcDedSysKb = Format(actor.ResExcDedSysKb);
+        ResExcDedVidKb = Format(actor.ResExcDedVidKb);
+        ResExcUnkKb = Format(actor.ResExcUnkKb);
+        LineNumber = actor.LineNumber;
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public string ObjectPath { get; }
+    public string Name { get; }
+    public string ClassName { get; }
+    public string NumKb { get; }
+    public string MaxKb { get; }
+    public string ResExcKb { get; }
+    public string ResExcDedSysKb { get; }
+    public string ResExcDedVidKb { get; }
+    public string ResExcUnkKb { get; }
+    public int LineNumber { get; }
+    public string Visibility => IsHidden ? "已隐藏" : "显示";
+
+    public bool IsHidden
+    {
+        get => _isHidden;
+        set
+        {
+            if (_isHidden == value) return;
+            _isHidden = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsHidden)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Visibility)));
+        }
+    }
+
+    private static string Format(decimal value) => value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 }

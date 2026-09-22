@@ -303,6 +303,45 @@ public sealed class Win64DeviceService : IDeviceService
         }
     }
 
+    public async Task<ProcessExecutionResult> QueryActorHiddenInGameAsync(
+        IDevice device,
+        string actorObjectPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorObjectPath);
+
+        try
+        {
+            return await _commandTransport.QueryActorHiddenInGameAsync(actorObjectPath, progress, cancellationToken);
+        }
+        catch (CommandTransportException exception)
+        {
+            throw new DeviceCommandException(exception.Message, exception.Result, exception);
+        }
+    }
+
+    public async Task<ProcessExecutionResult> SetActorHiddenInGameAsync(
+        IDevice device,
+        string actorObjectPath,
+        bool hidden,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorObjectPath);
+
+        try
+        {
+            return await _commandTransport.SetActorHiddenInGameAsync(actorObjectPath, hidden, progress, cancellationToken);
+        }
+        catch (CommandTransportException exception)
+        {
+            throw new DeviceCommandException(exception.Message, exception.Result, exception);
+        }
+    }
+
     /// <summary>
     /// Win64 上流式读取日志暂不支持。抛出而不是返回空流：
     /// 空流会被调用方误读为「已连接但暂无日志」。

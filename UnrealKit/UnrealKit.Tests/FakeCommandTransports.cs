@@ -23,6 +23,8 @@ internal sealed class RecordingCommandTransport(
 
     /// <summary>收到的 cvar 读回请求，按顺序记录。</summary>
     public List<(string VariableName, ConsoleVariableType VariableType)> Queries { get; } = [];
+    public List<string> ActorVisibilityQueries { get; } = [];
+    public List<(string ActorObjectPath, bool Hidden)> ActorVisibilitySets { get; } = [];
 
     /// <summary>读回时返回的响应 body。默认是 Remote Control 对数值 cvar 的回包形状。</summary>
     public string QueryResponseBody { get; set; } = """{"ReturnValue":80.0}""";
@@ -46,6 +48,27 @@ internal sealed class RecordingCommandTransport(
         Queries.Add((variableName, variableType));
         return Task.FromResult(new ProcessExecutionResult(
             0, QueryResponseBody, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+    }
+
+    public Task<ProcessExecutionResult> QueryActorHiddenInGameAsync(
+        string actorObjectPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ActorVisibilityQueries.Add(actorObjectPath);
+        return Task.FromResult(new ProcessExecutionResult(
+            0, """{"ReturnValue":false}""", string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+    }
+
+    public Task<ProcessExecutionResult> SetActorHiddenInGameAsync(
+        string actorObjectPath,
+        bool hidden,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ActorVisibilitySets.Add((actorObjectPath, hidden));
+        return Task.FromResult(new ProcessExecutionResult(
+            0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
     }
 }
 
@@ -75,6 +98,19 @@ internal sealed class FailingCommandTransport(
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default) =>
         throw Failure(variableName);
+
+    public Task<ProcessExecutionResult> QueryActorHiddenInGameAsync(
+        string actorObjectPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        throw Failure(actorObjectPath);
+
+    public Task<ProcessExecutionResult> SetActorHiddenInGameAsync(
+        string actorObjectPath,
+        bool hidden,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        throw Failure(actorObjectPath);
 
     private CommandTransportException Failure(string subject) =>
         new(code,

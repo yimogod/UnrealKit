@@ -39,4 +39,17 @@ public interface IRemoteControlService
         RemoteControlTeleportRequest request,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>读取指定 Actor 在游戏中的隐藏状态。</summary>
+    Task<ProcessExecutionResult> QueryActorHiddenInGameAsync(
+        RemoteControlActorVisibilityRequest request,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>设置指定 Actor 在游戏中的隐藏状态。</summary>
+    Task<ProcessExecutionResult> SetActorHiddenInGameAsync(
+        RemoteControlActorVisibilityRequest request,
+        bool hidden,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
 }

@@ -37,7 +37,7 @@ public sealed class AdbDeviceService : IDeviceService
     {
         _adb = adb ?? throw new ArgumentNullException(nameof(adb));
         _commandTransport = commandTransport
-            ?? (channelOptions ?? CommandChannelOptions.Default).CreateTransport();
+            ?? (channelOptions ?? CommandChannelOptions.Default).CreateTransport(useLocalForwardPort: true);
     }
 
     public TargetPlatform Platform => TargetPlatform.Android;
@@ -192,6 +192,47 @@ public sealed class AdbDeviceService : IDeviceService
         {
             return await _commandTransport.QueryConsoleVariableAsync(
                 variableName, variableType, progress, cancellationToken);
+        }
+        catch (CommandTransportException exception)
+        {
+            throw new DeviceCommandException(exception.Message, exception.Result, exception);
+        }
+    }
+
+    public async Task<ProcessExecutionResult> QueryActorHiddenInGameAsync(
+        IDevice device,
+        string actorObjectPath,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorObjectPath);
+        await EnsurePortForwardedAsync(device, progress, cancellationToken);
+
+        try
+        {
+            return await _commandTransport.QueryActorHiddenInGameAsync(actorObjectPath, progress, cancellationToken);
+        }
+        catch (CommandTransportException exception)
+        {
+            throw new DeviceCommandException(exception.Message, exception.Result, exception);
+        }
+    }
+
+    public async Task<ProcessExecutionResult> SetActorHiddenInGameAsync(
+        IDevice device,
+        string actorObjectPath,
+        bool hidden,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorObjectPath);
+        await EnsurePortForwardedAsync(device, progress, cancellationToken);
+
+        try
+        {
+            return await _commandTransport.SetActorHiddenInGameAsync(actorObjectPath, hidden, progress, cancellationToken);
         }
         catch (CommandTransportException exception)
         {

@@ -6,10 +6,12 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Windows.Input;
 using UnrealKit.Core.Adb;
+using UnrealKit.Core.ActorControl;
 using UnrealKit.Core.Analysis;
 using UnrealKit.Core.Capture;
 using UnrealKit.Core.Console;
 using UnrealKit.Core.Devices;
+using UnrealKit.Core.Diagnostics;
 using UnrealKit.Core.Download;
 using UnrealKit.Core.Export;
 using UnrealKit.Core.Launch;
@@ -133,6 +135,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _cameraOutput = string.Empty;
     private bool _isCameraJumping;
     private string _defaultPawnPath = string.Empty;
+    private string _actorControlOutput = "点击「刷新 Actor」读取当前运行地图中的 Actor。";
+    private bool _isRefreshingActors;
+    private bool _isTogglingActorVisibility;
     private string _ftpHost = string.Empty;
     private string _ftpPort = FtpSettings.DefaultPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private string _ftpUsername = string.Empty;
@@ -279,6 +284,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _jumpToCameraCommand = new AsyncDelegateCommand(
             JumpToCameraAsync,
             () => !IsBusy && _selectedDevice is not null && _selectedCameraPreset is not null);
+        _refreshRuntimeActorsCommand = new AsyncDelegateCommand(
+            RefreshRuntimeActorsAsync,
+            () => !IsBusy && _selectedDevice is not null);
+        _toggleRuntimeActorVisibilityCommand = new ParameterizedAsyncDelegateCommand<RuntimeActorOption>(
+            ToggleRuntimeActorVisibilityAsync,
+            () => !IsBusy && _selectedDevice is not null);
         DownloadCommand = new AsyncDelegateCommand(DownloadLatestAsync, CanDownloadLatest);
         InstallDownloadedApkCommand = new AsyncDelegateCommand(InstallDownloadedApkAsync, CanInstallDownloadedApk);
         OpenDownloadedDirectoryCommand = new AsyncDelegateCommand(
@@ -309,6 +320,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     /// <summary>工程中所有相机预设涉及的地图名列表，供地图选择下拉使用。</summary>
     public ObservableCollection<string> CameraMapNames { get; } = [];
+
+    /// <summary>当前运行地图中的 Actor；仅由用户点击刷新后更新。</summary>
+    public ObservableCollection<RuntimeActorOption> RuntimeActors { get; } = [];
 
     /// <summary>
     /// 控制台预设指令。界面用 <c>CollectionViewSource</c> 按 <c>Group</c> 分组显示，
@@ -413,6 +427,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "启动参数" => "选择预设并预览 uecommandline.txt，然后推送到已明确选择的设备。",
         "控制台" => "向运行中的 UE 应用发送控制台指令。预设指令按分组列出，开关与数值型可读回游戏中的当前值。",
         "相机指令" => "选择地图，从预设列表中选定相机位置，点击跳转将相机移动到指定坐标和旋转。",
+        "Actor控制" => "刷新当前游戏地图中的 Actor；双击列表项可在显示和隐藏之间切换。",
         "指令序列" => "按顺序执行指令序列（指令 → 等待 → 标记），支持工程预设和内联输入。",
         "采集归档" => "将采集数据归档到新的 Content Capture，避免覆盖历史数据。",
         "RenderDoc" => "调用独立的 RenderDoc Python 脚本，查看退出码与输出目录。",
@@ -1361,6 +1376,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         // 相机预设：按地图分组，默认选首个地图
         CameraMapNames.Clear();
         CameraPresets.Clear();
+        RuntimeActors.Clear();
+        ActorControlOutput = "点击「刷新 Actor」读取当前运行地图中的 Actor。";
         foreach (var map in project.Settings.Cameras.Select(c => c.MapName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(m => m, StringComparer.OrdinalIgnoreCase))
         {
             CameraMapNames.Add(map);
@@ -3076,6 +3093,30 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand JumpToCameraCommand => _jumpToCameraCommand;
     private AsyncDelegateCommand _jumpToCameraCommand;
 
+    public string ActorControlOutput
+    {
+        get => _actorControlOutput;
+        private set => SetField(ref _actorControlOutput, value ?? string.Empty);
+    }
+
+    public bool IsRefreshingActors
+    {
+        get => _isRefreshingActors;
+        private set => SetField(ref _isRefreshingActors, value);
+    }
+
+    public bool IsTogglingActorVisibility
+    {
+        get => _isTogglingActorVisibility;
+        private set => SetField(ref _isTogglingActorVisibility, value);
+    }
+
+    public ICommand RefreshRuntimeActorsCommand => _refreshRuntimeActorsCommand;
+    private readonly AsyncDelegateCommand _refreshRuntimeActorsCommand;
+
+    public ICommand ToggleRuntimeActorVisibilityCommand => _toggleRuntimeActorVisibilityCommand;
+    private readonly ParameterizedAsyncDelegateCommand<RuntimeActorOption> _toggleRuntimeActorVisibilityCommand;
+
     public ICommand RunConsoleSequenceCommand => _runConsoleSequenceCommand;
     private AsyncDelegateCommand _runConsoleSequenceCommand;
 
@@ -3383,6 +3424,122 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
     }
 
+    private Task RefreshRuntimeActorsAsync() => RunAsync("正在刷新运行中 Actor…", async progress =>
+    {
+        if (_selectedDevice is null) return;
+
+        var service = ResolveDeviceServiceForDevice(_selectedDevice.Device);
+        if (!service.Supports(DeviceCapability.SendConsoleCommand))
+        {
+            ActorControlOutput = $"[SKIP] {_selectedDevice.Platform} 平台暂不支持 UE 控制台指令。";
+            return;
+        }
+
+        IsRefreshingActors = true;
+        RuntimeActors.Clear();
+        ActorControlOutput = "正在请求 Actor 列表并下载日志…";
+
+        try
+        {
+            var result = await new RuntimeActorService(service).RefreshAsync(
+                new RuntimeActorRefreshRequest(_project!, _selectedDevice.Device), progress, OperationCancellationToken);
+            foreach (var actor in result.ParseResult.Actors)
+            {
+                var option = new RuntimeActorOption(actor);
+                var visibility = await service.QueryActorHiddenInGameAsync(
+                    _selectedDevice.Device,
+                    option.ObjectPath,
+                    cancellationToken: OperationCancellationToken);
+                option.IsHidden = TryParseActorHiddenInGame(visibility.StandardOutput, out var hidden) && hidden;
+                RuntimeActors.Add(option);
+            }
+
+            var errors = result.ParseResult.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
+            ActorControlOutput = errors.Length > 0
+                ? $"Actor 日志解析失败：{string.Join("; ", errors.Select(diagnostic => diagnostic.Message))}"
+                : $"已从 {Path.GetFileName(result.CurrentLogPath)} 获取 {result.ParseResult.Actors.Count} 个 Actor。双击任一项切换显示状态。";
+            StatusMessage = $"Actor 列表已刷新：{result.ParseResult.Actors.Count} 项。";
+        }
+        catch (OperationCanceledException)
+        {
+            ActorControlOutput = "获取 Actor 列表已取消。";
+        }
+        catch (Exception exception)
+        {
+            ActorControlOutput = $"[ERROR] 获取 Actor 列表失败：{exception.Message}";
+        }
+        finally
+        {
+            IsRefreshingActors = false;
+        }
+    });
+
+    private async Task ToggleRuntimeActorVisibilityAsync(RuntimeActorOption actor)
+    {
+        if (actor is null || _selectedDevice is null) return;
+
+        var service = ResolveDeviceServiceForDevice(_selectedDevice.Device);
+        if (!service.Supports(DeviceCapability.SendConsoleCommand))
+        {
+            ActorControlOutput = $"[SKIP] {_selectedDevice.Platform} 平台暂不支持 Actor 控制。";
+            return;
+        }
+
+        IsTogglingActorVisibility = true;
+        var newHidden = !actor.IsHidden;
+        ActorControlOutput = $"正在{(newHidden ? "隐藏" : "显示")}「{actor.Name}」…";
+        try
+        {
+            var result = await service.SetActorHiddenInGameAsync(
+                _selectedDevice.Device,
+                actor.ObjectPath,
+                newHidden,
+                cancellationToken: OperationCancellationToken);
+
+            if (!result.Succeeded)
+            {
+                ActorControlOutput = $"[FAIL] {actor.Name}：{result.StandardError}";
+                return;
+            }
+
+            actor.IsHidden = newHidden;
+            ActorControlOutput = $"[OK] 已{(newHidden ? "隐藏" : "显示")}「{actor.Name}」。";
+        }
+        catch (Exception exception)
+        {
+            ActorControlOutput = $"[ERROR] {actor.Name}：{exception.Message}";
+        }
+        finally
+        {
+            IsTogglingActorVisibility = false;
+        }
+    }
+
+    private static bool TryParseActorHiddenInGame(string response, out bool hidden)
+    {
+        hidden = false;
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(response);
+            if (!document.RootElement.TryGetProperty("ReturnValue", out var returnValue)) return false;
+
+            hidden = returnValue.ValueKind switch
+            {
+                System.Text.Json.JsonValueKind.True => true,
+                System.Text.Json.JsonValueKind.False => false,
+                System.Text.Json.JsonValueKind.Number => returnValue.GetInt32() != 0,
+                _ => false
+            };
+            return returnValue.ValueKind is System.Text.Json.JsonValueKind.True
+                or System.Text.Json.JsonValueKind.False
+                or System.Text.Json.JsonValueKind.Number;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
     private string GetPawnPathForMap(string mapName) =>
         _project?.Settings.DefaultPawnPaths is { } paths
             && paths.TryGetValue(mapName, out var path) ? path : string.Empty;
@@ -3529,13 +3686,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, ScanPakCommand, ScanMapActorsCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand, _jumpToCameraCommand, TakeScreenshotCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, ScanPakCommand, ScanMapActorsCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand, _jumpToCameraCommand, _refreshRuntimeActorsCommand, TakeScreenshotCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }
 
         // 参数化命令不是 AsyncDelegateCommand，上面的 OfType 过滤覆盖不到它。
         _applyConsoleCommandPresetCommand.RaiseCanExecuteChanged();
+        _toggleRuntimeActorVisibilityCommand.RaiseCanExecuteChanged();
         (OpenSavedDirectoryCommand as DelegateCommand)?.RaiseCanExecuteChanged();
         (ExportPakScanHtmlCommand as DelegateCommand)?.RaiseCanExecuteChanged();
         (ExportPakScanCsvCommand  as DelegateCommand)?.RaiseCanExecuteChanged();

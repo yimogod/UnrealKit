@@ -87,6 +87,8 @@ public sealed record CommandChannelOptions(RemoteControlOptions RemoteControl)
     /// <summary>
     /// 构造通道实例。所有平台共用，无需平台分支。
     /// </summary>
-    public ICommandTransport CreateTransport(IRemoteControlService? remoteControlService = null) =>
-        new HttpCommandTransport(RemoteControl, remoteControlService);
+    public ICommandTransport CreateTransport(
+        IRemoteControlService? remoteControlService = null,
+        bool useLocalForwardPort = false) =>
+        new HttpCommandTransport(RemoteControl, remoteControlService, useLocalForwardPort);
 }

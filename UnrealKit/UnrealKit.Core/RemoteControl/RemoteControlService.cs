@@ -227,6 +227,49 @@ public sealed class RemoteControlService : IRemoteControlService
             cancellationToken);
     }
 
+    public Task<ProcessExecutionResult> QueryActorHiddenInGameAsync(
+        RemoteControlActorVisibilityRequest request,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateActorRequest(request);
+
+        progress?.Report(new OperationProgress(
+            "remote-control-actor-visibility", "Querying", null, null,
+            $"Reading actor visibility: {request.ObjectPath}"));
+
+        return CallWithObjectParametersAsync(
+            request.HttpPort,
+            request.ObjectPath,
+            "GetActorHiddenInGame",
+            new Dictionary<string, object>(),
+            generateTransaction: false,
+            cancellationToken);
+    }
+
+    public Task<ProcessExecutionResult> SetActorHiddenInGameAsync(
+        RemoteControlActorVisibilityRequest request,
+        bool hidden,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateActorRequest(request);
+
+        progress?.Report(new OperationProgress(
+            "remote-control-actor-visibility", "Setting", null, null,
+            $"Setting actor visibility: {request.ObjectPath}"));
+
+        return CallWithObjectParametersAsync(
+            request.HttpPort,
+            request.ObjectPath,
+            "SetActorHiddenInGame",
+            new Dictionary<string, object> { ["bNewHidden"] = hidden },
+            generateTransaction: true,
+            cancellationToken);
+    }
+
     private RemoteControlException BuildFailure(string message, Exception exception, DateTimeOffset startedAt) =>
         new(
             message,
@@ -248,6 +291,9 @@ public sealed class RemoteControlService : IRemoteControlService
         ValidateEndpoint(request.HttpPort, request.ObjectPath, request.FunctionName);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.VariableName);
     }
+
+    private static void ValidateActorRequest(RemoteControlActorVisibilityRequest request) =>
+        ValidateEndpoint(request.HttpPort, request.ObjectPath, "GetActorHiddenInGame");
 
     private static void ValidateEndpoint(int httpPort, string objectPath, string functionName)
     {

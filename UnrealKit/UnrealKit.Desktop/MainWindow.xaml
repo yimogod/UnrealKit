@@ -115,6 +115,7 @@
             <models:NavigationPage Title="启动参数"   Group="-----运行-----"><views:LaunchParametersView /></models:NavigationPage>
             <models:NavigationPage Title="控制台"     Group="-----运行-----"><views:ConsoleView /></models:NavigationPage>
             <models:NavigationPage Title="相机指令"   Group="-----运行-----"><views:CameraView /></models:NavigationPage>
+            <models:NavigationPage Title="Actor控制"  Group="-----运行-----"><views:ActorControlView /></models:NavigationPage>
             <models:NavigationPage Title="指令序列"   Group="-----运行-----"><views:ConsoleSequenceView /></models:NavigationPage>
             <models:NavigationPage Title="采集归档"   Group="----采集----"><views:CaptureView /></models:NavigationPage>
             <models:NavigationPage Title="RenderDoc"  Group="----采集----"><views:RenderDocView /></models:NavigationPage>
