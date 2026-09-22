@@ -31,9 +31,6 @@ internal static class CliUsage
         Console.WriteLine("  unrealkit parse static-camera --input <log> [--screenshots <dir>] [--format json] [--html-output <path>]");
         Console.WriteLine("  unrealkit export meminfo --input <meminfo.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
         Console.WriteLine("  unrealkit export memreport --input <memreport.txt> --output <results.csv|results.tsv|results.xlsx> [--include-details] [--capture-id <capture-id>]");
-        Console.WriteLine("  unrealkit analyze diff --baseline <file> --current <file> [--source meminfo|win64-meminfo|memreport|static-camera] [--metrics <list>] [--only-changed] [--format text|json]");
-        Console.WriteLine("  unrealkit analyze diff --project <project.ukit> --baseline <capture-id> --current <capture-id> [--baseline-file <filename>] [--current-file <filename>] [--source <source>] [--metrics <list>] [--only-changed] [--format text|json]");
-        Console.WriteLine("  unrealkit analyze trend --project <project.ukit> [--source <source>] [--platform <platform>] [--tag <tag>] [--device <serial>] [--from <yyyy-MM-dd>] [--to <yyyy-MM-dd>] [--metrics <list>] [--file <filename>] [--output <file.csv|file.tsv|file.xlsx>] [--include-points] [--format text|json]");
         Console.WriteLine("  unrealkit renderdoc run --python <python.exe> --script <script.py> [--args <space-separated args>] [--output <dir>] [--workdir <dir>] [--format text|json]");
         Console.WriteLine("  unrealkit download --project <project.ukit> --platform <Android|Win64> [--format text|json]");
         Console.WriteLine("  unrealkit download install --project <project.ukit> --device <serial> --apk <path> [--adb-path <path>]");

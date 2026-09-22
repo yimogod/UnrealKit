@@ -160,16 +160,6 @@ public sealed record ScpAverageOption(string FrameTimeMs, string GameTimeMs, str
 
 public sealed record ScpDiagnosticOption(string Severity, string Code, string Line, string Message);
 
-public sealed record DiffResultOption(string Group, string Name, string Unit, string Direction, string BaselineValue, string CurrentValue, string Delta, string DeltaPercent, string Status, string Assessment);
-
-public sealed record DiffDiagnosticOption(string Severity, string Code, string Line, string Message);
-
-public sealed record TrendCaptureOption(string CaptureId, string CaptureDate, string Platform, string Tag, string DeviceModel);
-
-public sealed record TrendSeriesOption(string Group, string Name, string Unit, string Direction, int Points, int Present, int Missing, string Min, string Max, string Avg, string First, string Last, string TotalDelta, string TotalDeltaPercent, string Assessment);
-
-public sealed record TrendDiagnosticOption(string Severity, string Code, string Line, string Message);
-
 public sealed record RenderDocDiagnosticOption(string Severity, string Code, string Line, string Message);
 
 /// <summary>
@@ -192,8 +182,6 @@ public sealed record DownloadedPackageOption(string FolderName, string? LocalApk
         }
     }
 }
-
-public sealed record TrendChartAxisLabel(double X, double Y, string Label);
 
 public sealed record PakScanTextureOption(
     string Name, string Path, string SizeX, string SizeY,

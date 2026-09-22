@@ -34,7 +34,7 @@
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
-    <!-- 解析/差分/趋势结果区顶部的摘要行，内容来自绑定，长度不可控故允许换行 -->
+    <!-- 解析结果区顶部的摘要行，内容来自绑定，长度不可控故允许换行 -->
     <Style x:Key="ResultSummaryTextStyle" TargetType="TextBlock">
         <Setter Property="FontSize" Value="16" />
         <Setter Property="FontWeight" Value="SemiBold" />

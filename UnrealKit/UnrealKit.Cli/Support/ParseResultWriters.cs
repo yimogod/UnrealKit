@@ -43,10 +43,10 @@ internal static class ParseResultWriters
             var counters = result.Report.Counters;
             Console.WriteLine($"Input: {result.InputPath}");
             Console.WriteLine($"Process: {result.Report.ProcessName} (pid {result.Report.ProcessId})");
-            Console.WriteLine($"Working set: {MetricFormatting.Bytes(counters.WorkingSetBytes)}");
-            Console.WriteLine($"Private memory: {MetricFormatting.Bytes(counters.PrivateMemoryBytes)}");
-            Console.WriteLine($"Virtual memory: {MetricFormatting.Bytes(counters.VirtualMemoryBytes)}");
-            Console.WriteLine($"Peak working set: {MetricFormatting.Bytes(counters.PeakWorkingSetBytes)}");
+            Console.WriteLine($"Working set: {FormatBytes(counters.WorkingSetBytes)}");
+            Console.WriteLine($"Private memory: {FormatBytes(counters.PrivateMemoryBytes)}");
+            Console.WriteLine($"Virtual memory: {FormatBytes(counters.VirtualMemoryBytes)}");
+            Console.WriteLine($"Peak working set: {FormatBytes(counters.PeakWorkingSetBytes)}");
             Console.WriteLine($"Threads: {counters.ThreadCount}, Handles: {counters.HandleCount}");
             if (!string.IsNullOrWhiteSpace(counters.TotalProcessorTime))
             {
@@ -321,4 +321,13 @@ internal static class ParseResultWriters
 
     // -1 is the sentinel for "not available" (e.g. Win64 Nanite geometry not exposed by CUE4Parse).
     private static string FmtMesh(int value) => value < 0 ? "N/A" : value.ToString();
+
+    private static string FormatBytes(long? bytes)
+    {
+        if (bytes is null) return "-";
+        if (bytes >= 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
+        if (bytes >= 1024 * 1024) return $"{bytes / (1024.0 * 1024):F2} MB";
+        if (bytes >= 1024) return $"{bytes / 1024.0:F2} KB";
+        return $"{bytes} B";
+    }
 }

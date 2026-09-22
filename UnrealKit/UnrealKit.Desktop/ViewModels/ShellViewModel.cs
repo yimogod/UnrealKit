@@ -7,7 +7,6 @@ using System.Text;
 using System.Windows.Input;
 using UnrealKit.Core.Adb;
 using UnrealKit.Core.ActorControl;
-using UnrealKit.Core.Analysis;
 using UnrealKit.Core.Capture;
 using UnrealKit.Core.Console;
 using UnrealKit.Core.Devices;
@@ -72,19 +71,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _scpScreenshotsDir = string.Empty;
     private string _scpParseDescription = "Select a static camera perf log and optional screenshots directory.";
     private StaticCameraPerfParseResult? _lastScpParseResult;
-    private string _diffBaselinePath = string.Empty;
-    private string _diffCurrentPath = string.Empty;
-    private string _diffSource = "StaticCamera";
-    private string _diffMetricFilter = string.Empty;
-    private string _diffSummary = "Select a source type and two input files, then click Diff.";
-    private string _trendTag = string.Empty;
-    private string _trendFrom = string.Empty;
-    private string _trendTo = string.Empty;
-    private string _trendSource = "StaticCamera";
-    private string _trendMetricFilter = string.Empty;
-    private string _trendSummary = "Open a project, then click Build Trend.";
-    private TrendResult? _lastTrendResult;
-
     private string _renderDocScriptPath = string.Empty;
     private string _renderDocArguments = string.Empty;
     private string _renderDocOutputDir = string.Empty;
@@ -259,8 +245,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         CaptureMemReportCommand = new AsyncDelegateCommand(CaptureMemReportAsync, CanOperateOnSelectedDevice);
         CaptureMemInfoCommand = new AsyncDelegateCommand(CaptureMemInfoAsync, CanOperateOnSelectedDevice);
         ParseStaticCameraCommand = new AsyncDelegateCommand(ParseStaticCameraAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(ScpLogPath));
-        RunDiffCommand = new AsyncDelegateCommand(RunDiffAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(DiffBaselinePath) && !string.IsNullOrWhiteSpace(DiffCurrentPath));
-        RunTrendCommand = new AsyncDelegateCommand(RunTrendAsync, () => !IsBusy && _project is not null);
         RunRenderDocCommand = new AsyncDelegateCommand(RunRenderDocAsync, () => !IsBusy
             && !string.IsNullOrWhiteSpace(_renderDocScriptPath));
         OpenRenderDocOutputDirCommand = new DelegateCommand(OpenRenderDocOutputDir, () => !string.IsNullOrWhiteSpace(_renderDocOutputDir) && Directory.Exists(_renderDocOutputDir));
@@ -348,16 +332,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<ScpFrameOption> ScpFrames { get; } = [];
     public ObservableCollection<ScpAverageOption> ScpAverages { get; } = [];
     public ObservableCollection<ScpDiagnosticOption> ScpDiagnostics { get; } = [];
-    public ObservableCollection<DiffResultOption> DiffResults { get; } = [];
-    public ObservableCollection<DiffDiagnosticOption> DiffDiagnostics { get; } = [];
-    public ObservableCollection<TrendCaptureOption> TrendCaptures { get; } = [];
-    public ObservableCollection<TrendSeriesOption> TrendSeries { get; } = [];
-    public ObservableCollection<string> TrendChartSeriesNames { get; } = [];
-    public ObservableCollection<System.Windows.Point> TrendChartPoints { get; } = [];
-    public ObservableCollection<TrendChartAxisLabel> TrendChartXLabels { get; } = [];
-    private string _selectedTrendChartSeries = "";
-    public string SelectedTrendChartSeries { get => _selectedTrendChartSeries; set { if (SetField(ref _selectedTrendChartSeries, value)) UpdateTrendChart(); } }
-    public ObservableCollection<TrendDiagnosticOption> TrendDiagnostics { get; } = [];
     public ObservableCollection<RenderDocDiagnosticOption> RenderDocDiagnostics { get; } = [];
     public ObservableCollection<DownloadedPackageOption> DownloadedPackages { get; } = [];
     public ObservableCollection<PakScanTextureOption>      PakScanTextures       => PakTextures.Items;
@@ -391,8 +365,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ICommand CaptureMemReportCommand { get; }
     public ICommand CaptureMemInfoCommand { get; }
     public ICommand ParseStaticCameraCommand { get; }
-    public ICommand RunDiffCommand { get; }
-    public ICommand RunTrendCommand { get; }
     public ICommand RunRenderDocCommand { get; }
     public ICommand OpenRenderDocOutputDirCommand { get; }
     public ICommand ScanPakCommand { get; }
@@ -434,8 +406,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "Pak解析" => "离线扫描游戏包目录（.pak / .utoc / .ucas），批量提取 Texture2D/Mesh 资产信息，无需连接设备。",
         "内存解析" => "离线解析 meminfo 与 memreport，导出结果，或浏览工程内已归档的 Capture。",
         "静态相机" => "解析静态相机性能日志，查看逐相机指标并生成 HTML 报告。",
-        "基线差分" => "明确选择基线与当前两份输入，比较指标回退与改善。",
-        "历史趋势" => "按标签和时间范围汇总工程内的历史 Capture，查看指标走势。",
         "工具" => "截取当前设备的屏幕，保存到工程 Saved/Screenshots/<平台>/<时间戳>.png。",
         
         _ => string.Empty
@@ -576,17 +546,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string ScpLogPath { get => _scpLogPath; set { if (SetField(ref _scpLogPath, value)) RaiseCommandStates(); } }
     public string ScpScreenshotsDir { get => _scpScreenshotsDir; set { if (SetField(ref _scpScreenshotsDir, value)) RaiseCommandStates(); } }
     public string ScpParseDescription { get => _scpParseDescription; private set => SetField(ref _scpParseDescription, value); }
-    public string DiffBaselinePath { get => _diffBaselinePath; set { if (SetField(ref _diffBaselinePath, value)) RaiseCommandStates(); } }
-    public string DiffCurrentPath { get => _diffCurrentPath; set { if (SetField(ref _diffCurrentPath, value)) RaiseCommandStates(); } }
-    public string DiffSource { get => _diffSource; set { if (SetField(ref _diffSource, value)) RaiseCommandStates(); } }
-    public string DiffMetricFilter { get => _diffMetricFilter; set { if (SetField(ref _diffMetricFilter, value)) RaiseCommandStates(); } }
-    public string DiffSummary { get => _diffSummary; private set => SetField(ref _diffSummary, value); }
-    public string TrendTag { get => _trendTag; set { if (SetField(ref _trendTag, value)) RaiseCommandStates(); } }
-    public string TrendFrom { get => _trendFrom; set { if (SetField(ref _trendFrom, value)) RaiseCommandStates(); } }
-    public string TrendTo { get => _trendTo; set { if (SetField(ref _trendTo, value)) RaiseCommandStates(); } }
-    public string TrendSource { get => _trendSource; set { if (SetField(ref _trendSource, value)) RaiseCommandStates(); } }
-    public string TrendMetricFilter { get => _trendMetricFilter; set { if (SetField(ref _trendMetricFilter, value)) RaiseCommandStates(); } }
-    public string TrendSummary { get => _trendSummary; private set => SetField(ref _trendSummary, value); }
 
     public string RenderDocScriptPath { get => _renderDocScriptPath; set { if (SetField(ref _renderDocScriptPath, value)) RaiseCommandStates(); } }
     public string RenderDocArguments { get => _renderDocArguments; set { if (SetField(ref _renderDocArguments, value)) RaiseCommandStates(); } }
@@ -710,8 +669,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             }
             : string.Empty;
 
-    public IReadOnlyList<string> DiffSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
-    public IReadOnlyList<string> TrendSourceOptions { get; } = ["StaticCamera", "MemInfo", "MemReport"];
     public IReadOnlyList<string> DownloadPlatformOptions { get; } = [PlatformNames.ToName(TargetPlatform.Android), PlatformNames.ToName(TargetPlatform.Win64)];
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
     public string LaunchOperationSummary { get => _launchOperationSummary; private set => SetField(ref _launchOperationSummary, value); }
@@ -2176,110 +2133,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         StatusMessage = result.IsSuccess ? $"Parsed {result.Report?.ParseCameraCount ?? 0} camera(s) from {inputPath}" : "Static camera parse completed with errors.";
     });
 
-    private async Task RunDiffAsync() => await RunAsync("Running baseline diff...", async _ =>
-    {
-        var source = DiffSource switch
-        {
-            "MemInfo" => BaselineDiffSource.MemInfo,
-            "MemReport" => BaselineDiffSource.MemReport,
-            _ => BaselineDiffSource.StaticCamera
-        };
-
-        var metricFilter = string.IsNullOrWhiteSpace(DiffMetricFilter)
-            ? null
-            : (IReadOnlyList<string>)DiffMetricFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        var request = new BaselineDiffRequest(source, DiffBaselinePath, DiffCurrentPath, metricFilter, "Baseline", "Current");
-        var service = new BaselineService();
-        var result = await service.DiffAsync(request, OperationCancellationToken);
-
-        DiffResults.Clear();
-        DiffDiagnostics.Clear();
-
-        foreach (var diff in result.Metrics)
-        {
-            DiffResults.Add(new DiffResultOption(
-                diff.Group, diff.Name, diff.Unit, diff.Direction.ToString(),
-                diff.BaselineValue?.ToString("F2") ?? "-",
-                diff.CurrentValue?.ToString("F2") ?? "-",
-                diff.Delta?.ToString("F2") ?? "-",
-                diff.DeltaPercent?.ToString("F1") ?? "-",
-                diff.Status.ToString(), diff.Assessment.ToString()));
-        }
-
-        foreach (var diag in result.Diagnostics)
-            DiffDiagnostics.Add(new DiffDiagnosticOption(diag.Severity.ToString(), diag.Code, diag.LineNumber?.ToString() ?? "-", diag.Message));
-
-        DiffSummary = result.IsSuccess
-            ? $"Regressed: {result.RegressedCount} | Improved: {result.ImprovedCount} | Unchanged: {result.UnchangedCount} | Missing: {result.MissingCount}"
-            : "Diff completed with errors.";
-
-        StatusMessage = $"Diff: {result.Metrics.Count} metric(s) compared.";
-    });
-
-    private async Task RunTrendAsync() => await RunAsync("Building trend...", async _ =>
-    {
-        if (_project is null) { StatusMessage = "No project open."; return; }
-
-        var source = TrendSource switch
-        {
-            "MemInfo" => BaselineDiffSource.MemInfo,
-            "MemReport" => BaselineDiffSource.MemReport,
-            _ => BaselineDiffSource.StaticCamera
-        };
-
-        var metricFilter = string.IsNullOrWhiteSpace(TrendMetricFilter)
-            ? null
-            : (IReadOnlyList<string>)TrendMetricFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        DateTimeOffset? from = DateTimeOffset.TryParse(TrendFrom, out var f) ? f : null;
-        DateTimeOffset? to = DateTimeOffset.TryParse(TrendTo, out var t) ? t : null;
-
-        // 趋势跨平台没有意义：Android 与 Win64 的内存指标量级与口径都不同，
-        // 混在一条序列里的走势不可解读。作用域为「全部」时仍不强行选平台，
-        // 由结果里的 Platform 列呈现事实，让用户看到需要收窄作用域。
-        var request = new TrendRequest(_project, source,
-            Platform: PlatformScope.IsAll ? null : PlatformScope.Name,
-            Tag: string.IsNullOrWhiteSpace(TrendTag) ? null : TrendTag.Trim(),
-            From: from, To: to,
-            MetricFilter: metricFilter);
-
-        var service = new TrendService();
-        var result = await service.BuildTrendAsync(request, OperationCancellationToken);
-
-        TrendCaptures.Clear();
-        TrendSeries.Clear();
-        TrendDiagnostics.Clear();
-        _lastTrendResult = result;
-
-        foreach (var capture in result.Captures)
-            TrendCaptures.Add(new TrendCaptureOption(capture.CaptureId, capture.CaptureDate.ToString("yyyy-MM-dd HH:mm"), capture.Platform, capture.Tag, capture.DeviceModel ?? "-"));
-
-        foreach (var series in result.Series)
-        {
-            TrendSeries.Add(new TrendSeriesOption(
-                series.Group, series.Name, series.Unit, series.Direction.ToString(),
-                series.PointCount, series.PresentCount, series.MissingCount,
-                series.Minimum?.ToString("F2") ?? "-",
-                series.Maximum?.ToString("F2") ?? "-",
-                series.Average?.ToString("F2") ?? "-",
-                series.First?.ToString("F2") ?? "-",
-                series.Last?.ToString("F2") ?? "-",
-                series.TotalDelta?.ToString("F2") ?? "-",
-                series.TotalDeltaPercent?.ToString("F1") ?? "-",
-                series.OverallAssessment.ToString()));
-        }
-
-        foreach (var diag in result.Diagnostics)
-            TrendDiagnostics.Add(new TrendDiagnosticOption(diag.Severity.ToString(), diag.Code, diag.LineNumber?.ToString() ?? "-", diag.Message));
-
-        TrendSummary = result.IsSuccess
-            ? $"{result.Captures.Count} capture(s) | {result.Series.Count} series | Regressed: {result.RegressedCount} | Improved: {result.ImprovedCount}"
-            : "Trend build completed with errors.";
-
-        StatusMessage = $"Trend: {result.Series.Count} series across {result.Captures.Count} capture(s).";
-    });
-
     private void OpenRenderDocOutputDir()
     {
         if (!string.IsNullOrWhiteSpace(RenderDocOutputDir) && Directory.Exists(RenderDocOutputDir))
@@ -2919,70 +2772,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ? $"本地暂无已下载的 {PlatformNames.ToName(platform)} 构建包。点击「下载最新」获取。"
             : $"本地已下载 {DownloadedPackages.Count} 个 {PlatformNames.ToName(platform)} 构建包，选择其一可安装到设备；未选择则安装最新。";
         RaiseCommandStates();
-    }
-
-    private void UpdateTrendChart()
-    {
-        TrendChartPoints.Clear();
-        TrendChartXLabels.Clear();
-        TrendChartSeriesNames.Clear();
-
-        if (_lastTrendResult is null || string.IsNullOrEmpty(SelectedTrendChartSeries)) return;
-
-        var series = _lastTrendResult.Series.FirstOrDefault(s =>
-            $"{s.Group}/{s.Name}" == SelectedTrendChartSeries || s.Name == SelectedTrendChartSeries);
-        if (series is null) return;
-
-        // Populate series names for dropdown
-        foreach (var s in _lastTrendResult.Series)
-            TrendChartSeriesNames.Add($"{s.Group}/{s.Name}");
-
-        if (TrendChartSeriesNames.Count > 0 && string.IsNullOrEmpty(SelectedTrendChartSeries))
-            SelectedTrendChartSeries = TrendChartSeriesNames[0];
-
-        var presentPoints = series.Points.Where(p => p.Value.HasValue).ToList();
-        if (presentPoints.Count == 0) return;
-
-        double minVal = presentPoints.Min(p => p.Value!.Value);
-        double maxVal = presentPoints.Max(p => p.Value!.Value);
-        double range = maxVal - minVal;
-        if (range < 1e-9) range = 1;
-
-        double chartWidth = 600;
-        double chartHeight = 300;
-        double paddingLeft = 60;
-        double paddingRight = 20;
-        double paddingTop = 20;
-        double paddingBottom = 40;
-
-        double plotWidth = chartWidth - paddingLeft - paddingRight;
-        double plotHeight = chartHeight - paddingTop - paddingBottom;
-
-        if (presentPoints.Count == 1)
-        {
-            double x = paddingLeft + plotWidth / 2;
-            double y = paddingTop + plotHeight / 2;
-            TrendChartPoints.Add(new System.Windows.Point(x, y));
-        }
-        else
-        {
-            for (int i = 0; i < presentPoints.Count; i++)
-            {
-                double x = paddingLeft + (i / (double)(presentPoints.Count - 1)) * plotWidth;
-                double y = paddingTop + (1 - (presentPoints[i].Value!.Value - minVal) / range) * plotHeight;
-                TrendChartPoints.Add(new System.Windows.Point(x, y));
-            }
-        }
-
-        // X-axis labels (dates)
-        int labelStep = Math.Max(1, presentPoints.Count / 6);
-        for (int i = 0; i < presentPoints.Count; i += labelStep)
-        {
-            TrendChartXLabels.Add(new TrendChartAxisLabel(
-                paddingLeft + (presentPoints.Count > 1 ? (i / (double)(presentPoints.Count - 1)) * plotWidth : plotWidth / 2),
-                paddingTop + plotHeight + 5,
-                presentPoints[i].CaptureDate.ToString("MM-dd")));
-        }
     }
 
         public string ConsoleCommandText
@@ -3686,7 +3475,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunDiffCommand, RunTrendCommand, RunRenderDocCommand, ScanPakCommand, ScanMapActorsCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand, _jumpToCameraCommand, _refreshRuntimeActorsCommand, TakeScreenshotCommand }.OfType<AsyncDelegateCommand>())
+        foreach (var command in new[] { CreateProjectCommand, OpenProjectCommand, RefreshDevicesCommand, ConnectWirelessDeviceCommand, ShowDeviceIpAddressesCommand, PushLaunchParametersCommand, DeleteLaunchParametersCommand, StartApplicationCommand, RunCaptureCommand, DownloadDeviceSavedCommand, DownloadDeviceLogsCommand, SaveProjectSettingsCommand, ParseMemInfoCommand, RefreshCaptureResultsCommand, ViewCaptureResultFileCommand, ParseMemReportCommand, ParseStaticCameraCommand, RunRenderDocCommand, ScanPakCommand, ScanMapActorsCommand, _sendConsoleCommandCommand, _runConsoleSequenceCommand, DownloadCommand, InstallDownloadedApkCommand, OpenDownloadedDirectoryCommand, RefreshDownloadedPackagesCommand, _refreshConsoleCommandPresetValuesCommand, _jumpToCameraCommand, _refreshRuntimeActorsCommand, TakeScreenshotCommand }.OfType<AsyncDelegateCommand>())
         {
             command.RaiseCanExecuteChanged();
         }

@@ -29,7 +29,6 @@ internal static class CliEntryPoint
                 "capture" => await CaptureCommands.RunAsync(arguments[1..]),
                 "parse" => await ParseCommands.RunAsync(arguments[1..]),
                 "export" => await ExportCommands.RunAsync(arguments[1..]),
-                "analyze" => await AnalyzeCommands.RunAsync(arguments[1..]),
                 "renderdoc" => await RenderDocCommands.RunAsync(arguments[1..]),
                 "download" => await DownloadCommands.RunAsync(arguments[1..]),
                 _ => FailUnknownCommand()

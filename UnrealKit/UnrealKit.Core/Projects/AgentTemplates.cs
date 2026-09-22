@@ -33,8 +33,7 @@ and contains a `CaptureManifest.json` with device info, timing, and input file h
 1. List captures: read `Content/` directory tree or parse manifests.
 2. Choose a capture and identify its input files (meminfo, memreport, static-camera log).
 3. Parse the relevant file(s) using the rules in [Doc/解析导出与诊断.md].
-4. Compare against a baseline (another capture) or historical trend when available.
-5. Write the analysis report to `Saved/Analysis/<AnalysisId>/`.
+4. Write the analysis report to `Saved/Analysis/<AnalysisId>/`.
 
 ## Diagnostic codes (summary)
 
@@ -96,8 +95,7 @@ Analyze Unreal Engine Android performance capture data from an UnrealKit project
 2. Identify input files: meminfo `.txt`, memreport `.memreport`, or static-camera `.log`.
 3. Parse the data according to the diagnostic code conventions (see AGENTS.md).
 4. If comparing two captures, compute per-metric deltas with direction (higher-is-worse/lower-is-worse).
-5. For trends, aggregate captures by tag/platform/device and compute series.
-6. Generate a structured report in `Saved/Analysis/<id>/`.
+5. Generate a structured report in `Saved/Analysis/<id>/`.
 
 ## Output
 
