@@ -53,13 +53,10 @@ ADB 路径解析顺序：`--adb-path` < 工程配置 `AdbPath` < 环境变量（
 - `.ukit` 的 `FormatVersion`；提升版本必须同时提供迁移路径。
 - `CaptureManifest.json` 字段；扩展时新增可空字段，保证既有归档仍可反序列化。
 
-## 功能优先级
+## 测试工程地址
+下面是使用UnrealKit的项目的候选地址
+E:\XGameProfile
 
-前四个阶段已全部完成：工程管理、ADB、采集归档、解析、导出、CLI/GUI 全覆盖（第一阶段）；静态相机、基线差分、历史趋势、RenderDoc 集成、Agent 分析、Win64 设备支持（第二阶段）；UE 控制台指令通道（第三阶段）；Win64 Desktop 全链路集成（第四阶段）。
-
-当前进行中：PakScan 离线资产扫描（见 `UnrealKit.Core/PakScan/`）。
-
-下一步候选：Win64 采集端到端集成测试、RenderDoc WPF 页增强、更多 Agent 分析 Skill 模板。
 
 ## 交付要求
 

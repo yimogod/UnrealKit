@@ -18,6 +18,14 @@ public sealed record PakScanConfig
     public int MaxDegreeOfParallelism { get; init; } = 0;
 
     /// <summary>
+    /// 显式覆盖 CUE4Parse 版本标志，作为 pak 内 DefaultEngine.ini 的兜底。
+    /// 键名与 CUE4Parse Versions[] 一致，例如 "StaticMesh.KeepMobileMinLODSettingOnDesktop"。
+    /// PostMount() 之后无条件应用，优先级高于 pak 内 DefaultEngine.ini。
+    /// </summary>
+    public IReadOnlyDictionary<string, bool> VersionOverrides { get; init; } =
+        new Dictionary<string, bool>();
+
+    /// <summary>
     /// 从可执行文件所在目录向上查找 ThirdParty/Oodle/oo2core_9_win64.dll，
     /// 未找到时返回空字符串。
     /// </summary>

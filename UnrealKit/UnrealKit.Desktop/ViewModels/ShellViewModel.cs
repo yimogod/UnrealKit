@@ -669,6 +669,29 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             }
             : string.Empty;
 
+    /// <summary>
+    /// 读取当前工程 DefaultGame.ini 的 [UnrealKit.PakScan] 节，
+    /// 返回 CUE4Parse 版本标志覆盖字典。工程未打开或节不存在时返回空字典。
+    /// </summary>
+    private IReadOnlyDictionary<string, bool> ReadPakScanVersionOverrides()
+    {
+        if (_project is null) return new Dictionary<string, bool>();
+        var configPath = _project.ConfigFilePath;
+        if (!File.Exists(configPath)) return new Dictionary<string, bool>();
+
+        var doc = UnrealKit.Core.Projects.IniDocument.Parse(File.ReadAllText(configPath));
+        var section = doc.GetSection("UnrealKit.PakScan");
+        if (section.Count == 0) return new Dictionary<string, bool>();
+
+        var overrides = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in section)
+        {
+            if (bool.TryParse(value, out var flag))
+                overrides[key] = flag;
+        }
+        return overrides;
+    }
+
     public IReadOnlyList<string> DownloadPlatformOptions { get; } = [PlatformNames.ToName(TargetPlatform.Android), PlatformNames.ToName(TargetPlatform.Win64)];
     public string LaunchParameterPreview { get => _launchParameterPreview; private set => SetField(ref _launchParameterPreview, value); }
     public string LaunchOperationSummary { get => _launchOperationSummary; private set => SetField(ref _launchOperationSummary, value); }
@@ -2204,6 +2227,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             AesKey = PakAesKeyForPlatform(DownloadPlatform),
             OodleDllPath = PakOodlePath.Trim(),
             GameVersion = string.IsNullOrWhiteSpace(PakGameVersion) ? "GAME_UE5_6" : PakGameVersion.Trim(),
+            VersionOverrides = ReadPakScanVersionOverrides(),
         };
 
         var textures        = new List<UnrealKit.Core.PakScan.PakTextureEntry>();
@@ -3371,6 +3395,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             AesKey = PakAesKeyForPlatform(DownloadPlatform),
             OodleDllPath = PakOodlePath.Trim(),
             GameVersion = string.IsNullOrWhiteSpace(PakGameVersion) ? "GAME_UE5_6" : PakGameVersion.Trim(),
+            VersionOverrides = ReadPakScanVersionOverrides(),
         };
 
         await foreach (var entry in _pakScanService.ScanMapActorsStreamAsync(inputPath, config, OperationCancellationToken))

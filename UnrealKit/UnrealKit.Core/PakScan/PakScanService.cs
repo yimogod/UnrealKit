@@ -140,6 +140,10 @@ public sealed class PakScanService : IPakScanService
                 await provider.MountAsync();
                 provider.PostMount();
 
+                // 无条件应用项目 DefaultGame.ini 的显式覆盖，优先级高于 pak 内 DefaultEngine.ini
+                foreach (var kv in config.VersionOverrides)
+                    provider.Versions[kv.Key] = kv.Value;
+
                 var allPaths = provider.Files.Keys
                     .Where(p => p.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase))
                     .Where(p => !config.ExcludeEnginePaths || !p.Contains("/Engine/", StringComparison.OrdinalIgnoreCase))

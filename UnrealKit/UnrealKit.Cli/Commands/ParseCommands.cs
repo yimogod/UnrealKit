@@ -70,13 +70,15 @@ internal static class ParseCommands
 
     private static async Task<int> ParsePakScanAsync(string[] options)
     {
-        CliOptions.EnsureOnly(options, CliOptions.Allowed("--input", "--aes-key", "--game-version", "--oodle-path", "--output", "--format"));
+        CliOptions.EnsureOnly(options, CliOptions.Allowed("--input", "--aes-key", "--game-version", "--oodle-path", "--output", "--format", "--project"));
         var input = CliOptions.GetRequired(options, "--input");
+        var versionOverrides = ReadPakScanVersionOverrides(CliOptions.GetOptional(options, "--project"));
         var config = new PakScanConfig
         {
             AesKey = CliOptions.GetOptional(options, "--aes-key") ?? string.Empty,
             GameVersion = CliOptions.GetOptional(options, "--game-version") ?? "GAME_UE5_6",
             OodleDllPath = CliOptions.GetOptional(options, "--oodle-path") ?? string.Empty,
+            VersionOverrides = versionOverrides,
         };
         var result = await new PakScanService().ScanAsync(input, config);
         var outputFile = CliOptions.GetOptional(options, "--output");
@@ -93,13 +95,15 @@ internal static class ParseCommands
 
     private static async Task<int> ParseMapActorStatsAsync(string[] options)
     {
-        CliOptions.EnsureOnly(options, CliOptions.Allowed("--input", "--aes-key", "--game-version", "--oodle-path", "--output", "--format"));
+        CliOptions.EnsureOnly(options, CliOptions.Allowed("--input", "--aes-key", "--game-version", "--oodle-path", "--output", "--format", "--project"));
         var input = CliOptions.GetRequired(options, "--input");
+        var versionOverrides = ReadPakScanVersionOverrides(CliOptions.GetOptional(options, "--project"));
         var config = new PakScanConfig
         {
             AesKey = CliOptions.GetOptional(options, "--aes-key") ?? string.Empty,
             GameVersion = CliOptions.GetOptional(options, "--game-version") ?? "GAME_UE5_6",
             OodleDllPath = CliOptions.GetOptional(options, "--oodle-path") ?? string.Empty,
+            VersionOverrides = versionOverrides,
         };
         var result = await new PakScanService().ScanMapActorsAsync(input, config);
         var outputFile = CliOptions.GetOptional(options, "--output");
@@ -222,6 +226,36 @@ internal static class ParseCommands
         };
     }
 
+    /// <summary>
+    /// 从项目 DefaultGame.ini 的 [UnrealKit.PakScan] 节读取 CUE4Parse 版本标志覆盖。
+    /// projectPath 为 null 或文件不存在时返回空字典。
+    /// </summary>
+    private static IReadOnlyDictionary<string, bool> ReadPakScanVersionOverrides(string? projectPath)
+    {
+        if (string.IsNullOrWhiteSpace(projectPath)) return new Dictionary<string, bool>();
+
+        // projectPath 可以是 .ukit 文件路径，也可以是项目根目录
+        string configFile;
+        if (projectPath.EndsWith(".ukit", StringComparison.OrdinalIgnoreCase))
+            configFile = Path.Combine(Path.GetDirectoryName(projectPath)!, "Config", "DefaultGame.ini");
+        else
+            configFile = Path.Combine(projectPath, "Config", "DefaultGame.ini");
+
+        if (!File.Exists(configFile)) return new Dictionary<string, bool>();
+
+        var doc = IniDocument.Parse(File.ReadAllText(configFile));
+        var section = doc.GetSection("UnrealKit.PakScan");
+        if (section.Count == 0) return new Dictionary<string, bool>();
+
+        var overrides = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in section)
+        {
+            if (bool.TryParse(value, out var flag))
+                overrides[key] = flag;
+        }
+        return overrides;
+    }
+
     private static int FailUsage()
     {
         Console.Error.WriteLine("Usage:");
@@ -232,7 +266,7 @@ internal static class ParseCommands
         Console.Error.WriteLine("  unrealkit parse capture-files --capture-dir <path>");
         Console.Error.WriteLine("  unrealkit parse capture-meminfo --project <project.ukit> --capture <capture-id> [--file <filename>] [--analysis-id <id>]");
         Console.Error.WriteLine("  unrealkit parse static-camera --input <log> [--screenshots <dir>] [--format json]");
-        Console.Error.WriteLine("  unrealkit parse pak-scan --input <pak-dir> [--aes-key <key>] [--game-version <ver>] [--oodle-path <oo2core.dll>] [--output <file>] [--format text|json|html]");
+        Console.Error.WriteLine("  unrealkit parse pak-scan --input <pak-dir> [--project <project.ukit>] [--aes-key <key>] [--game-version <ver>] [--oodle-path <oo2core.dll>] [--output <file>] [--format text|json|html]");
         return 2;
     }
 }
