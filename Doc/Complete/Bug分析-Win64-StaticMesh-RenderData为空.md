@@ -1,5 +1,7 @@
 # Bug 分析：Win64 IoStore StaticMesh RenderData 为空
 
+已经解决
+
 ## 现象
 
 - **平台**：Win64 IoStore（`.utoc` / `.ucas`）
@@ -162,13 +164,13 @@ CUE4Parse 内置默认 (false)
 
 ## 关键文件索引
 
-| 文件 | 作用 |
-|------|------|
-| `CUE4Parse/UE4/Assets/Exports/StaticMesh/FStaticMeshRenderData.cs` line 29 | 版本标志控制是否读取 MinMobileLODIdx |
-| `CUE4Parse/UE4/Versions/VersionContainer.cs` line 99 | 标志默认值 false |
-| `CUE4Parse/FileProvider/AbstractFileProvider.cs` line 441, 473 | LoadIniConfigs / 解析 CVar |
-| `CUE4Parse/FileProvider/Vfs/AbstractVfsFileProvider.cs` line 504 | PostMount() 入口 |
-| `UnrealKit.Core/PakScan/PakScanService.cs` | PostMount() + VersionOverrides 应用 |
-| `UnrealKit.Core/PakScan/PakScanConfig.cs` | VersionOverrides 字段定义 |
-| `UnrealKit.Cli/Commands/ParseCommands.cs` | CLI --project 参数，ReadPakScanVersionOverrides |
-| `Engine/Source/Runtime/Engine/Private/StaticMesh.cpp` line 2446 | UE5 引擎侧序列化逻辑（Desktop 平台 +4 字节）|
+| 文件                                                                         | 作用                                            |
+| ---------------------------------------------------------------------------- | ----------------------------------------------- |
+| `CUE4Parse/UE4/Assets/Exports/StaticMesh/FStaticMeshRenderData.cs` line 29 | 版本标志控制是否读取 MinMobileLODIdx            |
+| `CUE4Parse/UE4/Versions/VersionContainer.cs` line 99                       | 标志默认值 false                                |
+| `CUE4Parse/FileProvider/AbstractFileProvider.cs` line 441, 473             | LoadIniConfigs / 解析 CVar                      |
+| `CUE4Parse/FileProvider/Vfs/AbstractVfsFileProvider.cs` line 504           | PostMount() 入口                                |
+| `UnrealKit.Core/PakScan/PakScanService.cs`                                 | PostMount() + VersionOverrides 应用             |
+| `UnrealKit.Core/PakScan/PakScanConfig.cs`                                  | VersionOverrides 字段定义                       |
+| `UnrealKit.Cli/Commands/ParseCommands.cs`                                  | CLI --project 参数，ReadPakScanVersionOverrides |
+| `Engine/Source/Runtime/Engine/Private/StaticMesh.cpp` line 2446            | UE5 引擎侧序列化逻辑（Desktop 平台 +4 字节）    |

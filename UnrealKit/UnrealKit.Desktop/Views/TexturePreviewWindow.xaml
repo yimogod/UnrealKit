@@ -17,8 +17,25 @@
                            Style="{StaticResource SectionTitleTextStyle}"
                            VerticalAlignment="Center"
                            TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                           MaxWidth="560" />
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                           MaxWidth="400" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- 通道过滤 -->
+                    <CheckBox x:Name="CbR" Content="R" IsChecked="True"
+                              Margin="0,0,8,0" VerticalAlignment="Center"
+                              Foreground="#E53935" FontWeight="SemiBold"
+                              Checked="ChannelCheckBox_Changed" Unchecked="ChannelCheckBox_Changed" />
+                    <CheckBox x:Name="CbG" Content="G" IsChecked="True"
+                              Margin="0,0,8,0" VerticalAlignment="Center"
+                              Foreground="#43A047" FontWeight="SemiBold"
+                              Checked="ChannelCheckBox_Changed" Unchecked="ChannelCheckBox_Changed" />
+                    <CheckBox x:Name="CbB" Content="B" IsChecked="True"
+                              Margin="0,0,12,0" VerticalAlignment="Center"
+                              Foreground="#1E88E5" FontWeight="SemiBold"
+                              Checked="ChannelCheckBox_Changed" Unchecked="ChannelCheckBox_Changed" />
+                    <CheckBox x:Name="CbA" Content="A" IsChecked="True"
+                              Margin="0,0,16,0" VerticalAlignment="Center"
+                              FontWeight="SemiBold"
+                              Checked="ChannelCheckBox_Changed" Unchecked="ChannelCheckBox_Changed" />
                     <Button Content="导出 PNG…" x:Name="ExportButton" Click="ExportButton_Click"
                             Padding="14,7" Margin="0,0,8,0" />
                 </StackPanel>
