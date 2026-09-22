@@ -195,7 +195,9 @@ public sealed class DownloadServiceTests
         ];
         factory.Client.ListResults["/builds/android/v1.0.10"] = [new("Game.apk", false)];
         var localBase = NewLocalBaseDirectory();
-        Directory.CreateDirectory(Path.Combine(localBase, "v1.0.10"));
+        var localVersionDir = Path.Combine(localBase, "v1.0.10");
+        Directory.CreateDirectory(localVersionDir);
+        File.WriteAllBytes(Path.Combine(localVersionDir, "Game.apk"), []); // 模拟已完整下载
         var service = new FtpDownloadService(factory);
         var request = new DownloadRequest(TargetPlatform.Android, ConfiguredSettings, "/builds/android", localBase);
 
@@ -223,6 +225,30 @@ public sealed class DownloadServiceTests
         Assert.Equal(DownloadDiagnosticCodes.AlreadyUpToDate, Assert.Single(result.Diagnostics).Code);
         Assert.Equal("2024.01.05", result.SourceSubdir);
         Assert.Empty(factory.Client.DownloadedDirectories);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_Android_DirectoryExistsButNoApk_DownloadsApk()
+    {
+        // 先下载了 Pak 导致目录存在但没有 APK，此时点"下载安装包"应继续下载。
+        var factory = new FakeFtpClientFactory();
+        factory.Client.ListResults["/builds/android"] =
+        [
+            new("v1.0.9", true),
+            new("v1.0.10", true)
+        ];
+        factory.Client.ListResults["/builds/android/v1.0.10"] = [new("Game.apk", false)];
+        var localBase = NewLocalBaseDirectory();
+        Directory.CreateDirectory(Path.Combine(localBase, "v1.0.10")); // 目录存在，但无 APK
+        var service = new FtpDownloadService(factory);
+        var request = new DownloadRequest(TargetPlatform.Android, ConfiguredSettings, "/builds/android", localBase);
+
+        var result = await service.DownloadAsync(request);
+
+        Assert.True(result.Succeeded);
+        Assert.DoesNotContain(result.Diagnostics, d => d.Code == DownloadDiagnosticCodes.AlreadyUpToDate);
+        Assert.Equal("v1.0.10", result.SourceSubdir);
+        Assert.Single(factory.Client.DownloadedFiles); // APK 被实际下载
     }
 
     private sealed class FakeFtpClientFactory : IFtpClientFactory

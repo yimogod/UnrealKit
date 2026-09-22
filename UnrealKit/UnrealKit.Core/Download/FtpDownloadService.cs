@@ -92,8 +92,13 @@ public sealed class FtpDownloadService : IFtpDownloadService
 
             // 最新构建已在本地（目录已存在）时不删除重下：构建目录是可重新获取的缓存，
             // 本地已有一份说明之前下过这个版本，覆盖它不带来任何新信息。
+            // 例外：Android 平台目录存在但 APK 缺失（如先下载了 Pak），仍需继续下载 APK。
             var localBaseDirectory = Path.Combine(request.LocalBaseDirectory, latest);
-            if (Directory.Exists(localBaseDirectory))
+            var skipDownload = Directory.Exists(localBaseDirectory);
+            if (skipDownload && request.Platform == TargetPlatform.Android && request.Mode == DownloadMode.Apk)
+                skipDownload = FindLocalApk(localBaseDirectory) is not null;
+
+            if (skipDownload)
             {
                 var alreadyLocalPath = request.Platform == TargetPlatform.Android
                     ? FindLocalApk(localBaseDirectory) ?? localBaseDirectory
