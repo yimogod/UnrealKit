@@ -58,10 +58,9 @@
                                   IsChecked="{Binding Win64Enabled, UpdateSourceTrigger=PropertyChanged}" />
                     </GroupBox.Header>
                     <StackPanel IsEnabled="{Binding Win64Enabled}">
-                        <TextBlock Text="可执行文件路径" Style="{StaticResource FieldLabelTextStyle}" />
+                        <TextBlock Text="可执行文件名（如 MyGame.exe，不含路径）" Style="{StaticResource FieldLabelTextStyle}" />
                         <TextBox Text="{Binding Win64Executable, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
-                        <TextBlock Text="工作目录" Style="{StaticResource StackedFieldLabelTextStyle}" />
-                        <TextBox Text="{Binding Win64WorkingDirectory, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" />
+                        <TextBlock Text="运行目录取自「安装包」页当前选中的已下载 Win64 构建包，不在此配置。" Style="{StaticResource HintTextStyle}" Margin="0,4,0,0" />
                         <TextBlock Text="FTP 父目录（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />
                         <TextBox Text="{Binding Win64FtpPath, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontFamily="Consolas" />
                         <TextBlock Text="Pak FTP 父目录（可选）" Style="{StaticResource StackedFieldLabelTextStyle}" />

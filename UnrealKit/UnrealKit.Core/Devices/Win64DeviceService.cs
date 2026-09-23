@@ -362,6 +362,7 @@ public sealed class Win64DeviceService : IDeviceService
         IDevice device,
         string target,
         string? activity = null,
+        string? commandLineArguments = null,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -379,8 +380,13 @@ public sealed class Win64DeviceService : IDeviceService
         // 继承调用方进程的 cwd 会让 GUI 与 CLI 启动出不同行为。
         var workingDirectory = Path.GetDirectoryName(Path.GetFullPath(target));
 
+        // Win64 不使用 uecommandline.txt，参数直接追加到命令行。
+        var arguments = string.IsNullOrWhiteSpace(commandLineArguments)
+            ? (IReadOnlyList<string>)[]
+            : commandLineArguments.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
         return await _processRunner.RunAsync(
-            new ProcessExecutionRequest(target, [], workingDirectory, null, null, null),
+            new ProcessExecutionRequest(target, arguments, workingDirectory, null, null, null),
             progress,
             cancellationToken);
     }

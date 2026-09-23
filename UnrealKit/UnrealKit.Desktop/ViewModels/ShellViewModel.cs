@@ -56,7 +56,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private bool _androidEnabled;
     private bool _win64Enabled;
     private string _win64Executable = string.Empty;
-    private string _win64WorkingDirectory = string.Empty;
     private string _memInfoParsedAt = string.Empty;
     private string _captureResultsCount = "Select a project then browse capture entries.";
 
@@ -454,7 +453,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     public bool Win64Enabled { get => _win64Enabled; set => SetField(ref _win64Enabled, value); }
     public string Win64Executable { get => _win64Executable; set => SetField(ref _win64Executable, value); }
-    public string Win64WorkingDirectory { get => _win64WorkingDirectory; set => SetField(ref _win64WorkingDirectory, value); }
 
     /// <summary>
     /// FTP 主机。跨平台共享，与各平台的 <see cref="AndroidFtpPath"/>/<see cref="Win64FtpPath"/>
@@ -542,6 +540,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     /// 平台不再是一项配置，因此没有「默认平台」可以显示。
     /// </summary>
     public string Platform => SelectedDevice?.Platform ?? string.Empty;
+
+    /// <summary>
+    /// 所选设备是否为 Win64 平台。用于隐藏 uecommandline.txt 相关操作——
+    /// Win64 游戏不读取该文件，参数直接追加到命令行。
+    /// </summary>
+    public bool IsSelectedDeviceWin64 =>
+        PlatformNames.TryParse(SelectedDevice?.Platform ?? string.Empty, out var p) && p == TargetPlatform.Win64;
     public string MemInfoInputPath { get => _memInfoInputPath; set { if (SetField(ref _memInfoInputPath, value)) RaiseCommandStates(); } }
     public string MemInfoProcessDescription { get => _memInfoProcessDescription; private set => SetField(ref _memInfoProcessDescription, value); }
     public string MemInfoParsedAt { get => _memInfoParsedAt; private set => SetField(ref _memInfoParsedAt, value); }
@@ -748,6 +753,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(SelectedDeviceDescription));
             // 当前平台由所选设备派生，换设备就可能换平台。
             OnPropertyChanged(nameof(Platform));
+            OnPropertyChanged(nameof(IsSelectedDeviceWin64));
             // IP 属于具体某台设备，换设备后旧值不再成立。
             SelectedDeviceIpSummary = "点击「获取 IP」查询所选设备的地址。";
             // 设备内容同样属于具体某台设备，换设备后旧内容不再成立。
@@ -1103,6 +1109,66 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         new(ResolveDeviceServiceForDevice(device));
 
     /// <summary>
+    /// 「安装包」页当前平台是否为 Win64（不区分大小写）。
+    /// </summary>
+    private bool IsDownloadPlatformWin64 =>
+        PlatformNames.TryParse(DownloadPlatform, out var platform) && platform == TargetPlatform.Win64;
+
+    /// <summary>
+    /// 解析本机 Win64 构建包所在目录：<c>Intermediate/Download/Win64/&lt;版本目录&gt;</c>。
+    /// 不依赖「安装包」页当前的平台选择器状态（用户可能正盯着 Android 设备下载 Android 包，
+    /// 同时想启动一个之前下载好的 Win64 构建）——直接对 Win64 常量重新枚举本地目录。
+    /// 若「安装包」页恰好选中了一个 Win64 包，优先用该选择；否则回落到本地最新版本目录
+    /// （自然排序最后一个），一个都没有就报错，不静默假设。
+    /// </summary>
+    private string ResolveWin64PackageDirectory()
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException("请先打开工程。");
+        }
+
+        var root = Path.Combine(_project.IntermediateDir, "Download", PlatformNames.ToName(TargetPlatform.Win64));
+        var packages = LocalDownloadCatalog.List(root, TargetPlatform.Win64);
+        if (packages.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"尚未下载任何 Win64 构建包（{root}）。请先在「安装包」页下载。");
+        }
+
+        var folderName = (IsDownloadPlatformWin64 ? SelectedDownloadedPackage?.FolderName : null)
+            ?? packages[^1].FolderName;
+        return Path.Combine(root, folderName);
+    }
+
+    /// <summary>
+    /// 本次针对指定设备的操作应使用的工程。Win64 设备下注入运行时构建包目录
+    /// （<see cref="ResolveWin64PackageDirectory"/>），Android 设备原样返回 <c>_project</c>。
+    ///
+    /// <see cref="LaunchParameterService"/>、<see cref="CaptureService"/>、
+    /// <see cref="UnrealSavedService"/> 都经 <c>ProjectSettings.ResolveTarget</c> 这唯一入口
+    /// 获取路径，因此每个会走到该入口的操作都要先经过这里，不能只处理启动按钮。
+    /// </summary>
+    private UkitProject ResolveProjectForDevice(IDevice device)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException("请先打开工程。");
+        }
+
+        if (!PlatformNames.TryParse(device.Platform, out var platform) || platform != TargetPlatform.Win64)
+        {
+            return _project;
+        }
+
+        var packageDirectory = ResolveWin64PackageDirectory();
+        return _project with
+        {
+            Settings = _project.Settings.WithWin64GameRoot(TargetPlatform.Win64, packageDirectory)
+        };
+    }
+
+    /// <summary>
     /// 当前所选设备平台的落地值。未选设备或该平台未配置时返回 null，
     /// 供预览类逻辑显示原因而不是抛出。
     /// </summary>
@@ -1118,7 +1184,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         try
         {
             var platform = PlatformNames.Parse(SelectedDevice.Platform, nameof(SelectedDevice));
-            return _project.Settings.ResolveTarget(platform, $"设备 '{SelectedDevice.Id}' 属于 {SelectedDevice.Platform} 平台。");
+            var project = ResolveProjectForDevice(SelectedDevice.Device);
+            return project.Settings.ResolveTarget(platform, $"设备 '{SelectedDevice.Id}' 属于 {SelectedDevice.Platform} 平台。");
         }
         catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
         {
@@ -1329,8 +1396,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var win64 = project.Settings.Win64;
         Win64Enabled = win64 is not null;
         var win64Values = win64 ?? Win64PlatformProfile.CreateDefaults();
-        Win64Executable = win64Values.Executable;
-        Win64WorkingDirectory = win64Values.WorkingDirectory;
+        Win64Executable = win64Values.PackageName;
         Win64FtpPath = win64Values.FtpPath;
         Win64PakFtpPath = win64Values.PakFtpPath;
         Win64PakAesKey = win64Values.PakAesKey;
@@ -1403,8 +1469,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 : null,
             Win64 = Win64Enabled
                 ? new Win64PlatformProfile(
-                    Executable: Win64Executable.Trim(),
-                    WorkingDirectory: Win64WorkingDirectory.Trim(),
+                    PackageName: Win64Executable.Trim(),
                     FtpPath: Win64FtpPath.Trim(),
                     PakFtpPath: Win64PakFtpPath.Trim(),
                     PakAesKey: Win64PakAesKey.Trim())
@@ -1457,9 +1522,18 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             // 参数内容与平台无关，先算出来：即使还没选设备也能预览将要写入的内容。
             var content = new LaunchParameterService(new AdbDeviceService(CreateAdbService()))
                 .BuildContent(_project.Settings, GetSelectedPresetNames(), CustomLaunchArguments);
+
             if (SelectedDevice is null)
             {
                 LaunchParameterPreview = $"目标路径：选择设备后确定{Environment.NewLine}{Environment.NewLine}{content}";
+                UpdateLaunchOperationSummary();
+                return;
+            }
+
+            // Win64 不使用 uecommandline.txt，参数直接追加到命令行，不显示文件路径。
+            if (IsSelectedDeviceWin64)
+            {
+                LaunchParameterPreview = $"命令行参数（追加到 exe）：{Environment.NewLine}{Environment.NewLine}{content}";
                 UpdateLaunchOperationSummary();
                 return;
             }
@@ -1531,7 +1605,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private Task StartApplicationAsync() => RunAsync("正在启动应用…", async progress =>
     {
         var service = CreateLaunchParameterService(SelectedDevice!.Device);
-        var target = _project!.Settings.ResolveTarget(
+        var project = ResolveProjectForDevice(SelectedDevice!.Device);
+        var target = project.Settings.ResolveTarget(
             PlatformNames.Parse(SelectedDevice!.Platform, nameof(SelectedDevice)));
 
         // 启动前先尝试停止旧实例，避免进程已在前台运行导致启动无效。
@@ -1539,14 +1614,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         // 对未运行目标会失败），此时不把「没有可停的进程」当成启动失败。
         try
         {
-            await service.StopApplicationAsync(_project, SelectedDevice!.Id, progress, OperationCancellationToken);
+            await service.StopApplicationAsync(project, SelectedDevice!.Id, progress, OperationCancellationToken);
         }
         catch (DeviceCommandException exception)
         {
             AddOperationLog("Warning", $"停止旧实例失败（忽略，继续启动）：{exception.Message}");
         }
 
-        await service.StartApplicationAsync(_project, SelectedDevice!.Id, progress, OperationCancellationToken);
+        await service.StartApplicationAsync(project, SelectedDevice!.Id, GetSelectedPresetNames(), CustomLaunchArguments, progress, OperationCancellationToken);
         StatusMessage = $"已发送应用启动请求：{target.LaunchTarget}{(target.LaunchActivity is { Length: > 0 } activity ? $"/{activity}" : string.Empty)}";
     });
 
@@ -1560,7 +1635,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         try
         {
-            var plan = CreateCaptureService(SelectedDevice.Device).CreatePlan(new CaptureRequest(_project, SelectedDevice.Device, CaptureTag));
+            var previewProject = ResolveProjectForDevice(SelectedDevice.Device);
+            var plan = CreateCaptureService(SelectedDevice.Device).CreatePlan(new CaptureRequest(previewProject, SelectedDevice.Device, CaptureTag));
             CaptureArchivePreview = $"归档目录：{plan.CaptureDirectory}{Environment.NewLine}设备 Saved：{plan.DeviceSavedDirectory}";
         }
         catch (Exception exception)
@@ -1571,7 +1647,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private Task RunCaptureAsync() => RunAsync("正在采集并归档原始数据…", async progress =>
     {
-        var request = new CaptureRequest(_project!, SelectedDevice!.Device, CaptureTag);
+        var project = ResolveProjectForDevice(SelectedDevice!.Device);
+        var request = new CaptureRequest(project, SelectedDevice!.Device, CaptureTag);
         var result = await CreateCaptureService(SelectedDevice.Device).CaptureAsync(request, progress, OperationCancellationToken);
         CaptureArchivePreview = $"归档目录：{result.Plan.CaptureDirectory}{Environment.NewLine}清单：{result.ManifestPath}";
         StatusMessage = $"采集完成：{result.Plan.CaptureDirectory}";
@@ -1627,7 +1704,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private Task DownloadDeviceSavedAsync(UnealSavedScope scope, string scopeLabel) =>
         RunAsync($"正在下载设备 {scopeLabel} 目录…", async progress =>
         {
-            var request = new UnrealSavedPullRequest(_project!, SelectedDevice!.Device, scope);
+            var project = ResolveProjectForDevice(SelectedDevice!.Device);
+            var request = new UnrealSavedPullRequest(project, SelectedDevice!.Device, scope);
             var service = new UnrealSavedService(ResolveDeviceServiceForDevice(SelectedDevice.Device));
             var result = await service.DownloadAsync(request, progress, OperationCancellationToken);
 
@@ -1795,12 +1873,20 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 return;
             }
 
-            var resolvedPath = remotePath
-                ?? CreateLaunchParameterService(SelectedDevice.Device).GetRemotePath(_project.Settings);
-            LaunchOperationSummary = $"设备：{SelectedDevice.Id}{(SelectedDevice.HasAlias ? $"（{SelectedDevice.Alias}）" : string.Empty)}（{target.PlatformName}）{Environment.NewLine}" +
-                                   $"启动目标：{target.LaunchTarget}{Environment.NewLine}" +
-                                   (target.LaunchActivity is { Length: > 0 } activity ? $"Activity：{activity}{Environment.NewLine}" : string.Empty) +
-                                   $"远端路径：{resolvedPath}";
+            var deviceLine = $"设备：{SelectedDevice.Id}{(SelectedDevice.HasAlias ? $"（{SelectedDevice.Alias}）" : string.Empty)}（{target.PlatformName}）";
+            var targetLine = $"启动目标：{target.LaunchTarget}";
+            var activityLine = target.LaunchActivity is { Length: > 0 } activity ? $"Activity：{activity}{Environment.NewLine}" : string.Empty;
+
+            if (IsSelectedDeviceWin64)
+            {
+                LaunchOperationSummary = $"{deviceLine}{Environment.NewLine}{targetLine}";
+            }
+            else
+            {
+                var resolvedPath = remotePath
+                    ?? CreateLaunchParameterService(SelectedDevice.Device).GetRemotePath(_project.Settings);
+                LaunchOperationSummary = $"{deviceLine}{Environment.NewLine}{targetLine}{Environment.NewLine}{activityLine}远端路径：{resolvedPath}";
+            }
         }
         catch (Exception exception)
         {
@@ -2063,7 +2149,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
             // 2. 下载 Saved 目录
             progress.Report(new OperationProgress("captureMemReport", "Download", 2, 3, "正在下载设备 Saved 目录…"));
-            var request = new UnrealSavedPullRequest(_project, SelectedDevice.Device, UnealSavedScope.Common);
+            var memReportProject = ResolveProjectForDevice(SelectedDevice.Device);
+            var request = new UnrealSavedPullRequest(memReportProject, SelectedDevice.Device, UnealSavedScope.Common);
             var savedService = new UnrealSavedService(ResolveDeviceServiceForDevice(SelectedDevice.Device));
             var downloadResult = await savedService.DownloadAsync(request, progress, OperationCancellationToken);
 

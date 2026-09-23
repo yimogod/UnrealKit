@@ -86,14 +86,14 @@ public sealed class ProjectServiceTests : IDisposable
         var settings = created.Project.Settings with
         {
             Android = AndroidPlatformProfile.CreateDefaults() with { PackageName = "com.example.game" },
-            Win64 = new Win64PlatformProfile(@"C:\Game\MyGame.exe", @"C:\Game")
+            Win64 = new Win64PlatformProfile("MyGame.exe")
         };
 
         await service.UpdateSettingsAsync(created.Project, settings);
         var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
 
         Assert.Equal("com.example.game", reopened.Settings.Android?.PackageName);
-        Assert.Equal(@"C:\Game\MyGame.exe", reopened.Settings.Win64?.Executable);
+        Assert.Equal("MyGame.exe", reopened.Settings.Win64?.PackageName);
         Assert.Equal(["Android", "Win64"], reopened.Settings.ConfiguredPlatforms);
     }
 
@@ -169,14 +169,16 @@ public sealed class ProjectServiceTests : IDisposable
         var created = await service.CreateProjectAsync(new CreateProjectRequest(projectDirectory, "Win64Project"));
         var settings = created.Project.Settings with
         {
-            Win64 = new Win64PlatformProfile(@"C:\Game\MyGame.exe", @"C:\Game")
+            // GameRoot 是运行时注入的会话状态（构建包目录由「安装包」页当前
+            // 选择决定），刻意在这里也填一个值，用来断言它不会被写入/读回 ini。
+            Win64 = new Win64PlatformProfile("MyGame.exe", GameRoot: @"C:\Game")
         };
 
         await service.UpdateSettingsAsync(created.Project, settings);
         var reopened = await service.OpenProjectAsync(created.Project.ProjectFilePath);
 
-        Assert.Equal(@"C:\Game\MyGame.exe", reopened.Settings.Win64?.Executable);
-        Assert.Equal(@"C:\Game", reopened.Settings.Win64?.WorkingDirectory);
+        Assert.Equal("MyGame.exe", reopened.Settings.Win64?.PackageName);
+        Assert.Null(reopened.Settings.Win64?.GameRoot);
     }
 
     [Fact]
@@ -292,7 +294,7 @@ public sealed class ProjectServiceTests : IDisposable
         {
             Ftp = new FtpSettings("ftp.example.com", 2121, "build-user", "secret"),
             Android = AndroidPlatformProfile.CreateDefaults() with { FtpPath = "/builds/android" },
-            Win64 = new Win64PlatformProfile(@"C:\Game\MyGame.exe", @"C:\Game", "/builds/win64")
+            Win64 = new Win64PlatformProfile("MyGame.exe", FtpPath: "/builds/win64")
         };
 
         await service.UpdateSettingsAsync(created.Project, settings);

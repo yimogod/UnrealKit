@@ -27,15 +27,20 @@ unrealkit adb connect <host:port> [--adb-path <path>]
 unrealkit adb disconnect <host:port> [--adb-path <path>]
 unrealkit adb ip <serial> [--adb-path <path>]
 
-unrealkit app start --project <project.ukit> [--device <serial>] [--platform <platform>] [--adb-path <path>]
+unrealkit app start --project <project.ukit> [--device <serial>] [--platform <platform>]
+                    [--preset <name>] [--custom <args>] [--package-dir <dir>] [--adb-path <path>]
+unrealkit app console send --project <project.ukit> [--device <serial>] [--platform <platform>]
+                           --cmd <command> [--package-dir <dir>] [--adb-path <path>]
+unrealkit app console run --project <project.ukit> [--device <serial>] [--platform <platform>]
+                          [--sequence <name>] [--cmds <inline>] [--package-dir <dir>] [--adb-path <path>]
 
 unrealkit commandline push --project <project.ukit> [--device <serial>] [--platform <platform>]
-                           [--preset <name>] [--custom <args>] [--adb-path <path>]
+                           [--preset <name>] [--custom <args>] [--package-dir <dir>] [--adb-path <path>]
 unrealkit commandline delete --project <project.ukit> [--device <serial>] [--platform <platform>]
-                             [--adb-path <path>]
+                             [--package-dir <dir>] [--adb-path <path>]
 
 unrealkit capture run --project <project.ukit> [--device <serial|auto>] [--platform <platform>]
-                      [--tag <tag>] [--skip-saved] [--format text|json] [--adb-path <path>]
+                      [--tag <tag>] [--skip-saved] [--format text|json] [--package-dir <dir>] [--adb-path <path>]
 unrealkit capture import --project <project.ukit> --source <directory> --platform <platform>
                          [--tag <tag>] [--capture-id <id>]
 unrealkit capture list <...>
@@ -87,6 +92,7 @@ unrealkit download install --project <project.ukit> --device <serial> --apk <pat
   - `capture import` 的 `--platform` **必填**：导入没有设备可据以判断平台，而归档目录按平台分区，替用户挑一个会把数据归到错误的平台下。
   - `capture list` / `parse capture-list` 的 `--platform` 是过滤器，不传表示不过滤。
   - `project create` 的 `--platform` 可重复或逗号分隔，声明工程要配置哪些平台；不传则两个平台都写入默认配置。
+- `--package-dir` 指定 Win64 构建包所在目录（通常是 `download` 落地的 `Intermediate/Download/Win64/<版本目录>`）。解析出的设备是 Win64 时**必填**——CLI 没有 GUI「安装包」页的会话选中状态，无法替用户猜使用哪个包；解析出的设备是 Android 时传了该参数直接报错，不静默忽略。工程配置里的 `Win64.PackageName` 只是文件名（如 `MyGame.exe`，与 Android 的 `PackageName` 同名不同义，参见 `Doc/工程格式与配置.md`），运行时在 `--package-dir` 目录第一层查找，找不到报错，不递归、不跨层猜测。
 - 设备所在平台在工程中未配置时报错并列出已配置平台，不回退到其他平台的配置。
 - `--adb-path` 为最高优先级的 adb 来源，解析顺序见 `Doc/设备操作与文件安全.md`。
 - `devices` 的 `--project` 可选，只用于取设备别名（配置见 `Doc/工程格式与配置.md`）：不传就只列设备本身，不去猜一个工程——猜错的工程会显示另一批设备的别名。配了别名的设备在行尾多一列别名，没配的不补占位符。别名不参与设备选择，`--device` 仍只接受设备 id。

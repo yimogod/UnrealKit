@@ -217,7 +217,7 @@ public sealed class LaunchParameterServiceTests
 
         public async IAsyncEnumerable<string> StreamLogAsync(IDevice device, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await System.Threading.Tasks.Task.CompletedTask; yield break; }
 
-        public Task<ProcessExecutionResult> StartApplicationAsync(IDevice device, string target, string? activity = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+        public Task<ProcessExecutionResult> StartApplicationAsync(IDevice device, string target, string? activity = null, string? commandLineArguments = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             StartRequest = (device.Id, target, activity ?? string.Empty);
             return Task.FromResult(Success);

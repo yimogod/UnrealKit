@@ -252,9 +252,12 @@ public sealed class AdbDeviceService : IDeviceService
         IDevice device,
         string target,
         string? activity = null,
+        string? commandLineArguments = null,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(target);
         return RunRequiredAsync(_adb.StartApplicationAsync(device.Id, target, activity ?? string.Empty, progress, cancellationToken));
     }
 

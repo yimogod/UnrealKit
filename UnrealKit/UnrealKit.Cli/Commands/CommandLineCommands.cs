@@ -45,7 +45,8 @@ internal static class CommandLineCommands
 
     private static int FailUsage()
     {
-        Console.Error.WriteLine("Usage: unrealkit commandline <push|delete> --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--adb-path <path>]");
+        Console.Error.WriteLine("Usage: unrealkit commandline <push|delete> --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--package-dir <dir>] [--adb-path <path>]");
+        Console.Error.WriteLine("  --package-dir is required for Win64 devices.");
         return 2;
     }
 }

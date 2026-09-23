@@ -198,32 +198,42 @@ public sealed class Win64IntegrationTests
     [Fact]
     public void CaptureService_CreatesPlan_ForWin64Project()
     {
-        var settings = ProjectSettings.CreateDefaults("WinGame") with
+        var packageDir = Directory.CreateTempSubdirectory().FullName;
+        try
         {
-            Win64 = new Win64PlatformProfile(@"C:\Projects\WinGame\WinGame.exe", @"C:\Projects\WinGame"),
-            UnrealProjectName = "WinGame"
-        };
-        var project = new UkitProject(
-            @"C:\Projects\WinGame\WinGame.ukit",
-            @"C:\Projects\WinGame",
-            UkitProjectDescriptor.CreateDefault("WinGame"),
-            settings);
+            File.WriteAllText(Path.Combine(packageDir, "WinGame.exe"), string.Empty);
 
-        var device = new Win64Device();
-        var service = new CaptureService();
-        var plan = service.CreatePlan(new CaptureRequest(project, device, "baseline"));
+            var settings = ProjectSettings.CreateDefaults("WinGame") with
+            {
+                Win64 = new Win64PlatformProfile("WinGame.exe", GameRoot: packageDir),
+                UnrealProjectName = "WinGame"
+            };
+            var project = new UkitProject(
+                Path.Combine(packageDir, "WinGame.ukit"),
+                packageDir,
+                UkitProjectDescriptor.CreateDefault("WinGame"),
+                settings);
 
-        Assert.Contains("Win64", plan.CaptureDirectory);
-        Assert.Contains("baseline", plan.CaptureDirectory);
-        Assert.Contains(@"C:\Projects\WinGame\WinGame\Saved", plan.DeviceSavedDirectory);
+            var device = new Win64Device();
+            var service = new CaptureService();
+            var plan = service.CreatePlan(new CaptureRequest(project, device, "baseline"));
+
+            Assert.Contains("Win64", plan.CaptureDirectory);
+            Assert.Contains("baseline", plan.CaptureDirectory);
+            Assert.Contains(Path.Combine(packageDir, "Saved"), plan.DeviceSavedDirectory);
+        }
+        finally
+        {
+            if (Directory.Exists(packageDir)) Directory.Delete(packageDir, recursive: true);
+        }
     }
 
     [Fact]
-    public void CaptureService_CreatePlan_ForWin64_NoWorkingDir_ThrowsWithActionableMessage()
+    public void CaptureService_CreatePlan_ForWin64_NoPackageDirectory_ThrowsWithActionableMessage()
     {
         var settings = ProjectSettings.CreateDefaults("WinGame") with
         {
-            Win64 = new Win64PlatformProfile(@"C:\Projects\WinGame\WinGame.exe", WorkingDirectory: string.Empty),
+            Win64 = new Win64PlatformProfile("WinGame.exe", GameRoot: null),
             UnrealProjectName = "WinGame"
         };
         var project = new UkitProject(
@@ -235,33 +245,71 @@ public sealed class Win64IntegrationTests
         var device = new Win64Device();
         var service = new CaptureService();
 
-        // Falling back to a relative path would resolve against the current process
-        // working directory, so GUI and CLI would archive from different locations.
-        // The Saved directory must be explicitly configured instead.
+        // 没有运行时构建包目录（用户尚未在「安装包」页选择/下载）必须报错，
+        // 不能默默拿一个猜测路径去采集——那会拉到空目录却报告成功。
         var exception = Assert.Throws<InvalidOperationException>(
             () => service.CreatePlan(new CaptureRequest(project, device, "test")));
 
-        Assert.Contains("WorkingDirectory", exception.Message);
+        Assert.Contains("构建包", exception.Message);
+    }
+
+    [Fact]
+    public void CaptureService_CreatePlan_ForWin64_ExecutableMissing_ThrowsWithActionableMessage()
+    {
+        var packageDir = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            // 故意不创建 WinGame.exe：exe 只在包目录第一层找，找不到就报错，不递归猜测。
+            var settings = ProjectSettings.CreateDefaults("WinGame") with
+            {
+                Win64 = new Win64PlatformProfile("WinGame.exe", GameRoot: packageDir),
+                UnrealProjectName = "WinGame"
+            };
+            var project = new UkitProject(
+                Path.Combine(packageDir, "WinGame.ukit"),
+                packageDir,
+                UkitProjectDescriptor.CreateDefault("WinGame"),
+                settings);
+
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => new CaptureService().CreatePlan(new CaptureRequest(project, new Win64Device(), "test")));
+
+            Assert.Contains("WinGame.exe", exception.Message);
+        }
+        finally
+        {
+            if (Directory.Exists(packageDir)) Directory.Delete(packageDir, recursive: true);
+        }
     }
 
     [Fact]
     public void CaptureService_CreatePlan_ForWin64_ResolvesSavedDirectoryToAbsolutePath()
     {
-        var settings = ProjectSettings.CreateDefaults("WinGame") with
+        var packageDir = Directory.CreateTempSubdirectory().FullName;
+        try
         {
-            Win64 = new Win64PlatformProfile(@"C:\Builds\WinGame\WinGame.exe", @"C:\Builds\WinGame"),
-            UnrealProjectName = "WinGame"
-        };
-        var project = new UkitProject(
-            @"C:\Projects\WinGame\WinGame.ukit",
-            @"C:\Projects\WinGame",
-            UkitProjectDescriptor.CreateDefault("WinGame"),
-            settings);
+            File.WriteAllText(Path.Combine(packageDir, "WinGame.exe"), string.Empty);
 
-        var plan = new CaptureService().CreatePlan(new CaptureRequest(project, new Win64Device(), "test"));
+            var settings = ProjectSettings.CreateDefaults("WinGame") with
+            {
+                Win64 = new Win64PlatformProfile("WinGame.exe", GameRoot: packageDir),
+                UnrealProjectName = "WinGame"
+            };
+            var project = new UkitProject(
+                Path.Combine(packageDir, "WinGame.ukit"),
+                packageDir,
+                UkitProjectDescriptor.CreateDefault("WinGame"),
+                settings);
 
-        Assert.Equal(@"C:\Builds\WinGame\WinGame\Saved", plan.DeviceSavedDirectory);
-        Assert.True(Path.IsPathFullyQualified(plan.DeviceSavedDirectory));
+            var plan = new CaptureService().CreatePlan(new CaptureRequest(project, new Win64Device(), "test"));
+
+            Assert.Equal(Path.Combine(packageDir, "Saved"), plan.DeviceSavedDirectory);
+            Assert.True(Path.IsPathFullyQualified(plan.DeviceSavedDirectory));
+        }
+        finally
+        {
+            if (Directory.Exists(packageDir)) Directory.Delete(packageDir, recursive: true);
+        }
     }
 
     [Fact]
@@ -290,30 +338,40 @@ public sealed class Win64IntegrationTests
     [Fact]
     public void CaptureService_CreatePlan_SameProjectServesBothPlatforms()
     {
-        // 同一工程配置了两个平台时，归档目录随设备平台走，互不干扰。
-        var settings = ProjectSettings.CreateDefaults("DualGame") with
+        var packageDir = Directory.CreateTempSubdirectory().FullName;
+        try
         {
-            UnrealProjectName = "DualGame",
-            Android = AndroidPlatformProfile.CreateDefaults() with { PackageName = "com.example.dual" },
-            Win64 = new Win64PlatformProfile(@"C:\Builds\DualGame\DualGame.exe", @"C:\Builds\DualGame")
-        };
-        var project = new UkitProject(
-            @"C:\Projects\DualGame\DualGame.ukit",
-            @"C:\Projects\DualGame",
-            UkitProjectDescriptor.CreateDefault("DualGame"),
-            settings);
-        var service = new CaptureService();
+            File.WriteAllText(Path.Combine(packageDir, "DualGame.exe"), string.Empty);
 
-        var win64Plan = service.CreatePlan(new CaptureRequest(project, new Win64Device(), "test"));
-        var androidPlan = service.CreatePlan(new CaptureRequest(
-            project,
-            new AdbDevice("device-01", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, string.Empty),
-            "test"));
+            // 同一工程配置了两个平台时，归档目录随设备平台走，互不干扰。
+            var settings = ProjectSettings.CreateDefaults("DualGame") with
+            {
+                UnrealProjectName = "DualGame",
+                Android = AndroidPlatformProfile.CreateDefaults() with { PackageName = "com.example.dual" },
+                Win64 = new Win64PlatformProfile("DualGame.exe", GameRoot: packageDir)
+            };
+            var project = new UkitProject(
+                @"C:\Projects\DualGame\DualGame.ukit",
+                @"C:\Projects\DualGame",
+                UkitProjectDescriptor.CreateDefault("DualGame"),
+                settings);
+            var service = new CaptureService();
 
-        Assert.Contains(Path.Combine("Content", "Win64"), win64Plan.CaptureDirectory);
-        Assert.Equal(@"C:\Builds\DualGame\DualGame\Saved", win64Plan.DeviceSavedDirectory);
-        Assert.Contains(Path.Combine("Content", "Android"), androidPlan.CaptureDirectory);
-        Assert.StartsWith("/sdcard/", androidPlan.DeviceSavedDirectory, StringComparison.Ordinal);
+            var win64Plan = service.CreatePlan(new CaptureRequest(project, new Win64Device(), "test"));
+            var androidPlan = service.CreatePlan(new CaptureRequest(
+                project,
+                new AdbDevice("device-01", AdbDeviceStatus.Device, null, "Pixel", null, AdbConnectionType.Usb, string.Empty),
+                "test"));
+
+            Assert.Contains(Path.Combine("Content", "Win64"), win64Plan.CaptureDirectory);
+            Assert.Equal(Path.Combine(packageDir, "Saved"), win64Plan.DeviceSavedDirectory);
+            Assert.Contains(Path.Combine("Content", "Android"), androidPlan.CaptureDirectory);
+            Assert.StartsWith("/sdcard/", androidPlan.DeviceSavedDirectory, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(packageDir)) Directory.Delete(packageDir, recursive: true);
+        }
     }
 
     private sealed class UnknownDevice : IDevice

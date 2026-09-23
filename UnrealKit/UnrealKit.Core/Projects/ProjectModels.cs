@@ -373,6 +373,35 @@ public sealed record ProjectSettings(
 }
 
 /// <summary>
+/// Win64 运行时上下文的注入点。<see cref="Win64PlatformProfile.GameRoot"/>
+/// 不是版本化配置，而是「本次操作用哪个已下载的构建包」这一会话选择，因此不放在
+/// <see cref="ProjectSettings"/> 的构造参数里，而是由调用方在发起操作前临时注入。
+///
+/// <see cref="CaptureService"/>、<see cref="Launch.LaunchParameterService"/>、
+/// <see cref="Unreal.UnrealSavedService"/> 都经 <see cref="ProjectSettings.ResolveTarget"/>
+/// 这唯一入口获取 <see cref="PlatformTarget"/>，因此这里统一处理一次，
+/// 三处调用方都不需要各自实现同样的 <c>with</c> 逻辑。
+/// </summary>
+public static class Win64RuntimeContextExtensions
+{
+    /// <summary>
+    /// 若目标平台是 Win64 且工程已配置该平台，返回注入了运行时构建包目录的副本；
+    /// 其他情况（Android、或 Win64 未配置）原样返回，对 Android 零影响。
+    /// </summary>
+    public static ProjectSettings WithWin64GameRoot(
+        this ProjectSettings settings, TargetPlatform platform, string? gameRoot)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        if (platform != TargetPlatform.Win64 || settings.Win64 is null)
+        {
+            return settings;
+        }
+
+        return settings with { Win64 = settings.Win64 with { GameRoot = gameRoot } };
+    }
+}
+
+/// <summary>
 /// 游戏启动参数预设默认值
 /// </summary>
 public static class LaunchParameterPresetDefaults

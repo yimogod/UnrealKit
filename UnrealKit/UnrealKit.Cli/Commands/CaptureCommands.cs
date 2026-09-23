@@ -31,7 +31,7 @@ internal static class CaptureCommands
     {
         CliOptions.EnsureOnly(
             arguments,
-            CliOptions.Allowed("--project", "--device", "--platform", "--tag", "--format", "--skip-saved"),
+            CliOptions.Allowed("--project", "--device", "--platform", "--tag", "--format", "--skip-saved", "--package-dir"),
             CliOptions.Allowed("--skip-saved"));
 
         var project = await new ProjectService().OpenProjectAsync(CliOptions.GetRequired(arguments, "--project"));
@@ -151,7 +151,8 @@ internal static class CaptureCommands
     private static int FailUsage()
     {
         Console.Error.WriteLine("Usage:");
-        Console.Error.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial>|auto [--tag <tag>] [--format text|json] [--skip-saved] [--adb-path <path>]");
+        Console.Error.WriteLine("  unrealkit capture run --project <project.ukit> --device <serial>|auto [--tag <tag>] [--format text|json] [--skip-saved] [--package-dir <dir>] [--adb-path <path>]");
+        Console.Error.WriteLine("    --package-dir is required when the resolved device is Win64.");
         Console.Error.WriteLine("  unrealkit capture import --project <project.ukit> --source <directory> [--platform <platform>] [--tag <tag>] [--capture-id <id>]");
         Console.Error.WriteLine("  unrealkit capture list --project <project.ukit> [--platform <platform>] [--tag <tag>] [--format text|json]");
         Console.Error.WriteLine("  unrealkit capture info --capture-dir <path> [--format text|json]");

@@ -188,14 +188,23 @@ public sealed class LaunchParameterService : ILaunchParameterService
         return _deviceService.DeleteRemoteFileAsync(ResolveDevice(serialNumber), path, progress, cancellationToken);
     }
 
-    public Task<ProcessExecutionResult> StartApplicationAsync(UkitProject project, string serialNumber, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    public Task<ProcessExecutionResult> StartApplicationAsync(UkitProject project, string serialNumber, IReadOnlyList<string>? selectedPresetNames = null, string? customArguments = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(serialNumber);
 
         var target = ResolveTarget(project.Settings);
+
+        // Win64 不使用 uecommandline.txt，参数直接追加到命令行。
+        // Android 参数通过 uecommandline.txt 传入，此处传 null 让设备服务忽略。
+        string? commandLineArguments = null;
+        if (target.Platform == TargetPlatform.Win64 && (selectedPresetNames is { Count: > 0 } || !string.IsNullOrWhiteSpace(customArguments)))
+        {
+            commandLineArguments = BuildContent(project.Settings, selectedPresetNames ?? [], customArguments);
+        }
+
         return _deviceService.StartApplicationAsync(
-            ResolveDevice(serialNumber), target.LaunchTarget, target.LaunchActivity, progress, cancellationToken);
+            ResolveDevice(serialNumber), target.LaunchTarget, target.LaunchActivity, commandLineArguments, progress, cancellationToken);
     }
 
     /// <summary>

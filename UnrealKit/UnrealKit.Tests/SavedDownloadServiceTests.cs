@@ -285,7 +285,8 @@ public sealed class UnrealSavedServiceTests : IDisposable
             new CreateProjectRequest(Path.Combine(_temporaryDirectory, name), name));
 
         var gameDirectory = Path.Combine(_temporaryDirectory, name + "Game");
-        var executable = Path.Combine(gameDirectory, name + ".exe");
+        var executableName = name + ".exe";
+        var executable = Path.Combine(gameDirectory, executableName);
         Directory.CreateDirectory(gameDirectory);
         await File.WriteAllTextAsync(executable, string.Empty);
 
@@ -293,8 +294,8 @@ public sealed class UnrealSavedServiceTests : IDisposable
         {
             Win64 = Win64PlatformProfile.CreateDefaults() with
             {
-                Executable = executable,
-                WorkingDirectory = gameDirectory
+                PackageName = executableName,
+                GameRoot = gameDirectory
             }
         };
         var project = created.Project with { Settings = settings };
@@ -363,7 +364,7 @@ public sealed class UnrealSavedServiceTests : IDisposable
         public Task<ProcessExecutionResult> SendConsoleCommandAsync(IDevice device, string command, string? target = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> QueryConsoleVariableAsync(IDevice device, string variableName, ConsoleVariableType variableType, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public async IAsyncEnumerable<string> StreamLogAsync(IDevice device, string? filter = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { await Task.CompletedTask; yield break; }
-        public Task<ProcessExecutionResult> StartApplicationAsync(IDevice device, string target, string? activity = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
+        public Task<ProcessExecutionResult> StartApplicationAsync(IDevice device, string target, string? activity = null, string? commandLineArguments = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> StopApplicationAsync(IDevice device, string target, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> PushFileAsync(IDevice device, string localPath, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);
         public Task<ProcessExecutionResult> DeleteRemoteFileAsync(IDevice device, string remotePath, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) => Task.FromResult(Success);

@@ -123,10 +123,15 @@ public interface IDeviceService : IDeviceProvider
     /// <summary>
     /// 启动应用。
     /// </summary>
+    /// <param name="commandLineArguments">
+    /// Win64：直接追加到 exe 后的命令行参数字符串（空格分隔的 UE 参数）。
+    /// Android：忽略，参数通过 uecommandline.txt 传入。
+    /// </param>
     Task<ProcessExecutionResult> StartApplicationAsync(
         IDevice device,
         string target,
         string? activity = null,
+        string? commandLineArguments = null,
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default);
 

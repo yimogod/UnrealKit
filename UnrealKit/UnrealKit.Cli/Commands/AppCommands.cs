@@ -25,9 +25,12 @@ internal static class AppCommands
 
     private static async Task<int> StartAsync(string[] options, string? adbPath)
     {
+        CliOptions.EnsureOnly(options, CliOptions.Allowed("--project", "--device", "--platform", "--preset", "--custom", "--package-dir", "--adb-path"));
         var project = await new ProjectService().OpenProjectAsync(CliOptions.GetRequired(options, "--project"));
         var resolved = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
-        await new LaunchParameterService(resolved.DeviceService).StartApplicationAsync(project, resolved.DeviceId);
+        var presets = CliOptions.GetAll(options, "--preset");
+        var custom = CliOptions.GetOptional(options, "--custom");
+        await new LaunchParameterService(resolved.DeviceService).StartApplicationAsync(project, resolved.DeviceId, presets, custom);
         return 0;
     }
 
@@ -51,7 +54,7 @@ internal static class AppCommands
 
     private static async Task<int> SendConsoleCommandAsync(string[] options, string? adbPath)
     {
-        CliOptions.EnsureOnly(options, CliOptions.Allowed("--device", "--platform", "--cmd", "--project", "--adb-path"));
+        CliOptions.EnsureOnly(options, CliOptions.Allowed("--device", "--platform", "--cmd", "--project", "--package-dir", "--adb-path"));
         var command = CliOptions.GetRequired(options, "--cmd");
         var project = await new ProjectService().OpenProjectAsync(CliOptions.GetRequired(options, "--project"));
         var resolved = await DeviceResolver.ResolveDeviceTargetAsync(project, options, adbPath);
@@ -85,7 +88,7 @@ internal static class AppCommands
 
     private static async Task<int> RunConsoleSequenceAsync(string[] options, string? adbPath)
     {
-        CliOptions.EnsureOnly(options, CliOptions.Allowed("--project", "--device", "--platform", "--sequence", "--cmds", "--adb-path"));
+        CliOptions.EnsureOnly(options, CliOptions.Allowed("--project", "--device", "--platform", "--sequence", "--cmds", "--package-dir", "--adb-path"));
         var projectPath = CliOptions.GetRequired(options, "--project");
         var sequenceName = CliOptions.GetOptional(options, "--sequence");
         var inlineCmds = CliOptions.GetOptional(options, "--cmds");
@@ -177,7 +180,8 @@ internal static class AppCommands
     private static int FailUsage()
     {
         Console.Error.WriteLine("Usage:");
-        Console.Error.WriteLine("  unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]");
+        Console.Error.WriteLine("  unrealkit app start --project <project.ukit> --device <serial> [--preset <name>] [--custom <arguments>] [--package-dir <dir>] [--adb-path <path>]");
+        Console.Error.WriteLine("    --package-dir is required for Win64 devices: the local build directory downloaded via the 安装包 page (Intermediate/Download/Win64/<version>).");
         WriteConsoleUsageLines();
         return 2;
     }

@@ -71,7 +71,25 @@ internal static class DeviceResolver
     {
         var device = await ResolveDeviceAsync(project, options, adbPath, streamOutput);
         var platform = PlatformNames.Parse(device.Platform, nameof(device));
-        var target = project.Settings.ResolveTarget(platform, $"设备 '{device.Id}' 属于 {device.Platform} 平台。");
+
+        // --package-dir 只对 Win64 有意义：CLI 没有「安装包页当前选中」这一会话状态，
+        // 必须显式指定构建包目录。Android 传了这个参数直接报错，不静默忽略——
+        // 用户可能以为它对 Android 也生效。
+        var packageDirectory = CliOptions.GetOptional(options, "--package-dir");
+        if (packageDirectory is not null && platform != TargetPlatform.Win64)
+        {
+            throw new AdbDeviceSelectionException(
+                $"--package-dir 仅用于 Win64 设备，当前设备 '{device.Id}' 属于 {device.Platform} 平台。");
+        }
+
+        if (platform == TargetPlatform.Win64 && packageDirectory is null)
+        {
+            throw new AdbDeviceSelectionException(
+                $"设备 '{device.Id}' 属于 Win64 平台，需要 --package-dir 指定已下载的构建包目录。");
+        }
+
+        var settings = project.Settings.WithWin64GameRoot(platform, packageDirectory);
+        var target = settings.ResolveTarget(platform, $"设备 '{device.Id}' 属于 {device.Platform} 平台。");
         return new ResolvedDeviceTarget(CreateDeviceService(project, device, adbPath, streamOutput), device, target);
     }
 

@@ -75,8 +75,7 @@ internal static class PlatformProfileIni
                 break;
 
             case Win64PlatformProfile win64:
-                document.SetValue(section, "Executable", win64.Executable);
-                document.SetValue(section, "WorkingDirectory", win64.WorkingDirectory);
+                document.SetValue(section, "PackageName", win64.PackageName);
                 document.SetValue(section, "FtpPath", win64.FtpPath);
                 document.SetValue(section, "PakFtpPath", win64.PakFtpPath);
                 document.SetValue(section, "PakAesKey", win64.PakAesKey);
@@ -136,8 +135,7 @@ internal static class PlatformProfileIni
     {
         var defaults = Win64PlatformProfile.CreateDefaults();
         return new Win64PlatformProfile(
-            Executable: value("Executable", defaults.Executable),
-            WorkingDirectory: value("WorkingDirectory", defaults.WorkingDirectory),
+            PackageName: value("PackageName", defaults.PackageName),
             FtpPath: value("FtpPath", defaults.FtpPath),
             PakFtpPath: value("PakFtpPath", defaults.PakFtpPath),
             PakAesKey: value("PakAesKey", defaults.PakAesKey),

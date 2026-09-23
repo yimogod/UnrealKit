@@ -11,6 +11,7 @@
 
             <converters:PointsToPointCollectionConverter x:Key="PointsConverter" />
             <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+            <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

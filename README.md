@@ -62,12 +62,12 @@ unrealkit adb devices [--adb-path <path>]
 unrealkit adb connect <host:port> [--adb-path <path>]
 unrealkit adb disconnect <host:port> [--adb-path <path>]
 unrealkit adb ip <serial> [--adb-path <path>]
-unrealkit app start --project <project.ukit> --device <serial> [--adb-path <path>]
-unrealkit app console send --project <project.ukit> --device <serial> --cmd <command> [--adb-path <path>]
-unrealkit app console run --project <project.ukit> --device <serial> [--sequence <name>] [--cmds <inline>] [--adb-path <path>]
-unrealkit commandline push --project <project.ukit> --device <serial> [--preset <name>] [--custom <args>] [--adb-path <path>]
-unrealkit commandline delete --project <project.ukit> --device <serial> [--adb-path <path>]
-unrealkit capture run --project <project.ukit> --device <serial|auto> [--tag <tag>] [--format text|json] [--skip-saved] [--adb-path <path>]
+unrealkit app start --project <project.ukit> --device <serial> [--preset <name>] [--custom <args>] [--package-dir <dir>] [--adb-path <path>]
+unrealkit app console send --project <project.ukit> --device <serial> --cmd <command> [--package-dir <dir>] [--adb-path <path>]
+unrealkit app console run --project <project.ukit> --device <serial> [--sequence <name>] [--cmds <inline>] [--package-dir <dir>] [--adb-path <path>]
+unrealkit commandline push --project <project.ukit> --device <serial> [--preset <name>] [--custom <args>] [--package-dir <dir>] [--adb-path <path>]
+unrealkit commandline delete --project <project.ukit> --device <serial> [--package-dir <dir>] [--adb-path <path>]
+unrealkit capture run --project <project.ukit> --device <serial|auto> [--tag <tag>] [--format text|json] [--skip-saved] [--package-dir <dir>] [--adb-path <path>]
 unrealkit capture import --project <project.ukit> --source <directory> [--platform <platform>] [--tag <tag>] [--capture-id <id>]
 unrealkit parse meminfo --input <file> [--format text|json]
 unrealkit parse memreport --input <file> [--format text|json]
@@ -89,6 +89,8 @@ unrealkit download install --project <project.ukit> --device <serial> --apk <pat
 `analyze trend` follows the same metrics across every capture matching the filters, oldest to newest. `--from` / `--to` take `yyyy-MM-dd` and are inclusive. A capture whose input is ambiguous or unparsable is excluded with a specific diagnostic rather than silently skipped — pass `--file` to name the file to read from each capture. Per-point deltas step from the previous capture that had a value, so a gap in the middle is not read as a drop to zero.
 
 `download` pulls the latest build for a platform from FTP: it lists the platform's FTP parent directory (`FtpPath`), picks the newest subdirectory by natural sort, and downloads the `.apk` (Android) or the whole subdirectory (Win64). FTP host/port/credentials come from the shared `[UnrealKit.Ftp]` section in the project config. `download install` installs a local APK to a connected Android device.
+
+`--package-dir` is required whenever the resolved device is Win64 (the executable's containing directory — normally `Intermediate/Download/Win64/<version>` from a prior `download`); it is rejected for Android devices. Win64's `PackageName` in `DefaultGame.ini` is a bare filename (e.g. `MyGame.exe`), found directly in `--package-dir`, not recursively.
 
 ## Capture Directory Convention
 
