@@ -215,7 +215,9 @@ public sealed class DownloadServiceTests
         var factory = new FakeFtpClientFactory();
         factory.Client.ListResults["/builds/win64"] = [new("2024.01.01", true), new("2024.01.05", true)];
         var localBase = NewLocalBaseDirectory();
-        Directory.CreateDirectory(Path.Combine(localBase, "2024.01.05"));
+        var localVersionDir = Path.Combine(localBase, "2024.01.05");
+        Directory.CreateDirectory(localVersionDir);
+        File.WriteAllBytes(Path.Combine(localVersionDir, "Game.exe"), []); // 模拟已完整下载
         var service = new FtpDownloadService(factory);
         var request = new DownloadRequest(TargetPlatform.Win64, ConfiguredSettings, "/builds/win64", localBase, DownloadMode.Directory);
 
@@ -225,6 +227,25 @@ public sealed class DownloadServiceTests
         Assert.Equal(DownloadDiagnosticCodes.AlreadyUpToDate, Assert.Single(result.Diagnostics).Code);
         Assert.Equal("2024.01.05", result.SourceSubdir);
         Assert.Empty(factory.Client.DownloadedDirectories);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_Win64_DirectoryExistsButNoExe_DownloadsInstaller()
+    {
+        // 先下载了 Pak 导致目录存在但没有 exe，此时点"下载安装包"应继续下载。
+        var factory = new FakeFtpClientFactory();
+        factory.Client.ListResults["/builds/win64"] = [new("2024.01.01", true), new("2024.01.05", true)];
+        var localBase = NewLocalBaseDirectory();
+        Directory.CreateDirectory(Path.Combine(localBase, "2024.01.05")); // 目录存在，但无 exe
+        var service = new FtpDownloadService(factory);
+        var request = new DownloadRequest(TargetPlatform.Win64, ConfiguredSettings, "/builds/win64", localBase, DownloadMode.Directory);
+
+        var result = await service.DownloadAsync(request);
+
+        Assert.True(result.Succeeded);
+        Assert.DoesNotContain(result.Diagnostics, d => d.Code == DownloadDiagnosticCodes.AlreadyUpToDate);
+        Assert.Equal("2024.01.05", result.SourceSubdir);
+        Assert.Single(factory.Client.DownloadedDirectories); // 安装包目录被实际下载
     }
 
     [Fact]

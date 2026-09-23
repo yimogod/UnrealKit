@@ -97,6 +97,8 @@ public sealed class FtpDownloadService : IFtpDownloadService
             var skipDownload = Directory.Exists(localBaseDirectory);
             if (skipDownload && request.Platform == TargetPlatform.Android && request.Mode == DownloadMode.Apk)
                 skipDownload = FindLocalApk(localBaseDirectory) is not null;
+            if (skipDownload && request.Platform == TargetPlatform.Win64 && request.Mode == DownloadMode.Directory)
+                skipDownload = FindLocalExe(localBaseDirectory) is not null;
 
             if (skipDownload)
             {
@@ -224,6 +226,12 @@ public sealed class FtpDownloadService : IFtpDownloadService
         Directory.EnumerateFiles(localDirectory, "*.apk", SearchOption.TopDirectoryOnly).ToArray() is { Length: 1 } apks
             ? apks[0]
             : null;
+
+    /// <summary>
+    /// Win64 包目录里任意一个 .exe；目录存在但缺少 exe（如先下载了 Pak）时返回 null，需继续下载安装包。
+    /// </summary>
+    private static string? FindLocalExe(string localDirectory) =>
+        Directory.EnumerateFiles(localDirectory, "*.exe", SearchOption.TopDirectoryOnly).FirstOrDefault();
 
     private static int CountFiles(string directory) =>
         Directory.Exists(directory)

@@ -49,7 +49,7 @@
                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center" HorizontalAlignment="Right"
                            Width="300" TextTrimming="CharacterEllipsis" />
                 <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
-                         Width=60" Padding="5,3" VerticalContentAlignment="Center"
+                         Width="60" Padding="5,3" VerticalContentAlignment="Center"
                          ToolTip="要写入的数值" />
                 <Button Content="应用" Padding="8,3" Margin="4,0,0,0"
                         Command="{Binding DataContext.ApplyConsoleCommandPresetCommand,
