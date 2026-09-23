@@ -309,10 +309,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<RuntimeActorOption> RuntimeActors { get; } = [];
 
     /// <summary>
-    /// 控制台预设指令。界面用 <c>CollectionViewSource</c> 按 <c>Group</c> 分组显示，
-    /// 因此这里是单一平铺集合而不是按组嵌套。
+    /// 控制台预设指令（平铺集合，供刷新当前值等批量操作使用）。
     /// </summary>
     public ObservableCollection<ConsoleCommandPresetOption> ConsoleCommandPresets { get; } = [];
+
+    /// <summary>
+    /// 按 Group 聚合后的分组列表，每组包含三类子集合，供界面三列 Grid 直接绑定。
+    /// </summary>
+    public ObservableCollection<ConsoleCommandPresetGroup> ConsoleCommandPresetGroups { get; } = [];
     public ObservableCollection<LaunchParameterPresetOption> LaunchParameterPresets { get; } = [];
     public ObservableCollection<MemInfoMetricOption> MemInfoMetrics { get; } = [];
     public ObservableCollection<MemInfoPssOption> MemInfoPssEntries { get; } = [];
@@ -1287,9 +1291,24 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         ConsoleSequencePresets.Clear();
         foreach (var preset in project.Settings.ConsoleSequences) ConsoleSequencePresets.Add(preset);
         ConsoleCommandPresets.Clear();
+        ConsoleCommandPresetGroups.Clear();
+        var groupMap = new Dictionary<string, ConsoleCommandPresetGroup>(StringComparer.OrdinalIgnoreCase);
         foreach (var preset in project.Settings.ConsoleCommandPresets)
         {
-            ConsoleCommandPresets.Add(new ConsoleCommandPresetOption(preset));
+            var option = new ConsoleCommandPresetOption(preset);
+            ConsoleCommandPresets.Add(option);
+            if (!groupMap.TryGetValue(preset.Group, out var group))
+            {
+                group = new ConsoleCommandPresetGroup(preset.Group);
+                groupMap[preset.Group] = group;
+                ConsoleCommandPresetGroups.Add(group);
+            }
+            switch (preset.Kind)
+            {
+                case ConsoleCommandKind.Bool:   group.BoolItems.Add(option);   break;
+                case ConsoleCommandKind.Action: group.ActionItems.Add(option); break;
+                case ConsoleCommandKind.Value:  group.ValueItems.Add(option);  break;
+            }
         }
         ConsoleSequenceName = ConsoleSequencePresets.Count > 0 ? ConsoleSequencePresets[0].Name : string.Empty;
         UnrealProjectName = project.Settings.UnrealProjectName;

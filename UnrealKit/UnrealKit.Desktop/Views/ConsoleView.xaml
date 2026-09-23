@@ -1,132 +1,146 @@
-<UserControl x:Class="UnrealKit.Desktop.Views.ConsoleView"
+﻿<UserControl x:Class="UnrealKit.Desktop.Views.ConsoleView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:projects="clr-namespace:UnrealKit.Core.Projects;assembly=UnrealKit.Core">
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors">
     <UserControl.Resources>
         <!--
-            预设按 Group 分组展示. 分组是显示维度而非数据结构:
-            ViewModel 侧保持单一平铺集合，分组交给 CollectionViewSource，
-            这样改 INI 里的 Group 就能重排界面，不必动 ViewModel.
+            Bool 列条目：CheckBox，勾选/取消立即发送命令。
+            RelativeSource 向上找 ItemsControl（Bool列），再找其 Tag 里存放的 ShellViewModel。
         -->
-        <CollectionViewSource x:Key="GroupedConsoleCommandPresets"
-                              Source="{Binding ConsoleCommandPresets}">
-            <CollectionViewSource.GroupDescriptions>
-                <PropertyGroupDescription PropertyName="Group" />
-            </CollectionViewSource.GroupDescriptions>
-        </CollectionViewSource>
+        <DataTemplate x:Key="BoolItemTemplate">
+            <CheckBox Margin="0,2,0,2"
+                      IsChecked="{Binding IsChecked}"
+                      Content="{Binding Name}"
+                      ToolTip="{Binding Description}"
+                      VerticalAlignment="Center">
+                <b:Interaction.Triggers>
+                    <b:EventTrigger EventName="Checked">
+                        <b:InvokeCommandAction
+                            Command="{Binding DataContext.ApplyConsoleCommandPresetCommand,
+                                      RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                            CommandParameter="{Binding}" />
+                    </b:EventTrigger>
+                    <b:EventTrigger EventName="Unchecked">
+                        <b:InvokeCommandAction
+                            Command="{Binding DataContext.ApplyConsoleCommandPresetCommand,
+                                      RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                            CommandParameter="{Binding}" />
+                    </b:EventTrigger>
+                </b:Interaction.Triggers>
+            </CheckBox>
+        </DataTemplate>
 
-        <!--
-            GroupStyle 必须显式给出 GroupItem 模板: 默认模板只渲染子项、不渲染 Name，
-            分组标签不会出现. 与 MainWindow 的导航分组同理.
-        -->
-        <GroupStyle x:Key="ConsoleCommandPresetGroupStyle">
-            <GroupStyle.ContainerStyle>
-                <Style TargetType="GroupItem">
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="GroupItem">
-                                <StackPanel Margin="0,0,0,6">
-                                    <Border Background="#FFF1F4F8" Padding="10,5" Margin="0,0,0,2">
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#FF1B263B" />
-                                    </Border>
-                                    <ItemsPresenter />
-                                </StackPanel>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                </Style>
-            </GroupStyle.ContainerStyle>
-        </GroupStyle>
-
-        <!--
-            一行一条预设. 三种类型共用一个模板，用 DataTrigger 按 Kind 切换输入控件:
-            分成三个模板会让分组内的行高、列宽各自对不齐.
-            列宽固定，使各行的复选框/输入框/当前值纵向对齐.
-        -->
-        <DataTemplate x:Key="ConsoleCommandPresetTemplate">
-            <Grid Margin="10,4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="260" />
-                    <ColumnDefinition Width="400" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="150" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                           ToolTip="{Binding Description}" />
-
-                <!-- 输入区: Bool 出复选框, Value 出输入框, Action 两者皆无. -->
-                <ContentControl Grid.Column="1" VerticalAlignment="Center" Content="{Binding}">
-                    <ContentControl.Style>
-                        <Style TargetType="ContentControl">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Kind}" Value="{x:Static projects:ConsoleCommandKind.Bool}">
-                                    <Setter Property="ContentTemplate">
-                                        <Setter.Value>
-                                            <DataTemplate>
-                                                <CheckBox IsChecked="{Binding IsChecked}"
-                                                          Content="开启"
-                                                          VerticalAlignment="Center" />
-                                            </DataTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding Kind}" Value="{x:Static projects:ConsoleCommandKind.Value}">
-                                    <Setter Property="ContentTemplate">
-                                        <Setter.Value>
-                                            <DataTemplate>
-                                                <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
-                                                         Padding="6,4" VerticalContentAlignment="Center"
-                                                         ToolTip="要写入的数值" />
-                                            </DataTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </ContentControl.Style>
-                </ContentControl>
-
-                <!--
-                    Command 走 AncestorType=ListBox 的 DataContext:
-                    模板内的 DataContext 是预设项本身，直接绑 Command 会找不到 ViewModel.
-                    CommandParameter="{Binding}" 把该项传回 ViewModel.
-                -->
-                <Button Grid.Column="2" Content="{Binding ActionLabel}" Padding="14,5" Margin="10,0,0,0"
+        <!-- Action 列条目：运行按钮 + 名称 -->
+        <DataTemplate x:Key="ActionItemTemplate">
+            <StackPanel Orientation="Horizontal" Margin="0,2,0,2"
+                        ToolTip="{Binding Description}">
+                <Button Content="运行" Padding="10,3"
                         Command="{Binding DataContext.ApplyConsoleCommandPresetCommand,
-                                          RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                  RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
                         CommandParameter="{Binding}" />
+                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" Margin="14,0,0,0" />
+            </StackPanel>
+        </DataTemplate>
 
-                <!-- 当前值: 只有 Bool/Value 有当前值可读, Action 型这一栏留空. -->
-                <TextBlock Grid.Column="3" Margin="12,0,0,0" VerticalAlignment="Center"
-                           Text="{Binding CurrentValueDisplay}"
-                           Foreground="#FF4B5A70" TextTrimming="CharacterEllipsis"
+        <!-- Value 列条目：名称 + 输入框 + 应用按钮 + 当前值 -->
+        <DataTemplate x:Key="ValueItemTemplate">
+            <StackPanel Orientation="Horizontal" Margin="0,2,0,2"
+                        ToolTip="{Binding Description}">
+                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" HorizontalAlignment="Right"
+                           Width="300" TextTrimming="CharacterEllipsis" />
+                <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                         Width=60" Padding="5,3" VerticalContentAlignment="Center"
+                         ToolTip="要写入的数值" />
+                <Button Content="应用" Padding="8,3" Margin="4,0,0,0"
+                        Command="{Binding DataContext.ApplyConsoleCommandPresetCommand,
+                                  RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                        CommandParameter="{Binding}" />
+                <TextBlock Text="{Binding CurrentValueDisplay}" VerticalAlignment="Center"
+                           Margin="6,0,0,0" Foreground="#FF4B5A70" MinWidth="50"
+                           TextTrimming="CharacterEllipsis"
                            ToolTip="{Binding CurrentValueDisplay}"
-                           Visibility="{Binding ShowsCurrentValue, Converter={StaticResource BoolToVisibilityConverter}}" />
+                           Visibility="{Binding ShowsCurrentValue,
+                               Converter={StaticResource BoolToVisibilityConverter}}" />
+            </StackPanel>
+        </DataTemplate>
 
-                <TextBlock Grid.Column="4" Margin="12,0,0,0" VerticalAlignment="Center"
-                           Text="{Binding Description}" Style="{StaticResource HintTextStyle}"
-                           TextTrimming="CharacterEllipsis" />
-            </Grid>
+        <!--
+            每个 Group 的模板：三列 Grid，左=开关，中=操作，右=数值。
+            每列用 ItemsControl 纵向列出各自子集合。
+        -->
+        <DataTemplate x:Key="GroupTemplate">
+            <StackPanel Margin="0,0,0,8">
+                <!-- Group 标题 -->
+                <Border Background="#FFF1F4F8" Padding="10,5" Margin="0,0,0,4">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#FF1B263B" />
+                </Border>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="300" />
+                        <ColumnDefinition Width="50" />
+                        <ColumnDefinition Width="300" />
+                        <ColumnDefinition Width="50" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 开关列 -->
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="开关" Foreground="#FF4B5A70" FontSize="11"
+                                   Margin="0,0,0,3"
+                                   Visibility="{Binding HasBoolItems,
+                                       Converter={StaticResource BoolToVisibilityConverter}}" />
+                        <ItemsControl ItemsSource="{Binding BoolItems}"
+                                      ItemTemplate="{StaticResource BoolItemTemplate}" />
+                    </StackPanel>
+
+                    <!-- 分隔线 -->
+                    <Border Grid.Column="1" Width="1" Background="#FFE2E6EA"
+                            VerticalAlignment="Stretch" HorizontalAlignment="Center" />
+
+                    <!-- 操作列 -->
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="操作" Foreground="#FF4B5A70" FontSize="11"
+                                   Margin="0,0,0,3"
+                                   Visibility="{Binding HasActionItems,
+                                       Converter={StaticResource BoolToVisibilityConverter}}" />
+                        <ItemsControl ItemsSource="{Binding ActionItems}"
+                                      ItemTemplate="{StaticResource ActionItemTemplate}" />
+                    </StackPanel>
+
+                    <!-- 分隔线 -->
+                    <Border Grid.Column="3" Width="1" Background="#FFE2E6EA"
+                            VerticalAlignment="Stretch" HorizontalAlignment="Center" />
+
+                    <!-- 数值列 -->
+                    <StackPanel Grid.Column="4">
+                        <TextBlock Text="数值" Foreground="#FF4B5A70" FontSize="11"
+                                   Margin="0,0,0,3"
+                                   Visibility="{Binding HasValueItems,
+                                       Converter={StaticResource BoolToVisibilityConverter}}" />
+                        <ItemsControl ItemsSource="{Binding ValueItems}"
+                                      ItemTemplate="{StaticResource ValueItemTemplate}" />
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
         </DataTemplate>
     </UserControl.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
-            <!-- 快速指令 / 预设标题栏各占一行，列表吃掉全部剩余高度，回显区无内容时整块折叠. -->
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- 快速指令与预设区各自的说明文字都移到控件 ToolTip 上: 常驻的说明行会挤占预设列表的高度. -->
         <DockPanel Margin="0,0,0,10" LastChildFill="True">
             <TextBlock DockPanel.Dock="Left" Text="快速指令" VerticalAlignment="Center" Margin="0,0,10,0"
                        Style="{StaticResource SectionTitleTextStyle}" />
-            <Button Content="发送" Command="{Binding SendConsoleCommandCommand}" Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
-            <TextBox Text="{Binding ConsoleCommandText, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" VerticalContentAlignment="Center"
+            <Button Content="发送" Command="{Binding SendConsoleCommandCommand}"
+                    Padding="14,7" Margin="10,0,0,0" DockPanel.Dock="Right" />
+            <TextBox Text="{Binding ConsoleCommandText, UpdateSourceTrigger=PropertyChanged}"
+                     Padding="8,6" VerticalContentAlignment="Center"
                      ToolTip="向已选设备的 UE 应用发送单条控制台指令，例如: stat fps" />
         </DockPanel>
 
@@ -139,20 +153,17 @@
         </DockPanel>
 
         <!--
-            HorizontalContentAlignment=Stretch: 默认 Left 会让行内容缩到自身宽度，
-            各行的列就不再纵向对齐.
+            DataContext 透传：ItemsControl 的 DataContext 是 ShellViewModel。
+            子模板里的 RelativeSource AncestorType=ScrollViewer 向上找到这个 ScrollViewer，
+            其 DataContext 就是 ShellViewModel，从而能绑定 ApplyConsoleCommandPresetCommand。
         -->
-        <ListBox Grid.Row="2"
-                 ItemsSource="{Binding Source={StaticResource GroupedConsoleCommandPresets}}"
-                 ItemTemplate="{StaticResource ConsoleCommandPresetTemplate}"
-                 HorizontalContentAlignment="Stretch"
-                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                 BorderBrush="#FFE2E6EA" BorderThickness="1">
-            <!-- GroupStyle 是只读集合属性，只能追加、不能用特性赋值. -->
-            <ListBox.GroupStyle>
-                <StaticResource ResourceKey="ConsoleCommandPresetGroupStyle" />
-            </ListBox.GroupStyle>
-        </ListBox>
+        <ScrollViewer Grid.Row="2"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding ConsoleCommandPresetGroups}"
+                          ItemTemplate="{StaticResource GroupTemplate}"
+                          Margin="4,0" />
+        </ScrollViewer>
 
         <ScrollViewer Grid.Row="3" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" MaxHeight="90"
                       Visibility="{Binding HasConsoleOutput, Converter={StaticResource BoolToVisibilityConverter}}">

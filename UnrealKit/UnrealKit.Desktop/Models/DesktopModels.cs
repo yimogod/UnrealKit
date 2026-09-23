@@ -125,6 +125,18 @@ public sealed class ConsoleCommandPresetOption(ConsoleCommandPreset preset) : IN
     /// <summary>Bool/Value 型显示当前值一栏；Action 型没有当前值。</summary>
     public bool ShowsCurrentValue => preset.SupportsReadBack;
 
+    /// <summary>
+    /// CollectionViewSource 二级分组 key，格式 "Group|order|label"。
+    /// order 保证 Bool(0) &lt; Action(1) &lt; Value(2) 的显示顺序。
+    /// </summary>
+    public string GroupKind => preset.Kind switch
+    {
+        ConsoleCommandKind.Bool   => $"{preset.Group}|0|开关",
+        ConsoleCommandKind.Action => $"{preset.Group}|1|操作",
+        ConsoleCommandKind.Value  => $"{preset.Group}|2|数值",
+        _                         => $"{preset.Group}|3|其他"
+    };
+
     /// <summary>按钮文案：Action 是执行一次，Bool/Value 是把值写下去。</summary>
     public string ActionLabel => preset.Kind == ConsoleCommandKind.Action ? "运行" : "应用";
 
@@ -152,6 +164,21 @@ public sealed class ConsoleCommandPresetOption(ConsoleCommandPreset preset) : IN
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+}
+
+/// <summary>
+/// 一个 Group 下的三类预设，供界面三列 Grid 直接绑定。
+/// </summary>
+public sealed class ConsoleCommandPresetGroup(string name)
+{
+    public string Name => name;
+    public List<ConsoleCommandPresetOption> BoolItems   { get; } = [];
+    public List<ConsoleCommandPresetOption> ActionItems { get; } = [];
+    public List<ConsoleCommandPresetOption> ValueItems  { get; } = [];
+
+    public bool HasBoolItems   => BoolItems.Count   > 0;
+    public bool HasActionItems => ActionItems.Count > 0;
+    public bool HasValueItems  => ValueItems.Count  > 0;
 }
 
 public sealed record ScpFrameOption(int Index, string CameraName, string FrameTimeMs, string GameTimeMs, string DrawTimeMs, string RhiTimeMs, string GpuTimeMs, string MemoryBytes, string DrawCalls, string Triangles, int Screenshots, int Line);
