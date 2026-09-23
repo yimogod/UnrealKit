@@ -47,8 +47,8 @@ internal static class PlatformProfileIni
 
         PlatformProfile profile = platform switch
         {
-            TargetPlatform.Android => ReadAndroid(Value),
-            TargetPlatform.Win64 => ReadWin64(Value),
+            TargetPlatform.Android => ReadAndroid(Value, document, section),
+            TargetPlatform.Win64 => ReadWin64(Value, document, section),
             _ => throw new ArgumentOutOfRangeException(nameof(platform), platform, "Unsupported platform.")
         };
 
@@ -71,6 +71,7 @@ internal static class PlatformProfileIni
                 document.SetValue(section, "FtpPath", android.FtpPath);
                 document.SetValue(section, "PakFtpPath", android.PakFtpPath);
                 document.SetValue(section, "PakAesKey", android.PakAesKey);
+                WritePakVersionOverrides(document, section, android.PakVersionOverrides);
                 break;
 
             case Win64PlatformProfile win64:
@@ -79,6 +80,7 @@ internal static class PlatformProfileIni
                 document.SetValue(section, "FtpPath", win64.FtpPath);
                 document.SetValue(section, "PakFtpPath", win64.PakFtpPath);
                 document.SetValue(section, "PakAesKey", win64.PakAesKey);
+                WritePakVersionOverrides(document, section, win64.PakVersionOverrides);
                 break;
 
             default:
@@ -87,7 +89,35 @@ internal static class PlatformProfileIni
         }
     }
 
-    private static AndroidPlatformProfile ReadAndroid(Func<string, string, string> value)
+    private const string PakVersionOverridePrefix = "PakVersionOverride.";
+
+    private static void WritePakVersionOverrides(
+        IniDocument document, string section, IReadOnlyDictionary<string, bool>? overrides)
+    {
+        if (overrides is null) return;
+        foreach (var (key, value) in overrides)
+            document.SetValue(section, PakVersionOverridePrefix + key, value ? "True" : "False");
+    }
+
+    private static IReadOnlyDictionary<string, bool>? ReadPakVersionOverrides(
+        LayeredIniDocument document, string section)
+    {
+        var all = document.GetSection(section);
+        Dictionary<string, bool>? result = null;
+        foreach (var (key, value) in all)
+        {
+            if (!key.StartsWith(PakVersionOverridePrefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!bool.TryParse(value, out var flag))
+                continue;
+            result ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            result[key[PakVersionOverridePrefix.Length..]] = flag;
+        }
+        return result;
+    }
+
+    private static AndroidPlatformProfile ReadAndroid(
+        Func<string, string, string> value, LayeredIniDocument document, string section)
     {
         var defaults = AndroidPlatformProfile.CreateDefaults();
         return new AndroidPlatformProfile(
@@ -97,10 +127,12 @@ internal static class PlatformProfileIni
             AdbPath: value("AdbPath", defaults.AdbPath),
             FtpPath: value("FtpPath", defaults.FtpPath),
             PakFtpPath: value("PakFtpPath", defaults.PakFtpPath),
-            PakAesKey: value("PakAesKey", defaults.PakAesKey));
+            PakAesKey: value("PakAesKey", defaults.PakAesKey),
+            PakVersionOverrides: ReadPakVersionOverrides(document, section));
     }
 
-    private static Win64PlatformProfile ReadWin64(Func<string, string, string> value)
+    private static Win64PlatformProfile ReadWin64(
+        Func<string, string, string> value, LayeredIniDocument document, string section)
     {
         var defaults = Win64PlatformProfile.CreateDefaults();
         return new Win64PlatformProfile(
@@ -108,6 +140,7 @@ internal static class PlatformProfileIni
             WorkingDirectory: value("WorkingDirectory", defaults.WorkingDirectory),
             FtpPath: value("FtpPath", defaults.FtpPath),
             PakFtpPath: value("PakFtpPath", defaults.PakFtpPath),
-            PakAesKey: value("PakAesKey", defaults.PakAesKey));
+            PakAesKey: value("PakAesKey", defaults.PakAesKey),
+            PakVersionOverrides: ReadPakVersionOverrides(document, section));
     }
 }

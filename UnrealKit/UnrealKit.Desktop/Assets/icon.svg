@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <clipPath id="badge">
+      <rect x="8" y="8" width="240" height="240" rx="44" ry="44"/>
+    </clipPath>
+  </defs>
+
+  <!-- Badge background -->
+  <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="#1B263B"/>
+
+  <!-- Subtle inner glow / depth -->
+  <rect x="8" y="8" width="240" height="240" rx="44" ry="44"
+        fill="none" stroke="#2C3E5A" stroke-width="3"/>
+
+  <!-- Left segment: stylized U — two vertical bars connected at bottom arc -->
+  <!-- Left bar of U -->
+  <rect x="52" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+  <!-- Right bar of U -->
+  <rect x="104" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+  <!-- Bottom connector of U -->
+  <rect x="52" y="148" width="78" height="26" rx="5" fill="#FFFFFF"/>
+
+  <!-- Divider line -->
+  <rect x="140" y="64" width="3" height="128" rx="1.5" fill="#4A9FE8" opacity="0.5"/>
+
+  <!-- Right segment: stylized K -->
+  <!-- Vertical bar of K -->
+  <rect x="152" y="72" width="26" height="104" rx="5" fill="#FFFFFF"/>
+  <!-- Upper arm of K — diagonal down-left from right -->
+  <polygon points="178,72  204,72  178,128" fill="#4A9FE8"/>
+  <!-- Lower arm of K — diagonal down-right from center -->
+  <polygon points="178,128  204,176  178,176" fill="#4A9FE8"/>
+
+  <!-- Accent diamond — UE nod, top-right corner small -->
+  <polygon points="218,30  232,44  218,58  204,44" fill="#4A9FE8" opacity="0.85"/>
+</svg>

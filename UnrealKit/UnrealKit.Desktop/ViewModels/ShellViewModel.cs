@@ -494,6 +494,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 return;
             }
 
+            // 平台切换后旧平台的选择立即失效，同步清空；异步刷新完成后用户再重新选。
+            SelectedLocalPakPackage = null;
             RaiseCommandStates();
             // 平台决定本地下载根目录，换平台即换列表；立即刷新而不是等用户点刷新。
             _ = RefreshDownloadedPackagesAsync();
@@ -676,20 +678,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private IReadOnlyDictionary<string, bool> ReadPakScanVersionOverrides()
     {
         if (_project is null) return new Dictionary<string, bool>();
-        var configPath = _project.ConfigFilePath;
-        if (!File.Exists(configPath)) return new Dictionary<string, bool>();
-
-        var doc = UnrealKit.Core.Projects.IniDocument.Parse(File.ReadAllText(configPath));
-        var section = doc.GetSection("UnrealKit.PakScan");
-        if (section.Count == 0) return new Dictionary<string, bool>();
-
-        var overrides = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in section)
-        {
-            if (bool.TryParse(value, out var flag))
-                overrides[key] = flag;
-        }
-        return overrides;
+        if (!PlatformNames.TryParse(DownloadPlatform, out var platform)) return new Dictionary<string, bool>();
+        var profile = _project.Settings.ProfileFor(platform);
+        return profile?.PakVersionOverrides ?? new Dictionary<string, bool>();
     }
 
     public IReadOnlyList<string> DownloadPlatformOptions { get; } = [PlatformNames.ToName(TargetPlatform.Android), PlatformNames.ToName(TargetPlatform.Win64)];

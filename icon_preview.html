@@ -1,0 +1,291 @@
+<title>UnrealKit Icon</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #F0F2F5;
+    --surface: #FFFFFF;
+    --navy: #1B263B;
+    --blue: #4A9FE8;
+    --text: #1B263B;
+    --sub: #6B7A8D;
+    --border: #DDE2EA;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0E1520;
+      --surface: #161F30;
+      --text: #D8E0EC;
+      --sub: #7A8A9D;
+      --border: #253047;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1520;
+    --surface: #161F30;
+    --text: #D8E0EC;
+    --sub: #7A8A9D;
+    --border: #253047;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-inline: 16px;
+    padding-block: 40px;
+    min-height: 100%;
+  }
+  h1 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--sub);
+    margin-bottom: 32px;
+  }
+  .grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: flex-end;
+  }
+  .cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--sub);
+  }
+  /* The icon — inline SVG, multiple sizes */
+  .icon-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .icon-wrap.dark-bg {
+    background: #2C3A55;
+    border-color: #2C3A55;
+  }
+
+  /* Checkerboard for the dark-bg cells to show transparency */
+  .swatch-row {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    margin-top: 40px;
+  }
+  .section-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--sub);
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    width: 100%;
+    margin-bottom: 4px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .palette {
+    display: flex; gap: 12px; flex-wrap: wrap; margin-top: 40px;
+  }
+  .swatch {
+    width: 56px;
+    display: flex; flex-direction: column; gap: 6px; align-items: center;
+  }
+  .swatch-color {
+    width: 56px; height: 56px; border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .swatch-name {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px; color: var(--sub); text-align: center;
+  }
+</style>
+
+<h1>UnrealKit — Icon</h1>
+
+<div class="grid">
+  <!-- 256px -->
+  <div class="cell">
+    <div class="icon-wrap">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+        <defs><clipPath id="c256"><rect x="8" y="8" width="240" height="240" rx="44" ry="44"/></clipPath></defs>
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="#1B263B"/>
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="none" stroke="#2C3E5A" stroke-width="3"/>
+        <!-- U: left bar -->
+        <rect x="52" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <!-- U: right bar -->
+        <rect x="104" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <!-- U: bottom connector -->
+        <rect x="52" y="148" width="78" height="26" rx="5" fill="#FFFFFF"/>
+        <!-- divider -->
+        <rect x="140" y="64" width="3" height="128" rx="1.5" fill="#4A9FE8" opacity="0.5"/>
+        <!-- K: vertical bar -->
+        <rect x="152" y="72" width="26" height="104" rx="5" fill="#FFFFFF"/>
+        <!-- K: upper arm -->
+        <polygon points="178,72 204,72 178,128" fill="#4A9FE8"/>
+        <!-- K: lower arm -->
+        <polygon points="178,128 204,176 178,176" fill="#4A9FE8"/>
+        <!-- accent diamond -->
+        <polygon points="218,30 232,44 218,58 204,44" fill="#4A9FE8" opacity="0.85"/>
+      </svg>
+    </div>
+    <span class="label">256 px</span>
+  </div>
+
+  <!-- 128px -->
+  <div class="cell">
+    <div class="icon-wrap">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="128" height="128">
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="#1B263B"/>
+        <rect x="52" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="104" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="52" y="148" width="78" height="26" rx="5" fill="#FFFFFF"/>
+        <rect x="140" y="64" width="3" height="128" rx="1.5" fill="#4A9FE8" opacity="0.5"/>
+        <rect x="152" y="72" width="26" height="104" rx="5" fill="#FFFFFF"/>
+        <polygon points="178,72 204,72 178,128" fill="#4A9FE8"/>
+        <polygon points="178,128 204,176 178,176" fill="#4A9FE8"/>
+        <polygon points="218,30 232,44 218,58 204,44" fill="#4A9FE8" opacity="0.85"/>
+      </svg>
+    </div>
+    <span class="label">128 px</span>
+  </div>
+
+  <!-- 64px -->
+  <div class="cell">
+    <div class="icon-wrap">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="64" height="64">
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="#1B263B"/>
+        <rect x="52" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="104" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="52" y="148" width="78" height="26" rx="5" fill="#FFFFFF"/>
+        <rect x="140" y="64" width="3" height="128" rx="1.5" fill="#4A9FE8" opacity="0.5"/>
+        <rect x="152" y="72" width="26" height="104" rx="5" fill="#FFFFFF"/>
+        <polygon points="178,72 204,72 178,128" fill="#4A9FE8"/>
+        <polygon points="178,128 204,176 178,176" fill="#4A9FE8"/>
+        <polygon points="218,30 232,44 218,58 204,44" fill="#4A9FE8" opacity="0.85"/>
+      </svg>
+    </div>
+    <span class="label">64 px</span>
+  </div>
+
+  <!-- 48px -->
+  <div class="cell">
+    <div class="icon-wrap">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="48" height="48">
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="#1B263B"/>
+        <rect x="52" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="104" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="52" y="148" width="78" height="26" rx="5" fill="#FFFFFF"/>
+        <rect x="152" y="72" width="26" height="104" rx="5" fill="#FFFFFF"/>
+        <polygon points="178,72 204,72 178,128" fill="#4A9FE8"/>
+        <polygon points="178,128 204,176 178,176" fill="#4A9FE8"/>
+        <polygon points="218,30 232,44 218,58 204,44" fill="#4A9FE8" opacity="0.85"/>
+      </svg>
+    </div>
+    <span class="label">48 px</span>
+  </div>
+
+  <!-- 32px -->
+  <div class="cell">
+    <div class="icon-wrap">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="32" height="32">
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="#1B263B"/>
+        <rect x="52" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="104" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="52" y="148" width="78" height="26" rx="5" fill="#FFFFFF"/>
+        <rect x="152" y="72" width="26" height="104" rx="5" fill="#FFFFFF"/>
+        <polygon points="178,72 204,72 178,128" fill="#4A9FE8"/>
+        <polygon points="178,128 204,176 178,176" fill="#4A9FE8"/>
+        <polygon points="218,30 232,44 218,58 204,44" fill="#4A9FE8" opacity="0.85"/>
+      </svg>
+    </div>
+    <span class="label">32 px</span>
+  </div>
+
+  <!-- 16px -->
+  <div class="cell">
+    <div class="icon-wrap">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16">
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="#1B263B"/>
+        <rect x="52" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="104" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="52" y="148" width="78" height="26" rx="5" fill="#FFFFFF"/>
+        <rect x="152" y="72" width="26" height="104" rx="5" fill="#FFFFFF"/>
+        <polygon points="178,72 204,72 178,128" fill="#4A9FE8"/>
+        <polygon points="178,128 204,176 178,176" fill="#4A9FE8"/>
+        <polygon points="218,30 232,44 218,58 204,44" fill="#4A9FE8" opacity="0.85"/>
+      </svg>
+    </div>
+    <span class="label">16 px</span>
+  </div>
+</div>
+
+<!-- On dark background (simulating taskbar) -->
+<div style="margin-top:40px;">
+  <div class="section-label">On dark ground (taskbar simulation)</div>
+  <div class="grid" style="margin-top:16px; padding:20px; background:#1B263B; border-radius:8px;">
+    <div class="cell">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="64" height="64">
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="#1B263B"/>
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="none" stroke="#2C3E5A" stroke-width="6"/>
+        <rect x="52" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="104" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="52" y="148" width="78" height="26" rx="5" fill="#FFFFFF"/>
+        <rect x="140" y="64" width="3" height="128" rx="1.5" fill="#4A9FE8" opacity="0.5"/>
+        <rect x="152" y="72" width="26" height="104" rx="5" fill="#FFFFFF"/>
+        <polygon points="178,72 204,72 178,128" fill="#4A9FE8"/>
+        <polygon points="178,128 204,176 178,176" fill="#4A9FE8"/>
+        <polygon points="218,30 232,44 218,58 204,44" fill="#4A9FE8" opacity="0.85"/>
+      </svg>
+      <span class="label" style="color:#7A8A9D">64 px</span>
+    </div>
+    <div class="cell">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="32" height="32">
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="#1B263B"/>
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="none" stroke="#2C3E5A" stroke-width="6"/>
+        <rect x="52" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="104" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="52" y="148" width="78" height="26" rx="5" fill="#FFFFFF"/>
+        <rect x="152" y="72" width="26" height="104" rx="5" fill="#FFFFFF"/>
+        <polygon points="178,72 204,72 178,128" fill="#4A9FE8"/>
+        <polygon points="178,128 204,176 178,176" fill="#4A9FE8"/>
+        <polygon points="218,30 232,44 218,58 204,44" fill="#4A9FE8" opacity="0.85"/>
+      </svg>
+      <span class="label" style="color:#7A8A9D">32 px</span>
+    </div>
+    <div class="cell">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16">
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="#1B263B"/>
+        <rect x="8" y="8" width="240" height="240" rx="44" ry="44" fill="none" stroke="#2C3E5A" stroke-width="6"/>
+        <rect x="52" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="104" y="72" width="26" height="88" rx="5" fill="#FFFFFF"/>
+        <rect x="52" y="148" width="78" height="26" rx="5" fill="#FFFFFF"/>
+        <rect x="152" y="72" width="26" height="104" rx="5" fill="#FFFFFF"/>
+        <polygon points="178,72 204,72 178,128" fill="#4A9FE8"/>
+        <polygon points="178,128 204,176 178,176" fill="#4A9FE8"/>
+        <polygon points="218,30 232,44 218,58 204,44" fill="#4A9FE8" opacity="0.85"/>
+      </svg>
+      <span class="label" style="color:#7A8A9D">16 px</span>
+    </div>
+  </div>
+</div>
+
+<!-- Palette -->
+<div class="palette">
+  <div class="section-label" style="width:100%; margin-top:40px;">Palette</div>
+  <div class="swatch"><div class="swatch-color" style="background:#1B263B;"></div><span class="swatch-name">#1B263B<br>Navy</span></div>
+  <div class="swatch"><div class="swatch-color" style="background:#2C3E5A;"></div><span class="swatch-name">#2C3E5A<br>Deep</span></div>
+  <div class="swatch"><div class="swatch-color" style="background:#4A9FE8;"></div><span class="swatch-name">#4A9FE8<br>Blue</span></div>
+  <div class="swatch"><div class="swatch-color" style="background:#FFFFFF; border: 1px solid #DDE2EA;"></div><span class="swatch-name">#FFFFFF<br>White</span></div>
+</div>

@@ -27,6 +27,9 @@ public abstract record PlatformProfile
     /// <summary>该平台在 FTP 服务器上的下载父目录（空串表示未配置）。</summary>
     public abstract string FtpPath { get; init; }
 
+    /// <summary>解析 pak 时传给 CUE4Parse 的版本标志覆盖（null 表示无覆盖）。</summary>
+    public abstract IReadOnlyDictionary<string, bool>? PakVersionOverrides { get; init; }
+
     /// <summary>平台的稳定字符串标识。</summary>
     public string PlatformName => PlatformNames.ToName(Platform);
 
@@ -90,7 +93,8 @@ public sealed record AndroidPlatformProfile(
     string AdbPath,
     string FtpPath = "",
     string PakFtpPath = "",
-    string PakAesKey = "") : PlatformProfile
+    string PakAesKey = "",
+    IReadOnlyDictionary<string, bool>? PakVersionOverrides = null) : PlatformProfile
 {
     /// <summary>设备端游戏根目录模板的默认值，与旧工具的 UE Saved 路径规则一致。</summary>
     public const string DefaultGameRoot =
@@ -107,7 +111,8 @@ public sealed record AndroidPlatformProfile(
         AdbPath: string.Empty,
         FtpPath: string.Empty,
         PakFtpPath: string.Empty,
-        PakAesKey: string.Empty);
+        PakAesKey: string.Empty,
+        PakVersionOverrides: null);
 
     public override PlatformTarget Resolve(string unrealProjectName)
     {
@@ -154,7 +159,8 @@ public sealed record Win64PlatformProfile(
     string WorkingDirectory,
     string FtpPath = "",
     string PakFtpPath = "",
-    string PakAesKey = "") : PlatformProfile
+    string PakAesKey = "",
+    IReadOnlyDictionary<string, bool>? PakVersionOverrides = null) : PlatformProfile
 {
     public override TargetPlatform Platform => TargetPlatform.Win64;
 
@@ -165,7 +171,8 @@ public sealed record Win64PlatformProfile(
         WorkingDirectory: string.Empty,
         FtpPath: string.Empty,
         PakFtpPath: string.Empty,
-        PakAesKey: string.Empty);
+        PakAesKey: string.Empty,
+        PakVersionOverrides: null);
 
     public override PlatformTarget Resolve(string unrealProjectName)
     {

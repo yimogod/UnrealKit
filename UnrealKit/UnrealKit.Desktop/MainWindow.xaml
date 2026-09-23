@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:UnrealKit.Desktop.Views"
         xmlns:models="clr-namespace:UnrealKit.Desktop.Models"
-        Title="UnrealKit" Height="960" Width="1600" MinHeight="520" MinWidth="900">
+        Title="UnrealKit" Height="960" Width="1600" MinHeight="520" MinWidth="900"
+        Icon="Assets/icon.ico">
     <Window.Resources>
         <!--
             导航样式只以 x:Key 显式引用，不使用隐式 TargetType 样式: 
