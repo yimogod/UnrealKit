@@ -54,9 +54,17 @@ ADB 路径解析顺序：`--adb-path` < 工程配置 `AdbPath` < 环境变量（
 - `CaptureManifest.json` 字段；扩展时新增可空字段，保证既有归档仍可反序列化。
 
 ## 测试工程地址
+
 下面是使用UnrealKit的项目的候选地址
 E:\XGameProfile
 
+## 专用名词
+
+1. ProjectRoot指的是创建的UnrealKit项目
+   1. 举例 `E:\XGameProfile`
+2. GameRoot指的是需要运行的游戏实例的目录
+   1. 比如Android是 `/sdcard/Android/data/com.herogame.gplay.titanite/files/UnrealGame/XGame/XGame`
+   2. 比如windows是 `E:\XGameProfile\Intermediate\Download\Win64\ProjectX_Dev_20260923_042238_WinBuild02`
 
 ## 交付要求
 

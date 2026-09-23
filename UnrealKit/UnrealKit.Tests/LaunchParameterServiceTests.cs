@@ -147,6 +147,36 @@ public sealed class LaunchParameterServiceTests
     }
 
     [Fact]
+    public async Task StartApplicationAsync_Win64_StartsRegardlessOfPortCheckOutcome()
+    {
+        // 端口占用检测只查本机监听端口（.NET API，不调 adb、不起进程），
+        // 检测本身或检测结果都不能拦住启动——这里只验证启动照常完成，
+        // 具体有没有打印占用警告依赖运行机器当时的端口状态，不在此断言。
+        var deviceService = new RecordingDeviceService(TargetPlatform.Win64);
+        var service = new LaunchParameterService(deviceService);
+        var project = CreateWin64Project(out var executablePath);
+
+        var result = await service.StartApplicationAsync(project, "localhost");
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(("localhost", executablePath, string.Empty), deviceService.StartRequest);
+    }
+
+    private static UkitProject CreateWin64Project(out string executablePath)
+    {
+        var gameRoot = Path.Combine(Path.GetTempPath(), "UnrealKitTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(gameRoot);
+        executablePath = Path.Combine(gameRoot, "Sample.exe");
+        File.WriteAllBytes(executablePath, []);
+
+        var settings = ProjectSettings.CreateDefaults("Sample") with
+        {
+            Win64 = Win64PlatformProfile.CreateDefaults() with { PackageName = "Sample.exe", GameRoot = gameRoot }
+        };
+        return new UkitProject("C:\\Projects\\Sample\\Sample.ukit", "C:\\Projects\\Sample", UkitProjectDescriptor.CreateDefault("Sample"), settings);
+    }
+
+    [Fact]
     public async Task ReadAsync_ReturnsDeviceFileContent()
     {
         var deviceService = new RecordingDeviceService { ReadFileContent = "-RCWebControlEnable\n-RCWebInterfaceEnable" };
@@ -188,6 +218,11 @@ public sealed class LaunchParameterServiceTests
     {
         private static ProcessExecutionResult Success => new(0, string.Empty, string.Empty, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
 
+        public RecordingDeviceService(TargetPlatform platform = TargetPlatform.Android)
+        {
+            Platform = platform;
+        }
+
         public string? PushSerialNumber { get; private set; }
         public string? PushLocalPath { get; private set; }
         public string? PushRemotePath { get; private set; }
@@ -200,7 +235,7 @@ public sealed class LaunchParameterServiceTests
         public (string SerialNumber, string PackageName, string ActivityName)? StartRequest { get; private set; }
         public (string SerialNumber, string PackageName)? ForceStopRequest { get; private set; }
 
-        public TargetPlatform Platform => TargetPlatform.Android;
+        public TargetPlatform Platform { get; }
 
         public bool Supports(DeviceCapability capability) => true;
 

@@ -934,6 +934,14 @@ public sealed class DesktopShellViewModelTests
             return Success;
         }
 
+        // 这个 fake 只服务于 AdbService（Android 路径），从不经由 StartDetachedAsync
+        // 真正启动进程；委托给同一套记录/返回逻辑即可满足接口，不代表真实的「不等待」语义。
+        public Task<ProcessExecutionResult> StartDetachedAsync(
+            ProcessExecutionRequest request,
+            IProgress<OperationProgress>? progress = null,
+            CancellationToken cancellationToken = default) =>
+            RunAsync(request, progress, cancellationToken);
+
         private ProcessExecutionResult HandleShell(string serialNumber, IReadOnlyList<string> arguments)
         {
             // arguments = [-s, serial, shell, <子命令>, ...]。

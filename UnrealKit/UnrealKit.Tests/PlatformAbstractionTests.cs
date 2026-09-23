@@ -229,6 +229,13 @@ public sealed class AdbDeviceServicePortForwardTests
 
         private static int ParseTcpPort(string argument) =>
             int.Parse(argument.AsSpan("tcp:".Length), System.Globalization.CultureInfo.InvariantCulture);
+
+        // 这个 fake 只服务于 AdbService，从不经由 StartDetachedAsync 真正启动进程。
+        public Task<ProcessExecutionResult> StartDetachedAsync(
+            ProcessExecutionRequest request,
+            IProgress<OperationProgress>? progress = null,
+            CancellationToken cancellationToken = default) =>
+            RunAsync(request, progress, cancellationToken);
     }
 }
 
@@ -248,6 +255,13 @@ public sealed class AdbDeviceServicePullSubdirectoriesTests
             Requests.Add(request);
             return Task.FromResult(results[Math.Min(_callCount++, results.Length - 1)]);
         }
+
+        // 这个 fake 只服务于 AdbService，从不经由 StartDetachedAsync 真正启动进程。
+        public Task<ProcessExecutionResult> StartDetachedAsync(
+            ProcessExecutionRequest request,
+            IProgress<OperationProgress>? progress = null,
+            CancellationToken cancellationToken = default) =>
+            RunAsync(request, progress, cancellationToken);
     }
 
     private static ProcessExecutionResult Success() =>

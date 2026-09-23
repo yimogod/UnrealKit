@@ -74,6 +74,88 @@ public sealed class ProcessRunner : IProcessRunner
         }
     }
 
+    /// <summary>
+    /// 启动即返回，不等待退出。同步完成 <c>Process.Start()</c> 后立即包一层
+    /// <see cref="Task.FromResult{TResult}"/> 返回——内部没有任何 await，因此天然不会等子进程退出，
+    /// 也不受调用方传入的 <see cref="CancellationToken"/> 影响（没有可取消的等待）。
+    ///
+    /// 不能复用 <see cref="CreateStartInfo"/>：那里硬编码了
+    /// <c>RedirectStandardOutput/Error = true</c>，若照搬却不去读这两个流，
+    /// 子进程输出一多就会把系统管道缓冲区堵满而卡死——对游戏客户端这种会自己打日志的
+    /// 长期运行进程是致命的。这里单独构造不重定向输出的 <see cref="ProcessStartInfo"/>。
+    /// </summary>
+    public Task<ProcessExecutionResult> StartDetachedAsync(
+        ProcessExecutionRequest request,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.FileName);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var operationId = $"process-{Guid.NewGuid():N}";
+        var startInfo = CreateDetachedStartInfo(request);
+        var startedAt = DateTimeOffset.UtcNow;
+        Report(progress, operationId, "Starting", $"正在启动外部进程: {FormatCommandLine(request)}");
+        Log(LogLevel.Information, operationId, "Starting external process (detached)", request);
+
+        var process = new Process { StartInfo = startInfo };
+        try
+        {
+            if (!process.Start())
+            {
+                throw new InvalidOperationException($"无法启动外部进程: {request.FileName}");
+            }
+        }
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        {
+            Log(LogLevel.Error, operationId, "External process could not start", request, exception);
+            throw new InvalidOperationException($"无法启动外部进程 '{request.FileName}': {exception.Message}", exception);
+        }
+        finally
+        {
+            // 不持有 process 句柄等待退出，这里的 Process 对象生命周期到此结束即可释放；
+            // 不用 using——using 会在方法返回前 Dispose，但 Dispose 不会杀掉已启动的子进程，
+            // 只是释放 .NET 侧的句柄包装，对「启动后脱离管理」的语义无影响，显式 Dispose 更清楚。
+            process.Dispose();
+        }
+
+        var result = new ProcessExecutionResult(0, string.Empty, string.Empty, startedAt, DateTimeOffset.UtcNow);
+        Report(progress, operationId, "Launched", $"外部进程已启动: {request.FileName}");
+        Log(LogLevel.Information, operationId, "External process launched (detached)", request, result: result);
+        return Task.FromResult(result);
+    }
+
+    private static ProcessStartInfo CreateDetachedStartInfo(ProcessExecutionRequest request)
+    {
+        var startInfo = new ProcessStartInfo(request.FileName)
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = false,
+            RedirectStandardError = false,
+            CreateNoWindow = false
+        };
+
+        if (!string.IsNullOrWhiteSpace(request.WorkingDirectory))
+        {
+            startInfo.WorkingDirectory = request.WorkingDirectory;
+        }
+
+        foreach (var argument in request.Arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        if (request.EnvironmentVariables is not null)
+        {
+            foreach (var environmentVariable in request.EnvironmentVariables)
+            {
+                startInfo.Environment[environmentVariable.Key] = environmentVariable.Value;
+            }
+        }
+
+        return startInfo;
+    }
+
     private static ProcessStartInfo CreateStartInfo(ProcessExecutionRequest request)
     {
         var startInfo = new ProcessStartInfo(request.FileName)

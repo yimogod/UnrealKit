@@ -53,16 +53,43 @@ public sealed class Win64IntegrationTests
     }
 
     [Fact]
-    public async Task StartApplicationAsync_RunsExecutableToCompletion()
+    public async Task StartApplicationAsync_ReturnsImmediately_WithoutWaitingForExit()
     {
+        // 游戏客户端是长期运行的 GUI 进程：StartApplicationAsync 必须只确认启动成功就返回，
+        // 不能等目标进程退出——否则调用方会一直卡到 DefaultTimeout（2 分钟）超时，
+        // 期间还会把刚启动的进程强制杀掉。用一条明显不会很快退出的命令（ping 30 次，约 30 秒）
+        // 验证「启动调用在几秒内返回」且「此时目标进程仍在运行」。
         var service = new Win64DeviceService();
         var device = (await service.ListDevicesAsync())[0];
         using var executable = UniquelyNamedExecutable.CreateFromCommandProcessor();
 
-        // StartApplicationAsync 会等待进程结束，因此这里只验证「能启动并正常退出」。
-        var startResult = await service.StartApplicationAsync(device, executable.Path);
+        var startTask = service.StartApplicationAsync(device, executable.Path, commandLineArguments: "/d /c ping -n 30 127.0.0.1 > nul");
+        var completed = await Task.WhenAny(startTask, Task.Delay(TimeSpan.FromSeconds(5)));
 
-        Assert.Equal(0, startResult.ExitCode);
+        try
+        {
+            Assert.Same(startTask, completed);
+            var startResult = await startTask;
+            Assert.Equal(0, startResult.ExitCode);
+
+            var runningProcesses = Process.GetProcessesByName(executable.ProcessName);
+            Assert.NotEmpty(runningProcesses);
+        }
+        finally
+        {
+            foreach (var process in Process.GetProcessesByName(executable.ProcessName))
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit(TimeSpan.FromSeconds(10));
+                }
+                finally
+                {
+                    process.Dispose();
+                }
+            }
+        }
     }
 
     [Fact]

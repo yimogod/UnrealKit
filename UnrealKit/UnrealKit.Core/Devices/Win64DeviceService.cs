@@ -385,7 +385,10 @@ public sealed class Win64DeviceService : IDeviceService
             ? (IReadOnlyList<string>)[]
             : commandLineArguments.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        return await _processRunner.RunAsync(
+        // 游戏客户端是长期运行的 GUI 进程，不会自己退出：RunAsync 会等到进程结束才返回，
+        // 用在这里会让调用方永远卡住，直到 DefaultTimeout（2 分钟）到期后把刚启动的游戏强制杀掉。
+        // StartDetachedAsync 只确认启动成功即返回，语义才是「发出启动请求」。
+        return await _processRunner.StartDetachedAsync(
             new ProcessExecutionRequest(target, arguments, workingDirectory, null, null, null),
             progress,
             cancellationToken);

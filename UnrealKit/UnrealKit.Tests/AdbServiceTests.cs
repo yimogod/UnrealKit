@@ -348,6 +348,10 @@ public sealed class AdbServiceTests
             Request = request;
             return Task.FromResult(result);
         }
+
+        // 这个 fake 只服务于 AdbService，从不经由 StartDetachedAsync 真正启动进程。
+        public Task<ProcessExecutionResult> StartDetachedAsync(ProcessExecutionRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) =>
+            RunAsync(request, progress, cancellationToken);
     }
 
     /// <summary>按调用顺序返回预设结果，用于验证多命令探测序列。</summary>
@@ -362,5 +366,9 @@ public sealed class AdbServiceTests
             Requests.Add(request);
             return Task.FromResult(results[Math.Min(_callCount++, results.Length - 1)]);
         }
+
+        // 这个 fake 只服务于 AdbService，从不经由 StartDetachedAsync 真正启动进程。
+        public Task<ProcessExecutionResult> StartDetachedAsync(ProcessExecutionRequest request, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default) =>
+            RunAsync(request, progress, cancellationToken);
     }
 }

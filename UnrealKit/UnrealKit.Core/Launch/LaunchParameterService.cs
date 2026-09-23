@@ -188,7 +188,7 @@ public sealed class LaunchParameterService : ILaunchParameterService
         return _deviceService.DeleteRemoteFileAsync(ResolveDevice(serialNumber), path, progress, cancellationToken);
     }
 
-    public Task<ProcessExecutionResult> StartApplicationAsync(UkitProject project, string serialNumber, IReadOnlyList<string>? selectedPresetNames = null, string? customArguments = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
+    public async Task<ProcessExecutionResult> StartApplicationAsync(UkitProject project, string serialNumber, IReadOnlyList<string>? selectedPresetNames = null, string? customArguments = null, IProgress<OperationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(serialNumber);
@@ -203,8 +203,53 @@ public sealed class LaunchParameterService : ILaunchParameterService
             commandLineArguments = BuildContent(project.Settings, selectedPresetNames ?? [], customArguments);
         }
 
-        return _deviceService.StartApplicationAsync(
+        if (target.Platform == TargetPlatform.Win64)
+        {
+            WarnIfRemoteControlPortInUse(project.Settings, progress);
+        }
+
+        return await _deviceService.StartApplicationAsync(
             ResolveDevice(serialNumber), target.LaunchTarget, target.LaunchActivity, commandLineArguments, progress, cancellationToken);
+    }
+
+    /// <summary>
+    /// 启动 Win64 前检测本机 Web Remote Control 端口是否已被占用，仅记日志，不做任何处理。
+    ///
+    /// 常见诱因：上一次跑 Android 时 adb forward 把设备端口转发到本机同一个端口
+    /// （<see cref="RemoteControl.RemoteControlOptions.EffectiveForwardPort"/>），忘记释放的话
+    /// adb.exe 会一直占着它；切到 Win64 后引擎自己的 Web Remote Control 服务抢不到端口，
+    /// 现象是「游戏能跑，控制台指令发不出去」，很难联想到端口冲突。
+    ///
+    /// 之前尝试过在这里自动跑 <c>adb forward --remove</c> 清理，但那条路径会拉起
+    /// adb server（可能触发 <c>adb start-server</c> 等外部进程调用），一旦 adb 侧状态异常就可能
+    /// 卡住整次启动、连带把 UI 锁死在 IsBusy。既然清理动作本身有不可控的外部依赖风险，
+    /// 这里退回到最小侵入的检测：只查本机端口是否被占用（.NET 自带 API，不起进程、不调 adb），
+    /// 占用就写一条日志留痕，交给用户自行用 <c>adb forward --remove</c> 或
+    /// <c>netstat</c>/<c>tasklist</c> 处理。
+    /// </summary>
+    private static void WarnIfRemoteControlPortInUse(ProjectSettings settings, IProgress<OperationProgress>? progress)
+    {
+        var port = RemoteControl.RemoteControlOptions.FromProjectSettings(settings).EffectiveForwardPort;
+
+        try
+        {
+            var inUse = System.Net.NetworkInformation.IPGlobalProperties.GetIPGlobalProperties()
+                .GetActiveTcpListeners()
+                .Any(endpoint => endpoint.Port == port);
+
+            if (inUse)
+            {
+                progress?.Report(new OperationProgress("start-app", "Warning", null, null,
+                    $"本机端口 {port}（Web Remote Control）已被占用，Win64 的控制台指令可能因此连不上。" +
+                    $"常见原因是上次跑 Android 遗留的 adb forward；可手动执行 `adb forward --remove tcp:{port}` 后重新启动应用。"));
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // 检测本身失败（权限、平台限制等）不该影响启动，只记录检测失败这件事。
+            progress?.Report(new OperationProgress("start-app", "Warning", null, null,
+                $"检测本机端口 {port} 占用情况时出错（忽略）：{exception.Message}"));
+        }
     }
 
     /// <summary>
