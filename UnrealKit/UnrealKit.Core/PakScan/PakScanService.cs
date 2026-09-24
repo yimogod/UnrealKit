@@ -162,6 +162,8 @@ public sealed class PakScanService : IPakScanService
 
                 Dictionary<string, string> TempDict = new Dictionary<string, string>();
                 var textureUsage = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+                // materialName → StaticMesh names that reference it
+                var meshMaterialUsage = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (var path in allPaths)
                 {
@@ -205,6 +207,7 @@ public sealed class PakScanService : IPakScanService
                             if (provider.TryLoadPackageObject<UStaticMesh>(objectPath, out var sm) && sm is not null)
                             {
                                 await channel.Writer.WriteAsync(new PakScanStaticMeshFound(BuildStaticMeshEntry(sm, objectPath, chunkId)), cancellationToken);
+                                AccumulateMeshMaterialUsage(sm, meshMaterialUsage);
                                 staticMeshCount++;
                             }
                         }
@@ -245,6 +248,7 @@ public sealed class PakScanService : IPakScanService
                             else if (provider.TryLoadPackageObject<UStaticMesh>(objectPath, out var sm) && sm is not null)
                             {
                                 await channel.Writer.WriteAsync(new PakScanStaticMeshFound(BuildStaticMeshEntry(sm, objectPath, chunkId)), cancellationToken);
+                                AccumulateMeshMaterialUsage(sm, meshMaterialUsage);
                                 staticMeshCount++;
                             }
                             else if (provider.TryLoadPackageObject<UMaterial>(objectPath, out var mat) && mat is not null)
@@ -277,6 +281,7 @@ public sealed class PakScanService : IPakScanService
                 sw.Stop();
 
                 await channel.Writer.WriteAsync(new PakScanTextureUsageReadyEntry(textureUsage), cancellationToken);
+                await channel.Writer.WriteAsync(new PakScanMeshMaterialUsageReadyEntry(meshMaterialUsage), cancellationToken);
 
                 await channel.Writer.WriteAsync(new PakScanDiagnosticEntry(new Diagnostic(DiagnosticSeverity.Information, "PKS006",
                     $"扫描完成：{textureCount} 个 Texture2D，{staticMeshCount} 个 StaticMesh，{skeletalMeshCount} 个 SkeletalMesh，{materialCount} 个 Material，{materialInstanceCount} 个 MaterialInstance，共扫描 {scannedCount} 个资产，耗时 {FormatElapsed(sw.Elapsed)}")), cancellationToken);
@@ -358,6 +363,10 @@ public sealed class PakScanService : IPakScanService
 
                 case PakScanTextureUsageReadyEntry u:
                     textureUsage = u.Usage;
+                    break;
+
+                case PakScanMeshMaterialUsageReadyEntry:
+                    // CLI ScanAsync 不使用 mesh→material 反向索引，GUI 通过流式事件自行处理
                     break;
 
                 case PakScanDiagnosticEntry d:
@@ -495,6 +504,30 @@ public sealed class PakScanService : IPakScanService
             estimatedBytes,
             pakChunkId,
             []);
+    }
+
+    private static void AccumulateMeshMaterialUsage(UStaticMesh sm, Dictionary<string, List<string>> meshMaterialUsage)
+    {
+        // Use the same three-way fallback as BuildStaticMeshEntry.
+        // FPackageIndex.Name resolves to the referenced object's name without triggering deserialization.
+        IEnumerable<string?> matNames;
+        if (sm.StaticMaterials?.Length > 0)
+            matNames = sm.StaticMaterials.Select(m => m.MaterialInterface?.Name);
+        else if (sm.Materials?.Length > 0)
+            matNames = sm.Materials.Select(m => m?.Name);
+        else if (sm.TryGetValue<FStaticMaterial[]>(out var rawMats, "StaticMaterials") && rawMats?.Length > 0)
+            matNames = rawMats.Select(m => m.MaterialInterface?.Name);
+        else
+            return;
+
+        foreach (var matName in matNames)
+        {
+            if (string.IsNullOrEmpty(matName) || matName == "None") continue;
+            if (!meshMaterialUsage.TryGetValue(matName, out var list))
+                meshMaterialUsage[matName] = list = [];
+            if (!list.Contains(sm.Name))
+                list.Add(sm.Name);
+        }
     }
 
     private static void AccumulateTextureUsage(DefaultFileProvider provider, UMaterial mat, Dictionary<string, List<string>> textureUsage)

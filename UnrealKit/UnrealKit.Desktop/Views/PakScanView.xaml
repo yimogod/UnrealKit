@@ -107,6 +107,11 @@
                                           VirtualizingPanel.VirtualizationMode="Recycling"
                                           Sorting="StaticMeshDataGrid_Sorting"
                                           MouseDoubleClick="StaticMeshDataGrid_MouseDoubleClick">
+                                    <DataGrid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="查看资产统计" Click="StaticMeshStatsMenuItem_Click" />
+                                        </ContextMenu>
+                                    </DataGrid.ContextMenu>
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name"          Binding="{Binding Name}"          Width="200" />
                                         <DataGridTextColumn Header="Chunk"         Binding="{Binding PakChunkId}"    Width="50" />
@@ -166,7 +171,7 @@
                                     <TextBlock Text="搜索：" VerticalAlignment="Center" Margin="0,0,4,0" />
                                     <TextBox Text="{Binding PakMaterials.Search, UpdateSourceTrigger=PropertyChanged}"
                                              Width="260" FontFamily="Consolas"
-                                             ToolTip="按 Name 或 Path 搜索（区分大小写）" />
+                                             ToolTip="按 Name 或 Path 搜索（区分大小写）；以 SM: 开头按使用该材质的 StaticMesh 名搜索" />
                                 </StackPanel>
                                 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,4,0,0">
                                     <Button Content="◀" Command="{Binding PakMaterials.PrevPageCommand}" Padding="8,4" />
@@ -202,7 +207,7 @@
                                     <TextBlock Text="搜索：" VerticalAlignment="Center" Margin="0,0,4,0" />
                                     <TextBox Text="{Binding PakMaterialInstances.Search, UpdateSourceTrigger=PropertyChanged}"
                                              Width="260" FontFamily="Consolas"
-                                             ToolTip="按 Name 或 Path 搜索（区分大小写）" />
+                                             ToolTip="按 Name 或 Path 搜索（区分大小写）；以 SM: 开头按使用该材质球的 StaticMesh 名搜索" />
                                 </StackPanel>
                                 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,4,0,0">
                                     <Button Content="◀" Command="{Binding PakMaterialInstances.PrevPageCommand}" Padding="8,4" />

@@ -230,13 +230,15 @@ public sealed record PakScanMaterialOption(
     string Name, string Path,
     string BlendMode, string ShadingModel,
     string ReferencedTextureCount, string TwoSided,
-    string PakChunkId);
+    string PakChunkId,
+    string UsedByMeshes);
 
 public sealed record PakScanMaterialInstanceOption(
     string Name, string Path,
     string ParentName,
     string TextureParameterCount,
-    string PakChunkId);
+    string PakChunkId,
+    string UsedByMeshes);
 
 public sealed record PakScanDiagnosticOption(string Severity, string Code, string Message);
 

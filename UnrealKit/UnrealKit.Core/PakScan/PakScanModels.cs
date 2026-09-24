@@ -128,6 +128,9 @@ public sealed record PakScanMaterialInstanceFound(PakMaterialInstanceEntry Mater
 /// <summary>Texture ObjectPath → 引用该贴图的材质名称列表，扫描收尾后一次性推送。</summary>
 public sealed record PakScanTextureUsageReadyEntry(IReadOnlyDictionary<string, List<string>> Usage) : PakScanEntry;
 
+/// <summary>Material/MatInstance Name → 使用该材质的 StaticMesh 名称列表，扫描收尾后一次性推送。</summary>
+public sealed record PakScanMeshMaterialUsageReadyEntry(IReadOnlyDictionary<string, List<string>> Usage) : PakScanEntry;
+
 /// <summary>产生一条诊断信息（警告、错误等）。</summary>
 public sealed record PakScanDiagnosticEntry(Diagnostic Diagnostic) : PakScanEntry;
 

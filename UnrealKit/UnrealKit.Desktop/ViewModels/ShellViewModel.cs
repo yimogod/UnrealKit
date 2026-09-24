@@ -86,6 +86,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _pakGameVersion = "GAME_UE5_6";
     private UnrealKit.Core.PakScan.PakScanResult? _lastPakScanResult;
     private UnrealKit.Core.PakScan.MapActorScanResult? _lastMapActorScanResult;
+    // smName → List<materialName>，扫描结束后由 meshMaterialUsage 反转构建
+    private IReadOnlyDictionary<string, List<string>> _smMaterialUsage = new Dictionary<string, List<string>>();
+    private IReadOnlyList<PakScanMaterialOption> _allMaterials = [];
+    private IReadOnlyList<PakScanMaterialInstanceOption> _allMaterialInstances = [];
+    private IReadOnlyList<PakScanTextureOption> _allTextures = [];
     private string _mapActorScanDescription = "选择游戏包目录，点击「扫描Actor」统计 StaticMeshActor 放置次数。";
     private readonly UnrealKit.Core.PakScan.PakScanService _pakScanService = new();
     private PakScanTextureOption? _selectedPakTexture;
@@ -164,8 +169,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         PakTextures       = new PagedSearchList<PakScanTextureOption>     (t => t.Name, t => t.Path, () => _pakPageSize, ("M:", t => t.UsedByMaterials));
         PakStaticMeshes   = new PagedSearchList<PakScanStaticMeshOption>  (m => m.Name, m => m.Path, () => _pakPageSize);
         PakSkeletalMeshes = new PagedSearchList<PakScanSkeletalMeshOption>(m => m.Name, m => m.Path, () => _pakPageSize);
-        PakMaterials          = new PagedSearchList<PakScanMaterialOption>        (m => m.Name, m => m.Path, () => _pakPageSize);
-        PakMaterialInstances  = new PagedSearchList<PakScanMaterialInstanceOption>(m => m.Name, m => m.Path, () => _pakPageSize);
+        PakMaterials          = new PagedSearchList<PakScanMaterialOption>        (m => m.Name, m => m.Path, () => _pakPageSize, ("SM:", m => m.UsedByMeshes));
+        PakMaterialInstances  = new PagedSearchList<PakScanMaterialInstanceOption>(m => m.Name, m => m.Path, () => _pakPageSize, ("SM:", m => m.UsedByMeshes));
 
         PakTextures.RegisterSortKey("Name",     t => t.Name);
         PakTextures.RegisterSortKey("Chunk",    t => int.TryParse(t.PakChunkId, out var c) ? c : 0);
@@ -2345,6 +2350,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var materialInstances  = new List<UnrealKit.Core.PakScan.PakMaterialInstanceEntry>();
         var diagnostics        = new List<UnrealKit.Core.Diagnostics.Diagnostic>();
         IReadOnlyDictionary<string, List<string>> textureUsage = new Dictionary<string, List<string>>();
+        IReadOnlyDictionary<string, List<string>> meshMaterialUsage = new Dictionary<string, List<string>>();
 
         var service = _pakScanService;
         await foreach (var entry in service.ScanStreamAsync(inputPath, config, OperationCancellationToken))
@@ -2384,6 +2390,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
                 case UnrealKit.Core.PakScan.PakScanTextureUsageReadyEntry u:
                     textureUsage = u.Usage;
+                    break;
+
+                case UnrealKit.Core.PakScan.PakScanMeshMaterialUsageReadyEntry mu:
+                    meshMaterialUsage = mu.Usage;
                     break;
 
                 case UnrealKit.Core.PakScan.PakScanDiagnosticEntry d:
@@ -2426,12 +2436,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             m.Name, m.ObjectPath,
             m.BlendMode, m.ShadingModel,
             m.ReferencedTextureCount.ToString(), m.TwoSided.ToString(),
-            m.PakChunkId)));
+            m.PakChunkId,
+            meshMaterialUsage.TryGetValue(m.Name, out var mMeshes) ? string.Join(", ", mMeshes) : string.Empty)));
         PakMaterialInstances.Reset(materialInstances.Select(m => new PakScanMaterialInstanceOption(
             m.Name, m.ObjectPath,
             m.ParentName,
             m.TextureParameterCount.ToString(),
-            m.PakChunkId)));
+            m.PakChunkId,
+            meshMaterialUsage.TryGetValue(m.Name, out var miMeshes) ? string.Join(", ", miMeshes) : string.Empty)));
         PakScanDiagnostics.Reset(diagnostics.Select(d => new PakScanDiagnosticOption(
             d.Severity.ToString(), d.Code, d.Message)));
 
@@ -2448,6 +2460,22 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         _lastPakScanResult = new UnrealKit.Core.PakScan.PakScanResult(inputPath, report, diagnostics);
 
+        // 反转 meshMaterialUsage（matName→smList）为 smName→matList，供资产统计 Window 使用
+        var smMat = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (matName, smList) in meshMaterialUsage)
+        {
+            foreach (var smName in smList)
+            {
+                if (!smMat.TryGetValue(smName, out var matList))
+                    smMat[smName] = matList = [];
+                matList.Add(matName);
+            }
+        }
+        _smMaterialUsage = smMat;
+        _allMaterials         = PakMaterials.AllItems;
+        _allMaterialInstances = PakMaterialInstances.AllItems;
+        _allTextures          = PakTextures.AllItems;
+
         PakScanDescription = report is not null
             ? $"扫描完成：{report.TextureCount} 个 Texture2D / {report.StaticMeshCount} 个 StaticMesh / {report.SkeletalMeshCount} 个 SkeletalMesh / {report.MaterialCount} 个 Material / {report.MaterialInstanceCount} 个 MatInstance / 共 {report.TotalAssetsScanned} 个资产"
             : "扫描失败，请查看诊断信息。";
@@ -2457,6 +2485,29 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             : "Pak 扫描完成（有错误）";
         RaiseCommandStates();
     });
+
+    /// <summary>
+    /// 返回指定 StaticMesh 使用的所有 Material、MatInstance 和 Texture。
+    /// </summary>
+    public (IReadOnlyList<PakScanMaterialOption> Materials,
+            IReadOnlyList<PakScanMaterialInstanceOption> MatInstances,
+            IReadOnlyList<PakScanTextureOption> Textures)
+        GetStaticMeshStats(string smName)
+    {
+        var matNames = _smMaterialUsage.TryGetValue(smName, out var list)
+            ? (IReadOnlyCollection<string>)list
+            : Array.Empty<string>();
+
+        var mats     = _allMaterials.Where(m => matNames.Contains(m.Name, StringComparer.OrdinalIgnoreCase)).ToList();
+        var matInsts = _allMaterialInstances.Where(m => matNames.Contains(m.Name, StringComparer.OrdinalIgnoreCase)).ToList();
+        var textures = _allTextures
+            .Where(t => matNames.Any(mn => t.UsedByMaterials.Contains(mn, StringComparison.OrdinalIgnoreCase)))
+            .DistinctBy(t => t.Path)
+            .OrderBy(t => t.Name)
+            .ToList();
+
+        return (mats, matInsts, textures);
+    }
 
     private async Task DecodeSelectedTextureAsync(PakScanTextureOption? option)
     {

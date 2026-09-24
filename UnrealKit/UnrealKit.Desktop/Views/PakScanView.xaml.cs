@@ -156,6 +156,15 @@ public partial class PakScanView : UserControl
         list.ApplySort(header, descending);
     }
 
+    private void StaticMeshStatsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ShellViewModel vm) return;
+        if (vm.SelectedPakStaticMesh is null) return;
+        var owner = Window.GetWindow(this) ?? Application.Current.MainWindow;
+        var (mats, matInsts, texs) = vm.GetStaticMeshStats(vm.SelectedPakStaticMesh.Name);
+        StaticMeshStatsWindow.Show(owner, vm.SelectedPakStaticMesh, mats, matInsts, texs);
+    }
+
     private void Button_Click(object sender, RoutedEventArgs e)
     {
 

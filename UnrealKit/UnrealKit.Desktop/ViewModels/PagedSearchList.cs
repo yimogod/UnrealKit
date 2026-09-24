@@ -117,6 +117,9 @@ public sealed class PagedSearchList<T> : INotifyPropertyChanged
         GoToPage(1);
     }
 
+    /// <summary>返回全量原始数据（不受当前搜索/分页影响），供跨资产查询使用。</summary>
+    public IReadOnlyList<T> AllItems => _allItems;
+
     /// <summary>清空数据、搜索词、排序，回到第一页。</summary>
     public void Clear()
     {
