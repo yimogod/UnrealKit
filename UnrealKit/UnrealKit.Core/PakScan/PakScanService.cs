@@ -160,6 +160,7 @@ public sealed class PakScanService : IPakScanService
                 await channel.Writer.WriteAsync(new PakScanStartEntry(totalCount), cancellationToken);
 
                 Dictionary<string, string> TempDict = new Dictionary<string, string>();
+                var textureUsage = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (var path in allPaths)
                 {
@@ -211,6 +212,7 @@ public sealed class PakScanService : IPakScanService
                             if (provider.TryLoadPackageObject<UMaterial>(objectPath, out var mat) && mat is not null)
                             {
                                 await channel.Writer.WriteAsync(new PakScanMaterialFound(BuildMaterialEntry(mat, objectPath, chunkId)), cancellationToken);
+                                AccumulateTextureUsage(provider, mat, textureUsage);
                                 materialCount++;
                             }
                         }
@@ -238,6 +240,7 @@ public sealed class PakScanService : IPakScanService
                             else if (provider.TryLoadPackageObject<UMaterial>(objectPath, out var mat) && mat is not null)
                             {
                                 await channel.Writer.WriteAsync(new PakScanMaterialFound(BuildMaterialEntry(mat, objectPath, chunkId)), cancellationToken);
+                                AccumulateTextureUsage(provider, mat, textureUsage);
                                 materialCount++;
                             }
                         }
@@ -256,6 +259,8 @@ public sealed class PakScanService : IPakScanService
                 }
 
                 sw.Stop();
+
+                await channel.Writer.WriteAsync(new PakScanTextureUsageReadyEntry(textureUsage), cancellationToken);
 
                 await channel.Writer.WriteAsync(new PakScanDiagnosticEntry(new Diagnostic(DiagnosticSeverity.Information, "PKS006",
                     $"扫描完成：{textureCount} 个 Texture2D，{staticMeshCount} 个 StaticMesh，{skeletalMeshCount} 个 SkeletalMesh，{materialCount} 个 Material，共扫描 {scannedCount} 个资产，耗时 {FormatElapsed(sw.Elapsed)}")), cancellationToken);
@@ -296,6 +301,7 @@ public sealed class PakScanService : IPakScanService
         var staticMeshes   = new List<PakMeshEntry>();
         var skeletalMeshes = new List<PakMeshEntry>();
         var materials      = new List<PakMaterialEntry>();
+        IReadOnlyDictionary<string, List<string>> textureUsage = new Dictionary<string, List<string>>();
         int totalCount = 0;
 
         await foreach (var entry in ScanStreamAsync(pakDirectory, config, cancellationToken))
@@ -329,6 +335,10 @@ public sealed class PakScanService : IPakScanService
                     materials.Add(mat.Material);
                     break;
 
+                case PakScanTextureUsageReadyEntry u:
+                    textureUsage = u.Usage;
+                    break;
+
                 case PakScanDiagnosticEntry d:
                     diagnostics.Add(d.Diagnostic);
                     break;
@@ -342,6 +352,13 @@ public sealed class PakScanService : IPakScanService
 
         if (diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error))
             return new PakScanResult(pakDirectory, null, diagnostics);
+
+        textures = textures.Select(t => t with
+        {
+            UsedByMaterialNames = textureUsage.TryGetValue(t.ObjectPath, out var names)
+                ? names
+                : []
+        }).ToList();
 
         var report = new PakScanReport(pakDirectory, textures.Count + staticMeshes.Count + skeletalMeshes.Count + materials.Count,
             textures.Count, textures, staticMeshes.Count, staticMeshes, skeletalMeshes.Count, skeletalMeshes,
@@ -454,7 +471,27 @@ public sealed class PakScanService : IPakScanService
             lodGroup,
             numMips,
             estimatedBytes,
-            pakChunkId);
+            pakChunkId,
+            []);
+    }
+
+    private static void AccumulateTextureUsage(DefaultFileProvider provider, UMaterial mat, Dictionary<string, List<string>> textureUsage)
+    {
+        foreach (var tex in mat.ReferencedTextures)
+        {
+            // tex.Owner.Name 是 UE 虚拟路径（/Game/... 或 /Engine/...），需要 FixPath 转换成
+            // 与扫描主循环里 objectPath 同源的挂载相对路径（XGame/Content/... 等），否则字典查找永远不命中。
+            var ownerName = tex?.Owner?.Name.ToString();
+            if (string.IsNullOrEmpty(ownerName)) continue; // Owner 未解析，跳过而不报错
+            var fixedPath = provider.FixPath(ownerName);
+            var texPath = fixedPath.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase)
+                ? fixedPath[..^".uasset".Length]
+                : fixedPath;
+            if (!textureUsage.TryGetValue(texPath, out var list))
+                textureUsage[texPath] = list = [];
+            if (!list.Contains(mat.Name))
+                list.Add(mat.Name);
+        }
     }
 
     private static int ReadIntProperty(List<FPropertyTag> properties, string name)

@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using Microsoft.Win32;
 using UnrealKit.Core.Projects;
 using UnrealKit.Desktop.Services;
@@ -75,5 +75,10 @@ public partial class MainWindow : Window
         {
             OperationLogWindow.Show(this, viewModel);
         }
+    }
+
+    private void TabControl_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+
     }
 }

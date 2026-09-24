@@ -13,7 +13,8 @@ public sealed record PakTextureEntry(
     string LodGroup,
     int NumMips,
     long EstimatedSizeBytes,
-    string PakChunkId);
+    string PakChunkId,
+    IReadOnlyList<string> UsedByMaterialNames);
 
 public enum PakMeshKind { StaticMesh, SkeletalMesh }
 
@@ -111,6 +112,9 @@ public sealed record PakScanSkeletalMeshFound(PakMeshEntry Mesh) : PakScanEntry;
 
 /// <summary>发现一个 Material。</summary>
 public sealed record PakScanMaterialFound(PakMaterialEntry Material) : PakScanEntry;
+
+/// <summary>Texture ObjectPath → 引用该贴图的材质名称列表，扫描收尾后一次性推送。</summary>
+public sealed record PakScanTextureUsageReadyEntry(IReadOnlyDictionary<string, List<string>> Usage) : PakScanEntry;
 
 /// <summary>产生一条诊断信息（警告、错误等）。</summary>
 public sealed record PakScanDiagnosticEntry(Diagnostic Diagnostic) : PakScanEntry;

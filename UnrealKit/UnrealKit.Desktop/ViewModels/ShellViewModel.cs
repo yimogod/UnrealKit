@@ -160,7 +160,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         IEditorSettingStore? editorSettingStore = null,
         IUserSettingStore? userSettingStore = null)
     {
-        PakTextures       = new PagedSearchList<PakScanTextureOption>     (t => t.Name, t => t.Path, () => _pakPageSize);
+        PakTextures       = new PagedSearchList<PakScanTextureOption>     (t => t.Name, t => t.Path, () => _pakPageSize, ("M:", t => t.UsedByMaterials));
         PakStaticMeshes   = new PagedSearchList<PakScanStaticMeshOption>  (m => m.Name, m => m.Path, () => _pakPageSize);
         PakSkeletalMeshes = new PagedSearchList<PakScanSkeletalMeshOption>(m => m.Name, m => m.Path, () => _pakPageSize);
         PakMaterials      = new PagedSearchList<PakScanMaterialOption>    (m => m.Name, m => m.Path, () => _pakPageSize);
@@ -175,6 +175,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         PakTextures.RegisterSortKey("LodGroup", t => t.LodGroup);
         PakTextures.RegisterSortKey("Mips",     t => int.TryParse(t.NumMips, out var v) ? v : 0);
         PakTextures.RegisterSortKey("Est. MB",  t => double.TryParse(t.EstimatedSizeMB, out var v) ? v : 0.0);
+        PakTextures.RegisterSortKey("UsedByMaterials", t => t.UsedByMaterials);
 
         PakStaticMeshes.RegisterSortKey("Name",          m => m.Name);
         PakStaticMeshes.RegisterSortKey("Chunk",         m => int.TryParse(m.PakChunkId, out var c) ? c : 0);
@@ -2332,6 +2333,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var skeletalMeshes  = new List<UnrealKit.Core.PakScan.PakMeshEntry>();
         var materials       = new List<UnrealKit.Core.PakScan.PakMaterialEntry>();
         var diagnostics     = new List<UnrealKit.Core.Diagnostics.Diagnostic>();
+        IReadOnlyDictionary<string, List<string>> textureUsage = new Dictionary<string, List<string>>();
 
         var service = _pakScanService;
         await foreach (var entry in service.ScanStreamAsync(inputPath, config, OperationCancellationToken))
@@ -2365,6 +2367,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     materials.Add(mat.Material);
                     break;
 
+                case UnrealKit.Core.PakScan.PakScanTextureUsageReadyEntry u:
+                    textureUsage = u.Usage;
+                    break;
+
                 case UnrealKit.Core.PakScan.PakScanDiagnosticEntry d:
                     diagnostics.Add(d.Diagnostic);
                     break;
@@ -2377,6 +2383,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
 
         // 扫描结束后一次性填充 DataGrid
+        textures = textures.Select(t => t with
+        {
+            UsedByMaterialNames = textureUsage.TryGetValue(t.ObjectPath, out var names)
+                ? names
+                : []
+        }).ToList();
+
         PakTextures.Reset(textures.Select(t => new PakScanTextureOption(
             t.Name, t.ObjectPath,
             t.SizeX.ToString(), t.SizeY.ToString(),
@@ -2384,7 +2397,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             t.LodBias.ToString(), t.LodGroup,
             t.NumMips.ToString(),
             (t.EstimatedSizeBytes / 1024.0 / 1024.0).ToString("F2"),
-            t.PakChunkId)));
+            t.PakChunkId,
+            string.Join(", ", t.UsedByMaterialNames))));
         PakStaticMeshes.Reset(staticMeshes.Select(m => new PakScanStaticMeshOption(
             m.Name, m.ObjectPath,
             FormatMeshCount(m.LodCount), m.MaterialCount.ToString(),

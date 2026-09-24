@@ -47,7 +47,7 @@
                                     <TextBlock Text="搜索：" VerticalAlignment="Center" Margin="0,0,4,0" />
                                     <TextBox Text="{Binding PakTextures.Search, UpdateSourceTrigger=PropertyChanged}"
                                              Width="260" FontFamily="Consolas"
-                                             ToolTip="按 Name 或 Path 搜索（区分大小写）" />
+                                             ToolTip="按 Name 或 Path 搜索（区分大小写）；以 M: 开头按引用该贴图的材质名搜索" />
                                 </StackPanel>
                                 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,4,0,0">
                                     <Button Content="◀" Command="{Binding PakTextures.PrevPageCommand}" Padding="8,4" />
@@ -75,7 +75,8 @@
                                         <DataGridTextColumn Header="LodBias"  Binding="{Binding LodBias}"         Width="40" />
                                         <DataGridTextColumn Header="LodGroup" Binding="{Binding LodGroup}"        Width="160" />
                                         <DataGridTextColumn Header="Mips"     Binding="{Binding NumMips}"         Width="50" />
-                                        <DataGridTextColumn Header="Est. MB"  Binding="{Binding EstimatedSizeMB}" Width="*" />
+                                        <DataGridTextColumn Header="Est. MB"  Binding="{Binding EstimatedSizeMB}" Width="80" />
+                                        <DataGridTextColumn Header="UsedByMaterials" Binding="{Binding UsedByMaterials}" Width="*" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </DockPanel>

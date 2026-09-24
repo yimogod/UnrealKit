@@ -236,7 +236,7 @@
                     ItemContainerStyle="{StaticResource NavigationTabItemStyle}"
                     ItemTemplate="{StaticResource NavigationItemTemplate}"
                     SelectedValuePath="Title"
-                    SelectedValue="{Binding SelectedNavigationItem, Mode=TwoWay}">
+                    SelectedValue="{Binding SelectedNavigationItem, Mode=TwoWay}" SelectionChanged="TabControl_SelectionChanged">
             <!-- GroupStyle 是只读集合属性，只能追加、不能用特性赋值.  -->
             <TabControl.GroupStyle>
                 <StaticResource ResourceKey="NavigationGroupStyle" />

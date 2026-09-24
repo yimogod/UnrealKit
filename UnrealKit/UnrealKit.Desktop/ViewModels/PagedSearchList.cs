@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
@@ -17,6 +17,7 @@ public sealed class PagedSearchList<T> : INotifyPropertyChanged
     private readonly Func<T, string> _nameSelector;
     private readonly Func<T, string> _pathSelector;
     private readonly Func<int> _getPageSize;
+    private readonly (string Prefix, Func<T, string> Selector)? _prefixFilter;
 
     // column header → key selector（由外部在构造后注册）
     private readonly Dictionary<string, Func<T, IComparable>> _sortKeys = new(StringComparer.OrdinalIgnoreCase);
@@ -43,11 +44,13 @@ public sealed class PagedSearchList<T> : INotifyPropertyChanged
     public PagedSearchList(
         Func<T, string> nameSelector,
         Func<T, string> pathSelector,
-        Func<int> getPageSize)
+        Func<int> getPageSize,
+        (string Prefix, Func<T, string> Selector)? prefixFilter = null)
     {
         _nameSelector = nameSelector;
         _pathSelector = pathSelector;
         _getPageSize  = getPageSize;
+        _prefixFilter = prefixFilter;
 
         PrevPageCommand = new DelegateCommand(() => GoToPage(_page - 1), () => _page > 1);
         NextPageCommand = new DelegateCommand(() => GoToPage(_page + 1), () => _page < PageCount);
@@ -126,11 +129,22 @@ public sealed class PagedSearchList<T> : INotifyPropertyChanged
 
     private List<T> ComputeFiltered()
     {
-        IEnumerable<T> source = string.IsNullOrEmpty(_search)
-            ? _allItems
-            : _allItems.Where(t =>
+        IEnumerable<T> source;
+        if (string.IsNullOrEmpty(_search))
+        {
+            source = _allItems;
+        }
+        else if (_prefixFilter is { } pf && _search.StartsWith(pf.Prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var term = _search[pf.Prefix.Length..];
+            source = _allItems.Where(t => pf.Selector(t).Contains(term, StringComparison.Ordinal));
+        }
+        else
+        {
+            source = _allItems.Where(t =>
                 _nameSelector(t).Contains(_search, StringComparison.Ordinal) ||
                 _pathSelector(t).Contains(_search, StringComparison.Ordinal));
+        }
 
         if (_sortColumn is not null && _sortKeys.TryGetValue(_sortColumn, out var keySelector))
         {

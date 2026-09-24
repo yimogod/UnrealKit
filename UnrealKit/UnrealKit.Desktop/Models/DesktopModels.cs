@@ -213,7 +213,8 @@ public sealed record DownloadedPackageOption(string FolderName, string? LocalApk
 public sealed record PakScanTextureOption(
     string Name, string Path, string SizeX, string SizeY,
     string Format, string LodBias, string LodGroup,
-    string NumMips, string EstimatedSizeMB, string PakChunkId);
+    string NumMips, string EstimatedSizeMB, string PakChunkId,
+    string UsedByMaterials);
 
 public sealed record PakScanStaticMeshOption(
     string Name, string Path,
