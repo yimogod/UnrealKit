@@ -38,6 +38,13 @@ public sealed record PakMaterialEntry(
     bool TwoSided,
     string PakChunkId);
 
+public sealed record PakMaterialInstanceEntry(
+    string Name,
+    string ObjectPath,
+    string ParentName,
+    int TextureParameterCount,
+    string PakChunkId);
+
 public sealed record PakScanReport(
     string InputDirectory,
     int TotalAssetsScanned,
@@ -48,7 +55,9 @@ public sealed record PakScanReport(
     int SkeletalMeshCount,
     IReadOnlyList<PakMeshEntry> SkeletalMeshes,
     int MaterialCount,
-    IReadOnlyList<PakMaterialEntry> Materials);
+    IReadOnlyList<PakMaterialEntry> Materials,
+    int MaterialInstanceCount,
+    IReadOnlyList<PakMaterialInstanceEntry> MaterialInstances);
 
 public sealed record PakScanResult(
     string InputPath,
@@ -113,6 +122,9 @@ public sealed record PakScanSkeletalMeshFound(PakMeshEntry Mesh) : PakScanEntry;
 /// <summary>发现一个 Material。</summary>
 public sealed record PakScanMaterialFound(PakMaterialEntry Material) : PakScanEntry;
 
+/// <summary>发现一个 MaterialInstanceConstant。</summary>
+public sealed record PakScanMaterialInstanceFound(PakMaterialInstanceEntry MaterialInstance) : PakScanEntry;
+
 /// <summary>Texture ObjectPath → 引用该贴图的材质名称列表，扫描收尾后一次性推送。</summary>
 public sealed record PakScanTextureUsageReadyEntry(IReadOnlyDictionary<string, List<string>> Usage) : PakScanEntry;
 
@@ -126,6 +138,7 @@ public sealed record PakScanCompleteEntry(
     int StaticMeshCount,
     int SkeletalMeshCount,
     int MaterialCount,
+    int MaterialInstanceCount,
     TimeSpan Elapsed) : PakScanEntry;
 
 // ── 地图 Actor 扫描流式事件 ───────────────────────────────────────────────────

@@ -118,6 +118,13 @@ public partial class PakScanView : UserControl
         ApplyDataGridSort(e, vm.PakMaterials);
     }
 
+    private void MatInstanceDataGrid_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        if (DataContext is not ShellViewModel vm) return;
+        e.Handled = true;
+        ApplyDataGridSort(e, vm.PakMaterialInstances);
+    }
+
     private void MapMeshUsageDataGrid_Sorting(object sender, DataGridSortingEventArgs e)
     {
         if (DataContext is not ShellViewModel vm) return;

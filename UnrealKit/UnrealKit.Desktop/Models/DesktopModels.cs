@@ -232,6 +232,12 @@ public sealed record PakScanMaterialOption(
     string ReferencedTextureCount, string TwoSided,
     string PakChunkId);
 
+public sealed record PakScanMaterialInstanceOption(
+    string Name, string Path,
+    string ParentName,
+    string TextureParameterCount,
+    string PakChunkId);
+
 public sealed record PakScanDiagnosticOption(string Severity, string Code, string Message);
 
 /// <summary>

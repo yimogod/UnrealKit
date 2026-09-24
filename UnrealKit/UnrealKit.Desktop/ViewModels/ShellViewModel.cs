@@ -104,6 +104,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public PagedSearchList<PakScanStaticMeshOption>   PakStaticMeshes  { get; }
     public PagedSearchList<PakScanSkeletalMeshOption> PakSkeletalMeshes { get; }
     public PagedSearchList<PakScanMaterialOption>     PakMaterials     { get; }
+    public PagedSearchList<PakScanMaterialInstanceOption> PakMaterialInstances { get; }
     public PagedSearchList<PakMapMeshUsageOption>     PakMapMeshUsages     { get; }
     public PagedSearchList<PakMapMeshAggregateOption> PakMapMeshAggregates { get; }
     public PagedSearchList<PakMapMeshUsageOption>     PakMapLocalMeshUsages { get; }
@@ -163,7 +164,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         PakTextures       = new PagedSearchList<PakScanTextureOption>     (t => t.Name, t => t.Path, () => _pakPageSize, ("M:", t => t.UsedByMaterials));
         PakStaticMeshes   = new PagedSearchList<PakScanStaticMeshOption>  (m => m.Name, m => m.Path, () => _pakPageSize);
         PakSkeletalMeshes = new PagedSearchList<PakScanSkeletalMeshOption>(m => m.Name, m => m.Path, () => _pakPageSize);
-        PakMaterials      = new PagedSearchList<PakScanMaterialOption>    (m => m.Name, m => m.Path, () => _pakPageSize);
+        PakMaterials          = new PagedSearchList<PakScanMaterialOption>        (m => m.Name, m => m.Path, () => _pakPageSize);
+        PakMaterialInstances  = new PagedSearchList<PakScanMaterialInstanceOption>(m => m.Name, m => m.Path, () => _pakPageSize);
 
         PakTextures.RegisterSortKey("Name",     t => t.Name);
         PakTextures.RegisterSortKey("Chunk",    t => int.TryParse(t.PakChunkId, out var c) ? c : 0);
@@ -200,6 +202,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         PakMaterials.RegisterSortKey("BlendMode",   m => m.BlendMode);
         PakMaterials.RegisterSortKey("ShadingModel",m => m.ShadingModel);
         PakMaterials.RegisterSortKey("Textures",    m => int.TryParse(m.ReferencedTextureCount, out var v) ? v : 0);
+
+        PakMaterialInstances.RegisterSortKey("Name",          m => m.Name);
+        PakMaterialInstances.RegisterSortKey("Chunk",         m => int.TryParse(m.PakChunkId, out var c) ? c : 0);
+        PakMaterialInstances.RegisterSortKey("Path",          m => m.Path);
+        PakMaterialInstances.RegisterSortKey("Parent",        m => m.ParentName);
+        PakMaterialInstances.RegisterSortKey("TexParams",     m => int.TryParse(m.TextureParameterCount, out var v) ? v : 0);
 
         PakMapMeshUsages     = new PagedSearchList<PakMapMeshUsageOption>    (u => u.MeshName, u => u.MeshPath, () => _pakPageSize);
         PakMapMeshAggregates = new PagedSearchList<PakMapMeshAggregateOption>(a => a.MeshName, a => a.MeshPath, () => _pakPageSize);
@@ -341,7 +349,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public ObservableCollection<PakScanTextureOption>      PakScanTextures       => PakTextures.Items;
     public ObservableCollection<PakScanStaticMeshOption>   PakScanStaticMeshes   => PakStaticMeshes.Items;
     public ObservableCollection<PakScanSkeletalMeshOption> PakScanSkeletalMeshes => PakSkeletalMeshes.Items;
-    public ObservableCollection<PakScanMaterialOption>     PakScanMaterials      => PakMaterials.Items;
+    public ObservableCollection<PakScanMaterialOption>         PakScanMaterials          => PakMaterials.Items;
+    public ObservableCollection<PakScanMaterialInstanceOption> PakScanMaterialInstances  => PakMaterialInstances.Items;
     public ObservableCollection<PakScanDiagnosticOption> PakScanDiagnostics { get; } = [];
     public ObservableCollection<PakMapMeshUsageOption>     PakScanMapMeshUsages     => PakMapMeshUsages.Items;
     public ObservableCollection<PakMapMeshAggregateOption> PakScanMapMeshAggregates => PakMapMeshAggregates.Items;
@@ -2318,6 +2327,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         PakStaticMeshes.Clear();
         PakSkeletalMeshes.Clear();
         PakMaterials.Clear();
+        PakMaterialInstances.Clear();
 
         var inputPath = SelectedLocalPakPackage!.LocalDirectory;
         var config = new UnrealKit.Core.PakScan.PakScanConfig
@@ -2328,11 +2338,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             VersionOverrides = ReadPakScanVersionOverrides(),
         };
 
-        var textures        = new List<UnrealKit.Core.PakScan.PakTextureEntry>();
-        var staticMeshes    = new List<UnrealKit.Core.PakScan.PakMeshEntry>();
-        var skeletalMeshes  = new List<UnrealKit.Core.PakScan.PakMeshEntry>();
-        var materials       = new List<UnrealKit.Core.PakScan.PakMaterialEntry>();
-        var diagnostics     = new List<UnrealKit.Core.Diagnostics.Diagnostic>();
+        var textures           = new List<UnrealKit.Core.PakScan.PakTextureEntry>();
+        var staticMeshes       = new List<UnrealKit.Core.PakScan.PakMeshEntry>();
+        var skeletalMeshes     = new List<UnrealKit.Core.PakScan.PakMeshEntry>();
+        var materials          = new List<UnrealKit.Core.PakScan.PakMaterialEntry>();
+        var materialInstances  = new List<UnrealKit.Core.PakScan.PakMaterialInstanceEntry>();
+        var diagnostics        = new List<UnrealKit.Core.Diagnostics.Diagnostic>();
         IReadOnlyDictionary<string, List<string>> textureUsage = new Dictionary<string, List<string>>();
 
         var service = _pakScanService;
@@ -2348,7 +2359,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 case UnrealKit.Core.PakScan.PakScanProgressEntry p:
                     progress?.Report(new OperationProgress("pakScan", "Scan", p.Scanned, p.Total,
                         $"扫描中… {p.Scanned}/{p.Total}  {p.CurrentAsset}"));
-                    PakScanDescription = $"扫描中… {p.Scanned}/{p.Total}  ·  已发现 {textures.Count} 纹理 / {staticMeshes.Count} StaticMesh / {skeletalMeshes.Count} SkeletalMesh / {materials.Count} Material";
+                    PakScanDescription = $"扫描中… {p.Scanned}/{p.Total}  ·  已发现 {textures.Count} 纹理 / {staticMeshes.Count} StaticMesh / {skeletalMeshes.Count} SkeletalMesh / {materials.Count} Material / {materialInstances.Count} MatInstance";
                     break;
 
                 case UnrealKit.Core.PakScan.PakScanTextureFound t:
@@ -2367,6 +2378,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     materials.Add(mat.Material);
                     break;
 
+                case UnrealKit.Core.PakScan.PakScanMaterialInstanceFound mi:
+                    materialInstances.Add(mi.MaterialInstance);
+                    break;
+
                 case UnrealKit.Core.PakScan.PakScanTextureUsageReadyEntry u:
                     textureUsage = u.Usage;
                     break;
@@ -2377,7 +2392,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
                 case UnrealKit.Core.PakScan.PakScanCompleteEntry c:
                     progress?.Report(new OperationProgress("pakScan", "Done", c.TotalScanned, c.TotalScanned,
-                        $"扫描完成：{c.TextureCount} 纹理 / {c.StaticMeshCount} StaticMesh / {c.SkeletalMeshCount} SkeletalMesh / {c.MaterialCount} Material，耗时 {c.Elapsed.TotalSeconds:F1}s"));
+                        $"扫描完成：{c.TextureCount} 纹理 / {c.StaticMeshCount} StaticMesh / {c.SkeletalMeshCount} SkeletalMesh / {c.MaterialCount} Material / {c.MaterialInstanceCount} MatInstance，耗时 {c.Elapsed.TotalSeconds:F1}s"));
                     break;
             }
         }
@@ -2412,6 +2427,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             m.BlendMode, m.ShadingModel,
             m.ReferencedTextureCount.ToString(), m.TwoSided.ToString(),
             m.PakChunkId)));
+        PakMaterialInstances.Reset(materialInstances.Select(m => new PakScanMaterialInstanceOption(
+            m.Name, m.ObjectPath,
+            m.ParentName,
+            m.TextureParameterCount.ToString(),
+            m.PakChunkId)));
         PakScanDiagnostics.Reset(diagnostics.Select(d => new PakScanDiagnosticOption(
             d.Severity.ToString(), d.Code, d.Message)));
 
@@ -2419,20 +2439,21 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         UnrealKit.Core.PakScan.PakScanReport? report = hasError ? null
             : new UnrealKit.Core.PakScan.PakScanReport(
                 inputPath,
-                textures.Count + staticMeshes.Count + skeletalMeshes.Count + materials.Count,
+                textures.Count + staticMeshes.Count + skeletalMeshes.Count + materials.Count + materialInstances.Count,
                 textures.Count, textures,
                 staticMeshes.Count, staticMeshes,
                 skeletalMeshes.Count, skeletalMeshes,
-                materials.Count, materials);
+                materials.Count, materials,
+                materialInstances.Count, materialInstances);
 
         _lastPakScanResult = new UnrealKit.Core.PakScan.PakScanResult(inputPath, report, diagnostics);
 
         PakScanDescription = report is not null
-            ? $"扫描完成：{report.TextureCount} 个 Texture2D / {report.StaticMeshCount} 个 StaticMesh / {report.SkeletalMeshCount} 个 SkeletalMesh / {report.MaterialCount} 个 Material / 共 {report.TotalAssetsScanned} 个资产"
+            ? $"扫描完成：{report.TextureCount} 个 Texture2D / {report.StaticMeshCount} 个 StaticMesh / {report.SkeletalMeshCount} 个 SkeletalMesh / {report.MaterialCount} 个 Material / {report.MaterialInstanceCount} 个 MatInstance / 共 {report.TotalAssetsScanned} 个资产"
             : "扫描失败，请查看诊断信息。";
 
         StatusMessage = report is not null
-            ? $"Pak 扫描完成：{report.TextureCount} 个纹理 / {report.StaticMeshCount} StaticMesh / {report.SkeletalMeshCount} SkeletalMesh / {report.MaterialCount} Material"
+            ? $"Pak 扫描完成：{report.TextureCount} 个纹理 / {report.StaticMeshCount} StaticMesh / {report.SkeletalMeshCount} SkeletalMesh / {report.MaterialCount} Material / {report.MaterialInstanceCount} MatInstance"
             : "Pak 扫描完成（有错误）";
         RaiseCommandStates();
     });
@@ -2586,7 +2607,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             var matPath = basePath + "_Materials.html";
             HtmlTableReport.WriteAndOpen(PakScanMaterialHtmlBuilder.Build(_lastPakScanResult), matPath);
 
-            AddOperationLog("Info", $"Pak 扫描 HTML 已保存：{texPath}，{smPath}，{skmPath}，{matPath}");
+            var miPath = basePath + "_MatInstances.html";
+            HtmlTableReport.WriteAndOpen(PakScanMaterialInstanceHtmlBuilder.Build(_lastPakScanResult), miPath);
+
+            AddOperationLog("Info", $"Pak 扫描 HTML 已保存：{texPath}，{smPath}，{skmPath}，{matPath}，{miPath}");
         }
         catch (Exception ex)
         {
@@ -2618,6 +2642,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         var matPath = Path.Combine(Path.GetTempPath(), $"PakScanMaterials_{stamp}.csv");
         CsvTableReport.WriteAndOpen(matCsv, matPath);
         AddOperationLog("Info", $"CSV exported: {matPath}");
+
+        var miCsv  = PakScanCsvBuilder.BuildMaterialInstanceCsv(_lastPakScanResult);
+        var miPath = Path.Combine(Path.GetTempPath(), $"PakScanMatInstances_{stamp}.csv");
+        CsvTableReport.WriteAndOpen(miCsv, miPath);
+        AddOperationLog("Info", $"CSV exported: {miPath}");
     }
 
     private bool CanDownloadLatestPak() =>

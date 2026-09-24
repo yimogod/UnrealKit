@@ -504,6 +504,42 @@ internal static class PakScanMaterialHtmlBuilder
     }
 }
 
+// ── PakScan MaterialInstance HTML 构造器 ──────────────────────────────────────
+
+internal static class PakScanMaterialInstanceHtmlBuilder
+{
+    internal static string Build(UnrealKit.Core.PakScan.PakScanResult result)
+    {
+        var report    = result.Report;
+        var instances = report?.MaterialInstances ?? [];
+        var scanDir   = report?.InputDirectory ?? result.InputPath;
+
+        HtmlColumn[] columns =
+        [
+            new("n",  "名称",           HtmlColumnType.Text),
+            new("pn", "Parent",         HtmlColumnType.Text),
+            new("tp", "贴图参数数",      HtmlColumnType.Number, DefaultSort: true, DefaultSortDesc: true),
+            new("p",  "路径",           HtmlColumnType.Path, Sortable: false),
+        ];
+
+        var rows = instances.Select(m => new object?[]
+        {
+            m.Name, m.ParentName, m.TextureParameterCount, m.ObjectPath,
+        }).ToArray();
+
+        var meta = new HtmlMetaItem[]
+        {
+            new("目录",             scanDir),
+            new("MaterialInstance", (report?.MaterialInstanceCount ?? 0).ToString()),
+            new("生成时间",         DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+        };
+
+        var title = $"PakScan — MatInstance — {Path.GetFileName(scanDir.TrimEnd('/', '\\'))}";
+        return HtmlTableReport.Build(title, columns, rows, meta, null,
+            result.Diagnostics, searchPlaceholder: "搜索名称 / 路径…");
+    }
+}
+
 // ── PakScan CSV 构造器 ────────────────────────────────────────────────────────
 
 internal static class PakScanCsvBuilder
@@ -593,6 +629,24 @@ internal static class PakScanCsvBuilder
             m.ReferencedTextureCount, m.TwoSided, m.ObjectPath,
         }).ToArray();
         return CsvTableReport.Build(MaterialColumns, rows);
+    }
+
+    private static readonly CsvColumn[] MaterialInstanceColumns =
+    [
+        new("Name",                  "Name"),
+        new("ParentName",            "ParentName"),
+        new("TextureParameterCount", "TextureParameterCount"),
+        new("ObjectPath",            "ObjectPath"),
+    ];
+
+    internal static string BuildMaterialInstanceCsv(UnrealKit.Core.PakScan.PakScanResult result)
+    {
+        var instances = result.Report?.MaterialInstances ?? [];
+        var rows = instances.Select(m => new object?[]
+        {
+            m.Name, m.ParentName, m.TextureParameterCount, m.ObjectPath,
+        }).ToArray();
+        return CsvTableReport.Build(MaterialInstanceColumns, rows);
     }
 }
 
