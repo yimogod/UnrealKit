@@ -1,4 +1,4 @@
-<Window x:Class="UnrealKit.Desktop.Views.StaticMeshStatsWindow"
+﻿<Window x:Class="UnrealKit.Desktop.Views.StaticMeshStatsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="StaticMesh 资产统计"
@@ -62,84 +62,91 @@
                 </WrapPanel>
             </Border>
 
-            <!-- 三个列表：Grid 分三列 -->
+            <!-- 三个列表：左侧上下（Materials + MatInstances），右侧 Textures -->
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" MinWidth="200" />
-                    <ColumnDefinition Width="5" />
-                    <ColumnDefinition Width="*" MinWidth="180" />
+                    <ColumnDefinition Width="460" MinWidth="300" />
                     <ColumnDefinition Width="5" />
                     <ColumnDefinition Width="*" MinWidth="200" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Materials -->
+                <!-- 左侧：Materials（上）+ MatInstances（下） -->
                 <Grid Grid.Column="0">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
+                        <RowDefinition Height="*" MinHeight="100" />
+                        <RowDefinition Height="5" />
+                        <RowDefinition Height="*" MinHeight="100" />
                     </Grid.RowDefinitions>
-                    <Border Grid.Row="0" Background="#FFF8F9FA" BorderBrush="#FFE2E6EA" BorderThickness="0,0,0,1" Padding="12,6">
-                        <TextBlock x:Name="MatHeaderText" Text="Material（0）"
-                                   FontWeight="SemiBold" FontSize="12" />
-                    </Border>
-                    <DataGrid Grid.Row="1" x:Name="MaterialsGrid"
-                              AutoGenerateColumns="False"
-                              IsReadOnly="True"
-                              GridLinesVisibility="Horizontal"
-                              HeadersVisibility="Column"
-                              CanUserResizeRows="False"
-                              SelectionMode="Single"
-                              FontSize="11"
-                              RowHeight="22"
-                              BorderThickness="0">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Name"        Binding="{Binding Name}"                   Width="*" />
-                            <DataGridTextColumn Header="BlendMode"   Binding="{Binding BlendMode}"              Width="80" />
-                            <DataGridTextColumn Header="Shading"     Binding="{Binding ShadingModel}"           Width="80" />
-                            <DataGridTextColumn Header="Textures"    Binding="{Binding ReferencedTextureCount}" Width="55" />
-                            <DataGridTextColumn Header="TwoSided"    Binding="{Binding TwoSided}"               Width="60" />
-                            <DataGridTextColumn Header="Chunk"       Binding="{Binding PakChunkId}"             Width="44" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+
+                    <!-- Materials -->
+                    <Grid Grid.Row="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Background="#FFF8F9FA" BorderBrush="#FFE2E6EA" BorderThickness="0,0,0,1" Padding="12,6">
+                            <TextBlock x:Name="MatHeaderText" Text="Material（0）"
+                                       FontWeight="SemiBold" FontSize="12" />
+                        </Border>
+                        <DataGrid Grid.Row="1" x:Name="MaterialsGrid"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  GridLinesVisibility="Horizontal"
+                                  HeadersVisibility="Column"
+                                  CanUserResizeRows="False"
+                                  SelectionMode="Single"
+                                  FontSize="11"
+                                  RowHeight="22"
+                                  BorderThickness="0">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name"        Binding="{Binding Name}"                   Width="100" />
+                                <DataGridTextColumn Header="BlendMode"   Binding="{Binding BlendMode}"              Width="80" />
+                                <DataGridTextColumn Header="Shading"     Binding="{Binding ShadingModel}"           Width="*" />
+                                <DataGridTextColumn Header="Textures"    Binding="{Binding ReferencedTextureCount}" Width="55" />
+                                <DataGridTextColumn Header="TwoSided"    Binding="{Binding TwoSided}"               Width="60" />
+                                <DataGridTextColumn Header="Chunk"       Binding="{Binding PakChunkId}"             Width="44" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+
+                    <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                                  Background="#FFE2E6EA" ResizeBehavior="PreviousAndNext" />
+
+                    <!-- MatInstances -->
+                    <Grid Grid.Row="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Background="#FFF8F9FA" BorderBrush="#FFE2E6EA" BorderThickness="0,0,0,1" Padding="12,6">
+                            <TextBlock x:Name="MatInstHeaderText" Text="MatInstance（0）"
+                                       FontWeight="SemiBold" FontSize="12" />
+                        </Border>
+                        <DataGrid Grid.Row="1" x:Name="MatInstancesGrid"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  GridLinesVisibility="Horizontal"
+                                  HeadersVisibility="Column"
+                                  CanUserResizeRows="False"
+                                  SelectionMode="Single"
+                                  FontSize="11"
+                                  RowHeight="22"
+                                  BorderThickness="0">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name"      Binding="{Binding Name}"                   Width="100" />
+                                <DataGridTextColumn Header="Parent"    Binding="{Binding ParentName}"             Width="*" />
+                                <DataGridTextColumn Header="TexParams" Binding="{Binding TextureParameterCount}"  Width="66" />
+                                <DataGridTextColumn Header="Chunk"     Binding="{Binding PakChunkId}"             Width="44" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
                 </Grid>
 
                 <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch"
                               Background="#FFE2E6EA" ResizeBehavior="PreviousAndNext" />
 
-                <!-- MatInstances -->
+                <!-- 右侧：Textures -->
                 <Grid Grid.Column="2">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <Border Grid.Row="0" Background="#FFF8F9FA" BorderBrush="#FFE2E6EA" BorderThickness="0,0,0,1" Padding="12,6">
-                        <TextBlock x:Name="MatInstHeaderText" Text="MatInstance（0）"
-                                   FontWeight="SemiBold" FontSize="12" />
-                    </Border>
-                    <DataGrid Grid.Row="1" x:Name="MatInstancesGrid"
-                              AutoGenerateColumns="False"
-                              IsReadOnly="True"
-                              GridLinesVisibility="Horizontal"
-                              HeadersVisibility="Column"
-                              CanUserResizeRows="False"
-                              SelectionMode="Single"
-                              FontSize="11"
-                              RowHeight="22"
-                              BorderThickness="0">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Name"      Binding="{Binding Name}"                   Width="*" />
-                            <DataGridTextColumn Header="Parent"    Binding="{Binding ParentName}"             Width="*" />
-                            <DataGridTextColumn Header="TexParams" Binding="{Binding TextureParameterCount}"  Width="66" />
-                            <DataGridTextColumn Header="Chunk"     Binding="{Binding PakChunkId}"             Width="44" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Grid>
-
-                <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch"
-                              Background="#FFE2E6EA" ResizeBehavior="PreviousAndNext" />
-
-                <!-- Textures -->
-                <Grid Grid.Column="4">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -159,11 +166,11 @@
                               RowHeight="22"
                               BorderThickness="0">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Name"     Binding="{Binding Name}"           Width="*" />
-                            <DataGridTextColumn Header="Size"     Binding="{Binding Resolution}"     Width="75" />
-                            <DataGridTextColumn Header="Format"   Binding="{Binding Format}"         Width="66" />
+                            <DataGridTextColumn Header="Name"     Binding="{Binding Name}"            Width="200" />
+                            <DataGridTextColumn Header="Size"     Binding="{Binding Resolution}"      Width="75" />
+                            <DataGridTextColumn Header="Format"   Binding="{Binding Format}"          Width="66" />
                             <DataGridTextColumn Header="Est. MB"  Binding="{Binding EstimatedSizeMB}" Width="56" />
-                            <DataGridTextColumn Header="Chunk"    Binding="{Binding PakChunkId}"     Width="44" />
+                            <DataGridTextColumn Header="Chunk"    Binding="{Binding PakChunkId}"      Width="44" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
