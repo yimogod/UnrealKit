@@ -201,18 +201,21 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         PakSkeletalMeshes.RegisterSortKey("Vertices",      m => int.TryParse(m.VertexCount, out var v) ? v : 0);
         PakSkeletalMeshes.RegisterSortKey("Triangles",     m => int.TryParse(m.TriangleCount, out var v) ? v : 0);
 
-        PakMaterials.RegisterSortKey("Name",        m => m.Name);
-        PakMaterials.RegisterSortKey("Chunk",       m => int.TryParse(m.PakChunkId, out var c) ? c : 0);
-        PakMaterials.RegisterSortKey("Path",        m => m.Path);
-        PakMaterials.RegisterSortKey("BlendMode",   m => m.BlendMode);
-        PakMaterials.RegisterSortKey("ShadingModel",m => m.ShadingModel);
-        PakMaterials.RegisterSortKey("Textures",    m => int.TryParse(m.ReferencedTextureCount, out var v) ? v : 0);
+        PakMaterials.RegisterSortKey("Name",         m => m.Name);
+        PakMaterials.RegisterSortKey("Chunk",        m => int.TryParse(m.PakChunkId, out var c) ? c : 0);
+        PakMaterials.RegisterSortKey("Path",         m => m.Path);
+        PakMaterials.RegisterSortKey("BlendMode",    m => m.BlendMode);
+        PakMaterials.RegisterSortKey("ShadingModel", m => m.ShadingModel);
+        PakMaterials.RegisterSortKey("Textures",     m => int.TryParse(m.ReferencedTextureCount, out var v) ? v : 0);
+        PakMaterials.RegisterSortKey("TwoSided",     m => m.TwoSided);
+        PakMaterials.RegisterSortKey("UsedByMeshes", m => m.UsedByMeshes);
 
         PakMaterialInstances.RegisterSortKey("Name",          m => m.Name);
         PakMaterialInstances.RegisterSortKey("Chunk",         m => int.TryParse(m.PakChunkId, out var c) ? c : 0);
         PakMaterialInstances.RegisterSortKey("Path",          m => m.Path);
         PakMaterialInstances.RegisterSortKey("Parent",        m => m.ParentName);
         PakMaterialInstances.RegisterSortKey("TexParams",     m => int.TryParse(m.TextureParameterCount, out var v) ? v : 0);
+        PakMaterialInstances.RegisterSortKey("UsedByMeshes",  m => m.UsedByMeshes);
 
         PakMapMeshUsages     = new PagedSearchList<PakMapMeshUsageOption>    (u => u.MeshName, u => u.MeshPath, () => _pakPageSize);
         PakMapMeshAggregates = new PagedSearchList<PakMapMeshAggregateOption>(a => a.MeshName, a => a.MeshPath, () => _pakPageSize);
